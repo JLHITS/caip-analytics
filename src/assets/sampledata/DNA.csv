@@ -1,37 +1,37 @@
-"Staff","Slot Type","Appointment Count","Time Wasted"
-"Dr A Locum","Triage - Telephone","3","45"
-"Dr Abda Noreen","GP 5 Day Telephone","1","10"
-"Dr Abda Noreen","GP 14 Day Face to Face","30","360"
-"Dr Abda Noreen","GP 14 Day Telephone","1","10"
-"Dr Abda Noreen","GP 5 Day Face to Face","10","100"
-"Dr Sandhya Gopakumar","GP Telephone","8","80"
-"Dr Sandhya Gopakumar","GP Face to Face","2","30"
-"Dr Sandhya Gopakumar","GP Urgent","2","20"
-"Mrs Hannah Croft","Nurse Planned clinic","42","550"
-"Mr Sean Massey","PCN planned clinic","3","60"
-"Dr Kelvin Lim","GP 14 Day Face to Face","1","15"
-"Dr Kelvin Lim","GP Face to Face","12","180"
-"Dr Kelvin Lim","GP Same Day Face to Face","1","15"
-"Dr Kelvin Lim","GP Urgent","1","15"
-"Miss Aimee Wright","Blood Test","16","80"
-"Miss Aimee Wright","Minor  Surgery","1","15"
-"Miss Aimee Wright","Slot","1","2"
-"Miss Aimee Wright","Flu/Covid Vaccination","6","12"
-"Miss Aimee Wright","Home Visits","1","15"
-"Miss Aimee Wright","HCA Face to face","36","355"
-"Miss Aimee Wright","NHS Health Check","9","85"
-"Practice Nurse","Childrens flu","6","60"
-"Ms Pcg Phlebotomist","Blood Test","13","65"
-"Mrs Jennifer Palfreyman","ANP Same Day Face to Face","13","195"
-"Mrs Jennifer Palfreyman","ANP 5 Day Face to Face","7","105"
-"Mrs Emma Hallam","PCN planned clinic","1","20"
-"Mrs Karen Liddell","Nurse Planned clinic","40","543"
-"Catherine Seals","Embargo","2","60"
-"Catherine Seals","Initial Assessment","5","225"
-"Karen Richardson","Nurse Planned clinic","2","60"
-"Dr Jacques Ransford","GP 14 Day Face to Face","17","190"
-"Dr Jacques Ransford","GP Telephone","4","40"
-"Dr Jacques Ransford","GP 14 Day Telephone","1","10"
-"Dr Jacques Ransford","GP Same Day Face to Face","8","90"
-"Dr Jacques Ransford","GP 5 Day Face to Face","9","100"
-"Dr Jacques Ransford","GP Urgent","1","10"
+Staff,Slot Type,Appointment Count,Time Wasted
+Dr Person3,Triage - Telephone,3,45
+Dr Person4,GP 5 Day Telephone,1,10
+Dr Person4,GP 14 Day Face to Face,30,360
+Dr Person4,GP 14 Day Telephone,1,10
+Dr Person4,GP 5 Day Face to Face,10,100
+Dr Person7,GP Telephone,8,80
+Dr Person7,GP Face to Face,2,30
+Dr Person7,GP Urgent,2,20
+Mrs Person14,Nurse Planned clinic,42,550
+Mr Person12,PCN planned clinic,3,60
+Dr Person6,GP 14 Day Face to Face,1,15
+Dr Person6,GP Face to Face,12,180
+Dr Person6,GP Same Day Face to Face,1,15
+Dr Person6,GP Urgent,1,15
+Miss Person9,Blood Test,16,80
+Miss Person9,Minor  Surgery,1,15
+Miss Person9,Slot,1,2
+Miss Person9,Flu/Covid Vaccination,6,12
+Miss Person9,Home Visits,1,15
+Miss Person9,HCA Face to face,36,355
+Miss Person9,NHS Health Check,9,85
+Person19,Childrens flu,6,60
+Ms Person17,Blood Test,13,65
+Mrs Person15,ANP Same Day Face to Face,13,195
+Mrs Person15,ANP 5 Day Face to Face,7,105
+Mrs Person13,PCN planned clinic,1,20
+Mrs Person16,Nurse Planned clinic,40,543
+Person1,Embargo,2,60
+Person1,Initial Assessment,5,225
+Person8,Nurse Planned clinic,2,60
+Dr Person5,GP 14 Day Face to Face,17,190
+Dr Person5,GP Telephone,4,40
+Dr Person5,GP 14 Day Telephone,1,10
+Dr Person5,GP Same Day Face to Face,8,90
+Dr Person5,GP 5 Day Face to Face,9,100
+Dr Person5,GP Urgent,1,10

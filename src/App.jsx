@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Line, Bar } from 'react-chartjs-2';
+import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -7,12 +7,13 @@ import {
   PointElement,
   LineElement,
   BarElement,
+  ArcElement,
   Title,
   Tooltip,
   Legend,
   Filler,
 } from 'chart.js';
-import { Upload, Activity, Calendar, Users, Phone, AlertCircle, CheckCircle, XCircle, ChevronDown, Info, Sparkles, Loader2, PlayCircle } from 'lucide-react';
+import { Upload, Activity, Calendar, Users, Phone, AlertCircle, CheckCircle, XCircle, ChevronDown, ChevronUp, Info, Sparkles, Loader2, PlayCircle, Search, User } from 'lucide-react';
 
 // --- PRODUCTION IMPORTS ---
 import Papa from 'papaparse';
@@ -29,7 +30,6 @@ import rushcliffeLogo from './assets/rushcliffe.png';
 import nottsWestLogo from './assets/nottswest.png';
 
 // --- SAMPLE DATA IMPORTS ---
-// FIXED: Added ?url to ensure Vite imports the file path string, not the content
 import sampleAppt from './assets/sampledata/AppointmentReport.csv?url';
 import sampleDNA from './assets/sampledata/DNA.csv?url';
 import sampleUnused from './assets/sampledata/Unused.csv?url';
@@ -50,6 +50,7 @@ ChartJS.register(
   PointElement,
   LineElement,
   BarElement,
+  ArcElement,
   Title,
   Tooltip,
   Legend,
@@ -78,11 +79,14 @@ const NHS_DARK_BLUE = '#003087';
 const NHS_GREEN = '#009639';
 const NHS_RED = '#DA291C';
 const NHS_GREY = '#425563';
-const NHS_AMBER = '#ED8B00'; 
+const NHS_AMBER = '#ED8B00';
+const NHS_PURPLE = '#330072';
 const GP_BAND_BLUE = '#005EB820'; 
 const GP_BAND_GREEN = '#00963920';
 const GP_BAND_AMBER = '#ED8B0020';
 const GP_BAND_RED = '#DA291C20';
+
+// --- UI COMPONENTS ---
 
 const Card = ({ children, className = '' }) => (
   <div className={`bg-white/90 backdrop-blur-sm rounded-2xl shadow-sm border border-slate-200 p-6 transition-all hover:shadow-md ${className}`}>
@@ -113,6 +117,79 @@ const SectionHeader = ({ title, subtitle }) => (
     {subtitle && <p className="text-slate-500 text-sm mt-1">{subtitle}</p>}
   </div>
 );
+
+const Accordion = ({ title, children, defaultOpen = false, icon: Icon }) => {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+  return (
+    <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm mb-4">
+      <button 
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center justify-between p-4 bg-slate-50 hover:bg-slate-100 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+            {Icon && <Icon size={20} className="text-slate-500" />}
+            <span className="font-bold text-slate-700">{title}</span>
+        </div>
+        {isOpen ? <ChevronUp size={20} className="text-slate-400" /> : <ChevronDown size={20} className="text-slate-400" />}
+      </button>
+      {isOpen && (
+        <div className="p-4 border-t border-slate-200 animate-in slide-in-from-top-2 duration-200">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const StaffTable = ({ data, columns }) => {
+  const [search, setSearch] = useState('');
+  
+  const filteredData = data.filter(row => 
+    row.name.toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <div>
+      <div className="mb-4 relative">
+        <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
+        <input 
+          type="text" 
+          placeholder="Search staff name..." 
+          className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm text-left text-slate-600">
+          <thead className="bg-slate-50 text-slate-700 uppercase font-bold text-xs">
+            <tr>
+              {columns.map((col, i) => (
+                <th key={i} className="px-4 py-3">{col.header}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {filteredData.slice(0, 50).map((row, i) => (
+              <tr key={i} className="hover:bg-slate-50 transition-colors">
+                {columns.map((col, j) => (
+                  <td key={j} className="px-4 py-3 font-medium">
+                    {col.render ? col.render(row) : row[col.accessor]}
+                  </td>
+                ))}
+              </tr>
+            ))}
+            {filteredData.length === 0 && (
+                <tr><td colSpan={columns.length} className="p-4 text-center text-slate-400">No matching staff found</td></tr>
+            )}
+          </tbody>
+        </table>
+        {filteredData.length > 50 && <p className="text-xs text-slate-400 text-center mt-2">Showing top 50 matches</p>}
+      </div>
+    </div>
+  );
+};
+
 
 // --- Custom Markdown Renderer Component ---
 const SimpleMarkdown = ({ text }) => {
@@ -170,6 +247,7 @@ export default function App() {
   });
 
   const [processedData, setProcessedData] = useState(null);
+  const [staffData, setStaffData] = useState(null); // New state for Staff Tables
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -240,16 +318,15 @@ export default function App() {
     setIsProcessing(true);
     setError(null);
     setProcessedData(null);
+    setStaffData(null);
 
     try {
-      // Helper to fetch file and convert to Blob/File
       const fetchFile = async (path, name, type) => {
         const response = await fetch(path);
         const blob = await response.blob();
         return new File([blob], name, { type });
       };
 
-      // Load all assets
       const apptFile = await fetchFile(sampleAppt, 'AppointmentReport.csv', 'text/csv');
       const dnaFile = await fetchFile(sampleDNA, 'DNA.csv', 'text/csv');
       const unusedFile = await fetchFile(sampleUnused, 'Unused.csv', 'text/csv');
@@ -265,19 +342,15 @@ export default function App() {
         telephony: [pdf1, pdf2, pdf3]
       };
 
-      // Set config for the example - UPDATED TO 5600
       const exampleConfig = {
         surgeryName: 'Example Surgery',
         population: 5600,
         analyseTelephony: true
       };
 
-      // Update state (for the UI)
       setConfig(exampleConfig);
       setFiles(exampleFiles);
 
-      // Process immediately passing BOTH files and config manually
-      // This ensures we use the values we just defined, not the stale state
       await processFiles(exampleFiles, exampleConfig);
 
     } catch (err) {
@@ -302,31 +375,27 @@ export default function App() {
 
   // --- Main Processing Logic ---
 
-  // Now accepts optional customFiles AND customConfig to avoid stale state issues
   const processFiles = async (customFiles = null, customConfig = null) => {
     setIsProcessing(true);
     setError(null);
-    setProcessedData(null); 
+    setProcessedData(null);
+    setStaffData(null);
 
-    // Use custom inputs if provided, otherwise fall back to state
     const filesToProcess = customFiles || files;
     const configToUse = customConfig || config; 
 
     try {
       if (!filesToProcess.appointments) throw new Error("Appointment CSV is required");
       
-      // 1. Parse Files
       const apptData = await parseCSV(filesToProcess.appointments);
       const dnaData = filesToProcess.dna ? await parseCSV(filesToProcess.dna) : [];
       const unusedData = filesToProcess.unused ? await parseCSV(filesToProcess.unused) : [];
 
-      // 2. Validate Headers
       validateHeaders(apptData, ['Date', 'Day'], 'Appointments CSV');
       if (filesToProcess.dna) validateHeaders(dnaData, ['Staff', 'Appointment Count'], 'DNA CSV');
       if (filesToProcess.unused) validateHeaders(unusedData, ['Staff', 'Unused Slots'], 'Unused CSV');
 
       let telephonyData = [];
-      // Use configToUse instead of config state
       if (configToUse.analyseTelephony && filesToProcess.telephony && filesToProcess.telephony.length > 0) {
         for (const file of filesToProcess.telephony) {
           const text = await extractTextFromPDF(file);
@@ -334,7 +403,8 @@ export default function App() {
         }
       }
 
-      const months = {}; 
+      const months = {};
+      const staffStats = {}; // To store aggregated staff data
 
       const getMonthKey = (dateStr) => {
         const d = new Date(dateStr);
@@ -346,6 +416,13 @@ export default function App() {
         if (!name) return false;
         const n = name.trim();
         return n.includes('Dr') || n.toLowerCase().includes('locum');
+      };
+
+      // Helper to init staff in stats
+      const initStaff = (name) => {
+        if (!staffStats[name]) {
+            staffStats[name] = { name, isGP: isGP(name), appts: 0, dna: 0, unused: 0 };
+        }
       };
 
       // --- Process Appointments ---
@@ -384,12 +461,17 @@ export default function App() {
           
           if (isNaN(count)) return;
           
+          // Monthly Aggregation
           months[monthKey].totalAppts += count;
           if (isGP(key)) {
             months[monthKey].gpAppts += count;
           } else {
             months[monthKey].staffAppts += count;
           }
+
+          // Staff Table Aggregation
+          initStaff(key);
+          staffStats[key].appts += count;
         });
       });
 
@@ -403,9 +485,15 @@ export default function App() {
       
       dnaData.forEach(row => {
           const count = parseInt(row['Appointment Count'], 10) || 0;
+          const staffName = row['Staff'];
           globalDNACount += count;
-          if (isGP(row['Staff'])) {
+          if (isGP(staffName)) {
               globalGPDNACount += count;
+          }
+          // Staff Stats
+          if (staffName) {
+            initStaff(staffName);
+            staffStats[staffName].dna += count;
           }
       });
 
@@ -415,9 +503,15 @@ export default function App() {
       
       unusedData.forEach(row => {
           const count = parseInt(row['Unused Slots'], 10) || 0;
+          const staffName = row['Staff'];
           globalUnusedCount += count;
-          if (isGP(row['Staff'])) {
+          if (isGP(staffName)) {
               globalGPUnusedCount += count;
+          }
+          // Staff Stats
+          if (staffName) {
+            initStaff(staffName);
+            staffStats[staffName].unused += count;
           }
       });
 
@@ -488,11 +582,21 @@ export default function App() {
          const estimatedGPUnused = Math.round(globalGPUnusedCount * gpWeight);
          
          const t = m.telephony || {};
-         // Use configToUse here for the correct calculation
          const population = parseFloat(configToUse.population) || 1;
          const capitationCalling = t.inboundAnswered ? ((t.inboundAnswered / population) * 100) : 0;
 
-         // Ideal Forecast (GP ONLY)
+         // Ratios
+         const conversionRatio = t.inboundAnswered > 0 ? (m.totalAppts / t.inboundAnswered) * 100 : 0;
+         const gpConversionRatio = t.inboundAnswered > 0 ? (m.gpAppts / t.inboundAnswered) * 100 : 0;
+         
+         // Capacity Utilization
+         const totalCapacity = m.totalAppts + estimatedUnused;
+         const utilization = totalCapacity > 0 ? (m.totalAppts / totalCapacity) * 100 : 0;
+
+         const gpCapacity = m.gpAppts + estimatedGPUnused;
+         const gpUtilization = gpCapacity > 0 ? (m.gpAppts / gpCapacity) * 100 : 0;
+
+         // Ideal Forecast
          const gpRatio = t.inboundAnswered > 0 ? (m.gpAppts / t.inboundAnswered) : 0;
          const gpMissedDemand = gpRatio * (t.missedFromQueueExRepeat || 0);
          const gpWaste = estimatedGPUnused + estimatedGPDNA;
@@ -506,6 +610,12 @@ export default function App() {
            
            totalAppts: m.totalAppts,
            gpAppts: m.gpAppts,
+           
+           // New Ratios
+           conversionRatio,
+           gpConversionRatio,
+           utilization,
+           gpUtilization,
 
            // GP Metrics
            gpApptsPerDay: m.workingDays ? (m.gpAppts / population * 100) / m.workingDays : 0,
@@ -538,10 +648,12 @@ export default function App() {
       }
 
       setProcessedData(finalData);
+      setStaffData(Object.values(staffStats).sort((a,b) => b.appts - a.appts)); // Store sorted staff data
 
     } catch (err) {
       setError(err.message);
-      setProcessedData(null); // Ensure dashboard is hidden
+      setProcessedData(null); 
+      setStaffData(null);
       console.error("Processing Failed:", err);
     } finally {
       setIsProcessing(false);
@@ -557,20 +669,17 @@ export default function App() {
     setAiReport(null);
 
     try {
-        // Prepare data summary for AI
         const dataSummary = displayedData.map(d => ({
             month: d.month,
             gpAppts: d.gpAppts,
+            utilization: d.utilization.toFixed(1) + '%',
             gpApptsPerDay: d.gpApptsPerDay.toFixed(2) + '%', 
-            callbacksSuccess: d.callbacksSuccessful || 0,
+            bookingConversion: d.conversionRatio.toFixed(1) + '%',
             gpDNARate: d.gpDNAPct.toFixed(2) + '%',
-            gpUnusedRate: d.gpUnusedPct.toFixed(2) + '%',
             inboundCalls: d.inboundReceived,
-            missedCallsPct: (d.missedFromQueueExRepeatPct || 0).toFixed(2) + '%',
             forecastExtraSlotsNeeded: d.extraSlotsPerDay.toFixed(1)
         }));
 
-        // Prompt with Generic Name "this NHS GP Practice"
         const prompt = `
             You are an expert NHS Practice Manager and Data Analyst using CAIP Analytics.
             Analyze the following monthly performance data for this NHS GP Practice (${selectedMonth === 'All' ? 'Trend Analysis' : selectedMonth}).
@@ -580,16 +689,15 @@ export default function App() {
             Please provide a concise report in exactly these two sections using bullet points:
 
             ### ✅ Positives
-            * Highlight metrics that are performing well (e.g., low DNA rates, high queue answer rates, good capacity usage, good appointment availability).
+            * Highlight metrics that are performing well (e.g., high utilization, low DNA rates, good access ratios).
 
             ### 🚀 Room for Improvement & Actions
             * Identify specific issues and provide a direct, actionable solution for each.
-            * **Strictly apply this logic for your recommendations:**
-                * If **Missed Calls %** is high (>3%) but **Callbacks Success** is low, suggest: "High missed calls with low callback success suggests a configuration error. Check telephony callback settings and staffing."
+            * Logic to apply:
+                * If **Booking Conversion** (Appts / Answered Calls) is low (<30%), suggest: "A high volume of calls are not resulting in appointments. Review signposting/navigation scripts or check if patients are calling for non-clinical reasons."
+                * If **Utilization** is low (<95%), suggest: "You have wasted clinical capacity. Review embargo placement or release slots sooner."
                 * If **GP Appts % per Day** is low (<1.1%), suggest: "GP Appointment availability is low relative to population. Consider increasing clinical sessions or reviewing rota capacity."
-                * If **GP Appts % per Day** is very high (>1.5%), suggest: "GP Appointment rate is unusually high. Check for rota double-counting or potential clinician burnout risks."
-                * If **DNA Rate** is high (>4%), suggest: "DNA rate is above target. Review SMS reminder configuration and ensure patients receive prompts 24h in advance."
-                * If **Unused Slots** are high (>2%), suggest: "Unused capacity is high. Rectify SystmOne rota management, check for hidden embargoes, or release slots earlier."
+                * If **DNA Rate** is high (>4%), suggest: "DNA rate is above target. Review SMS reminder configuration."
 
             Keep the tone professional, constructive, and specific to NHS Primary Care. Use British English. Format with Markdown.
         `;
@@ -767,7 +875,6 @@ export default function App() {
           </div>
           
           <div className="flex items-center gap-4">
-             {/* Made in Section */}
              <div className="hidden lg:flex items-center gap-3 bg-white dark:bg-slate-700 px-4 py-2 rounded-full border border-slate-200 dark:border-slate-600 shadow-sm">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Made in</span>
                 <a href="https://www.rushcliffehealth.org" target="_blank" rel="noopener noreferrer">
@@ -778,7 +885,6 @@ export default function App() {
                 </a>
              </div>
 
-             {/* "See Example" Button - Only show if no data */}
              {!processedData && (
                <button 
                  onClick={loadExampleData}
@@ -998,20 +1104,31 @@ export default function App() {
                    />
                  </div>
 
-                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <Card className="h-80 lg:col-span-1">
                         <h3 className="font-bold text-slate-700 mb-4">Appointment Trends</h3>
                         <Line data={createChartData('Total Appointments', 'totalAppts', NHS_BLUE)} options={commonOptions} />
                     </Card>
                     <Card className="h-80 lg:col-span-1">
-                        <h3 className="font-bold text-slate-700 mb-4">DNA Rate (%)</h3>
-                        <Line data={createChartData('DNA %', 'allDNAPct', NHS_RED)} options={percentageOptions} />
-                    </Card>
-                    <Card className="h-80 lg:col-span-1">
-                        <h3 className="font-bold text-slate-700 mb-4">Unused Slots (%)</h3>
-                        <Line data={createChartData('Unused %', 'allUnusedPct', NHS_GREEN)} options={percentageOptions} />
+                        <h3 className="font-bold text-slate-700 mb-4">Booking Conversion Rate (%)</h3>
+                        <p className="text-xs text-slate-400 mb-2">Appointments booked per 100 answered calls</p>
+                        <Line data={createChartData('Conversion %', 'conversionRatio', NHS_PURPLE)} options={percentageOptions} />
                     </Card>
                  </div>
+                 
+                 <Accordion title="Staff Breakdown (All Staff)" icon={Users}>
+                    {staffData && (
+                        <StaffTable 
+                            data={staffData} 
+                            columns={[
+                                { header: 'Name', accessor: 'name' },
+                                { header: 'Appointments', accessor: 'appts' },
+                                { header: 'Unused Slots', accessor: 'unused' },
+                                { header: 'DNAs', accessor: 'dna' }
+                            ]}
+                        />
+                    )}
+                 </Accordion>
               </div>
             )}
 
@@ -1024,6 +1141,19 @@ export default function App() {
                             <Line data={createChartData('GP Appts %', 'gpApptsPerDay', NHS_DARK_BLUE, false)} options={gpBandOptions} />
                         </div>
                     </Card>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <Card className="h-80">
+                            <h3 className="font-bold text-slate-700 mb-2">GP Capacity Utilization</h3>
+                            <p className="text-xs text-slate-400 mb-4">% of total GP capacity (Appts + Unused) that was used</p>
+                            <Line data={createChartData('Utilization %', 'gpUtilization', NHS_GREEN)} options={percentageOptions} />
+                        </Card>
+                        <Card className="h-80">
+                            <h3 className="font-bold text-slate-700 mb-2">GP Booking Conversion</h3>
+                            <p className="text-xs text-slate-400 mb-4">GP Appointments per 100 answered calls</p>
+                            <Line data={createChartData('GP Conversion %', 'gpConversionRatio', NHS_PURPLE)} options={percentageOptions} />
+                        </Card>
+                    </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <Card className="h-64">
@@ -1052,6 +1182,20 @@ export default function App() {
                              </div>
                         </Card>
                     </div>
+
+                    <Accordion title="GP Performance Breakdown" icon={User}>
+                        {staffData && (
+                            <StaffTable 
+                                data={staffData.filter(s => s.isGP)} 
+                                columns={[
+                                    { header: 'GP Name', accessor: 'name' },
+                                    { header: 'Appointments', accessor: 'appts' },
+                                    { header: 'Unused Slots', accessor: 'unused' },
+                                    { header: 'DNAs', accessor: 'dna' }
+                                ]}
+                            />
+                        )}
+                    </Accordion>
                 </div>
             )}
 
