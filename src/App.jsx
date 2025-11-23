@@ -937,9 +937,10 @@ export default function App() {
     }]
   });
 
-  const FileInput = ({ label, accept, onChange, file }) => (
+  const FileInput = ({ label, helpText, accept, onChange, file }) => (
     <div className="mb-4">
       <label className="block text-sm font-medium text-slate-700 mb-1">{label}</label>
+      {helpText && <p className="text-xs text-slate-500 mb-2">{helpText}</p>}
       <div className="flex items-center gap-3">
         <label className="flex-1 cursor-pointer group">
           <div className={`flex items-center justify-center px-4 py-3 border-2 border-dashed rounded-xl transition-all ${file ? 'border-green-400 bg-green-50' : 'border-slate-300 hover:border-blue-400 hover:bg-blue-50'}`}>
@@ -1088,12 +1089,14 @@ export default function App() {
                />
                <FileInput 
                  label="DNA Extract (CSV) *" 
+                 helpText="(Must tick staff name and slot type in SystmOne)"
                  accept=".csv" 
                  file={files.dna}
                  onChange={(e) => setFiles({...files, dna: e.target.files[0]})}
                />
                <FileInput 
-                 label="Unused Slots Extract (CSV) *" 
+                 label="Unused Extract (CSV) *" 
+                 helpText="(Must tick staff name and slot type in SystmOne)"
                  accept=".csv" 
                  file={files.unused}
                  onChange={(e) => setFiles({...files, unused: e.target.files[0]})}
@@ -1101,7 +1104,8 @@ export default function App() {
                
                {config.analyseTelephony && (
                    <FileInput 
-                     label="Telephony Reports (PDF)" 
+                     label="Telephony Reports (PDF) *" 
+                     helpText="(Simply upload your X-on Surgery Connect Monthly Management Reports - only summary data is used)"
                      accept="application/pdf" 
                      file={files.telephony.length > 0 ? files.telephony : null}
                      onChange={(e) => setFiles({...files, telephony: Array.from(e.target.files)})}
