@@ -14,19 +14,17 @@ import {
 } from 'chart.js';
 import { Upload, Activity, Calendar, Users, Phone, AlertCircle, CheckCircle, XCircle, ChevronDown, Info, Sparkles, Loader2 } from 'lucide-react';
 
-// --- 1. REAL IMPORTS (No CDNs) ---
-import Papa from 'papaparse';
+// --- UNIVERSAL IMPORTS ---
+// Using esm.sh allows these to work in this chat AND in your local Vite project
+// without complex bundler configuration for the worker files.
+import Papa from 'https://esm.sh/papaparse@5.4.1';
+import * as pdfjsLib from 'https://esm.sh/pdfjs-dist@3.11.174';
 
-// PDF.js Import Strategy for Vite
-import * as pdfjsLib from 'pdfjs-dist';
-// This ?url syntax tells Vite to bundle the worker file correctly
-import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+// Set worker source to the matching CDN version
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://esm.sh/pdfjs-dist@3.11.174/build/pdf.worker.min.mjs';
 
-// Set worker source
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
-
-// API Key
-const apiKey = import.meta.env.VITE_GEMINI_KEY || "";
+// API Key - Safe check for Vite environment
+const apiKey = (import.meta && import.meta.env && import.meta.env.VITE_GEMINI_KEY) || "";
 
 // Initialize ChartJS
 ChartJS.register(
