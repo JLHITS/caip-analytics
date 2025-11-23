@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -13,10 +13,12 @@ import {
   Legend,
   Filler,
 } from 'chart.js';
-import { Upload, Activity, Calendar, Users, Phone, AlertCircle, CheckCircle, XCircle, ChevronDown, ChevronUp, Info, Sparkles, Loader2, PlayCircle, Search, User } from 'lucide-react';
+import { Upload, Activity, Calendar, Users, Phone, AlertCircle, CheckCircle, XCircle, ChevronDown, ChevronUp, Info, Sparkles, Loader2, PlayCircle, Search, User, Download, FileText } from 'lucide-react';
 
 // --- PRODUCTION IMPORTS ---
 import Papa from 'papaparse';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 // PDF.js v5+ Import Strategy for Vite
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
@@ -141,25 +143,30 @@ const Accordion = ({ title, children, defaultOpen = false, icon: Icon }) => {
   );
 };
 
-const StaffTable = ({ data, columns }) => {
+const StaffTable = ({ data, columns, isPrint = false }) => {
   const [search, setSearch] = useState('');
   
   const filteredData = data.filter(row => 
     row.name.toLowerCase().includes(search.toLowerCase())
   );
 
+  // If printing, show ALL rows. If not, show top 50.
+  const displayData = isPrint ? filteredData : filteredData.slice(0, 50);
+
   return (
     <div>
-      <div className="mb-4 relative">
-        <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
-        <input 
-          type="text" 
-          placeholder="Search staff name..." 
-          className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-      </div>
+      {!isPrint && (
+        <div className="mb-4 relative">
+            <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
+            <input 
+            type="text" 
+            placeholder="Search staff name..." 
+            className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            />
+        </div>
+      )}
       <div className="overflow-x-auto">
         <table className="w-full text-sm text-left text-slate-600">
           <thead className="bg-slate-50 text-slate-700 uppercase font-bold text-xs">
@@ -170,7 +177,7 @@ const StaffTable = ({ data, columns }) => {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {filteredData.slice(0, 50).map((row, i) => (
+            {displayData.map((row, i) => (
               <tr key={i} className="hover:bg-slate-50 transition-colors">
                 {columns.map((col, j) => (
                   <td key={j} className="px-4 py-3 font-medium">
@@ -184,7 +191,7 @@ const StaffTable = ({ data, columns }) => {
             )}
           </tbody>
         </table>
-        {filteredData.length > 50 && <p className="text-xs text-slate-400 text-center mt-2">Showing top 50 matches</p>}
+        {!isPrint && filteredData.length > 50 && <p className="text-xs text-slate-400 text-center mt-2">Showing top 50 matches</p>}
       </div>
     </div>
   );
@@ -195,13 +202,10 @@ const StaffTable = ({ data, columns }) => {
 const SimpleMarkdown = ({ text }) => {
   if (!text) return null;
 
-  // Helper to parse **bold** and *bold/italic* text
-  // Updated regex to capture both **double** and *single* asterisks
   const parseBold = (line) => {
     const parts = line.split(/(\*\*.*?\*\*|\*.*?\*)/g);
     return parts.map((part, i) => {
       if ((part.startsWith('**') && part.endsWith('**')) || (part.startsWith('*') && part.endsWith('*'))) {
-        // Remove markers
         const clean = part.replace(/^[\*]+|[\*]+$/g, '');
         return <strong key={i} className="font-bold text-indigo-900">{clean}</strong>;
       }
@@ -251,10 +255,11 @@ export default function App() {
   });
 
   const [processedData, setProcessedData] = useState(null);
-  const [rawStaffData, setRawStaffData] = useState([]); // Store raw granular staff data
+  const [rawStaffData, setRawStaffData] = useState([]); 
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [isExporting, setIsExporting] = useState(false);
   
   // Filter State
   const [selectedMonth, setSelectedMonth] = useState('All');
@@ -388,7 +393,6 @@ export default function App() {
     const filesToProcess = customFiles || files;
     const configToUse = customConfig || config; 
     
-    // --- Define Global Counters at the Top Scope of processFiles ---
     let globalDNACount = 0;
     let globalGPDNACount = 0;
     let globalUnusedCount = 0;
@@ -414,9 +418,6 @@ export default function App() {
       }
 
       const months = {};
-      
-      // Store granular staff data by month+name for proper filtering later
-      // Key: "MonthKey_StaffName", Value: { stats }
       const monthlyStaffMap = {}; 
 
       const getMonthKey = (dateStr) => {
@@ -431,7 +432,6 @@ export default function App() {
         return n.includes('Dr') || n.toLowerCase().includes('locum');
       };
 
-      // Helper to update monthly staff stats
       const updateStaff = (month, name, type, value) => {
         if (!name) return;
         const key = `${month}_${name}`;
@@ -441,7 +441,6 @@ export default function App() {
         monthlyStaffMap[key][type] += value;
       };
 
-      // --- Process Appointments ---
       apptData.forEach(row => {
         const date = row['Date'];
         if (!date) return;
@@ -477,7 +476,6 @@ export default function App() {
           
           if (isNaN(count)) return;
           
-          // Monthly Aggregation
           months[monthKey].totalAppts += count;
           if (isGP(key)) {
             months[monthKey].gpAppts += count;
@@ -485,7 +483,6 @@ export default function App() {
             months[monthKey].staffAppts += count;
           }
 
-          // Staff Aggregation
           updateStaff(monthKey, key, 'appts', count);
         });
       });
@@ -494,31 +491,26 @@ export default function App() {
           throw new Error("No valid data found. Please check the Date formatting in your Appointments CSV.");
       }
       
-      // Helper to find which months a staff member worked in (for distrubtion)
       const getMonthsForStaff = (name) => {
          return Object.values(monthlyStaffMap).filter(r => r.name === name).map(r => r.month);
       };
 
-      // --- Process DNA ---
       dnaData.forEach(row => {
           const count = parseInt(row['Appointment Count'], 10) || 0;
           const staffName = row['Staff'];
           globalDNACount += count;
           if (isGP(staffName)) globalGPDNACount += count;
           
-          // Distribute to months where this staff member has appointments
           const workedMonths = getMonthsForStaff(staffName);
           if (workedMonths.length > 0) {
-             const splitCount = count / workedMonths.length; // Even split approximation
+             const splitCount = count / workedMonths.length;
              workedMonths.forEach(m => updateStaff(m, staffName, 'dna', splitCount));
           } else {
-             // Staff had DNA but no appts? Assign to first available month of data
              const firstMonth = Object.keys(months)[0];
              if(firstMonth) updateStaff(firstMonth, staffName, 'dna', count);
           }
       });
 
-      // --- Process Unused ---
       unusedData.forEach(row => {
           const count = parseInt(row['Unused Slots'], 10) || 0;
           const staffName = row['Staff'];
@@ -535,7 +527,6 @@ export default function App() {
           }
       });
 
-      // --- Process Telephony ---
       telephonyData.forEach(item => {
         const text = item.text;
         const monthMatch = text.match(/(January|February|March|April|May|June|July|August|September|October|November|December)\s20\d{2}/i);
@@ -605,18 +596,15 @@ export default function App() {
          const population = parseFloat(configToUse.population) || 1;
          const capitationCalling = t.inboundAnswered ? ((t.inboundAnswered / population) * 100) : 0;
 
-         // Ratios - CHANGED TO RAW RATIO (not percentage)
          const conversionRatio = t.inboundAnswered > 0 ? (m.totalAppts / t.inboundAnswered) : 0;
          const gpConversionRatio = t.inboundAnswered > 0 ? (m.gpAppts / t.inboundAnswered) : 0;
          
-         // Capacity Utilization
          const totalCapacity = m.totalAppts + estimatedUnused;
          const utilization = totalCapacity > 0 ? (m.totalAppts / totalCapacity) * 100 : 0;
 
          const gpCapacity = m.gpAppts + estimatedGPUnused;
          const gpUtilization = gpCapacity > 0 ? (m.gpAppts / gpCapacity) * 100 : 0;
 
-         // Ideal Forecast
          const gpRatio = t.inboundAnswered > 0 ? (m.gpAppts / t.inboundAnswered) : 0;
          const gpMissedDemand = gpRatio * (t.missedFromQueueExRepeat || 0);
          const gpWaste = estimatedGPUnused + estimatedGPDNA;
@@ -631,32 +619,26 @@ export default function App() {
            totalAppts: m.totalAppts,
            gpAppts: m.gpAppts,
            
-           // New Ratios
            conversionRatio,
            gpConversionRatio,
            utilization,
            gpUtilization,
 
-           // GP Metrics
            gpApptsPerDay: m.workingDays ? (m.gpAppts / population * 100) / m.workingDays : 0,
            gpUnusedPct: (m.gpAppts + estimatedGPUnused) > 0 ? (estimatedGPUnused / (m.gpAppts + estimatedGPUnused)) * 100 : 0,
            gpDNAPct: m.gpAppts > 0 ? (estimatedGPDNA / m.gpAppts) * 100 : 0,
 
-           // All Staff Metrics
            allApptsPerDay: m.workingDays ? (m.totalAppts / population * 100) / m.workingDays : 0,
            allUnusedPct: (m.totalAppts + estimatedUnused) > 0 ? (estimatedUnused / (m.totalAppts + estimatedUnused)) * 100 : 0,
            allDNAPct: m.totalAppts > 0 ? (estimatedDNA / m.totalAppts) * 100 : 0,
 
-           // Telephony
            ...t,
            capitationCallingPerDay: m.workingDays ? (capitationCalling / m.workingDays) : 0,
 
-           // Ideal
            extraSlotsPerDay: extraGPSlotsPerDay 
          };
       });
 
-      // 3. Final Sanity Check
       const hasNaN = finalData.some(d => 
         isNaN(d.gpApptsPerDay) || 
         isNaN(d.allApptsPerDay) || 
@@ -668,7 +650,7 @@ export default function App() {
       }
 
       setProcessedData(finalData);
-      setRawStaffData(Object.values(monthlyStaffMap)); // Store the granular data
+      setRawStaffData(Object.values(monthlyStaffMap)); 
 
     } catch (err) {
       setError(err.message);
@@ -680,16 +662,13 @@ export default function App() {
     }
   };
   
-  // --- Aggregated Staff Data (Filtered) ---
   const aggregatedStaffData = useMemo(() => {
     if (!rawStaffData || rawStaffData.length === 0) return [];
     
-    // 1. Filter by month if needed
     const filtered = selectedMonth === 'All' 
         ? rawStaffData 
         : rawStaffData.filter(d => d.month === selectedMonth);
 
-    // 2. Aggregate by name
     const grouped = filtered.reduce((acc, curr) => {
         if (!acc[curr.name]) {
             acc[curr.name] = { 
@@ -706,77 +685,73 @@ export default function App() {
         return acc;
     }, {});
 
-    // 3. Convert to array and sort
     return Object.values(grouped).sort((a,b) => b.appts - a.appts);
 
   }, [rawStaffData, selectedMonth]);
 
+  const fetchAIReport = async () => {
+    const dataSummary = displayedData.map(d => ({
+        month: d.month,
+        gpAppts: d.gpAppts,
+        utilization: d.utilization.toFixed(1) + '%',
+        gpApptsPerDay: d.gpApptsPerDay.toFixed(2) + '%', 
+        bookingConversion: d.conversionRatio.toFixed(2),
+        gpDNARate: d.gpDNAPct.toFixed(2) + '%',
+        inboundCalls: d.inboundReceived,
+        forecastExtraSlotsNeeded: d.extraSlotsPerDay.toFixed(1)
+    }));
 
-  // --- AI Feature ---
+    const prompt = `
+        You are an expert NHS Practice Manager and Data Analyst using CAIP Analytics.
+        Analyze the following monthly performance data for this NHS GP Practice (${selectedMonth === 'All' ? 'Trend Analysis' : selectedMonth}).
+        
+        Data: ${JSON.stringify(dataSummary)}
+
+        Please provide a concise report in exactly these two sections using bullet points:
+
+        ### ✅ Positives
+        * Highlight metrics that are performing well (e.g., high utilization, low DNA rates, good access ratios).
+
+        ### 🚀 Room for Improvement & Actions
+        * Identify specific issues and provide a direct, actionable solution for each.
+        * Logic to apply:
+            * If **Booking Conversion** (Appts / Answered Calls) is low (<0.5), suggest: "A high volume of calls are not resulting in appointments. Review signposting/navigation scripts or check if patients are calling for non-clinical reasons."
+            * If **Utilization** is low (<95%), suggest: "You have wasted clinical capacity. Review embargo placement or release slots sooner."
+            * If **GP Appts % per Day** is low (<1.1%), suggest: "GP Appointment availability is low relative to population. Consider increasing clinical sessions or reviewing rota capacity."
+            * If **DNA Rate** is high (>4%), suggest: "DNA rate is above target. Review SMS reminder configuration."
+
+        Keep the tone professional, constructive, and specific to NHS Primary Care. Use British English. Format with Markdown.
+    `;
+
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }]
+        })
+    });
+
+    if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error?.message || 'Failed to generate insights');
+    }
+    
+    const result = await response.json();
+    return result.candidates?.[0]?.content?.parts?.[0]?.text;
+  };
+
   const generateAIInsights = async () => {
     if (!displayedData || displayedData.length === 0) return;
-    
     setIsAiLoading(true);
     setAiError(null);
-    setAiReport(null);
-
+    
     try {
-        const dataSummary = displayedData.map(d => ({
-            month: d.month,
-            gpAppts: d.gpAppts,
-            utilization: d.utilization.toFixed(1) + '%',
-            gpApptsPerDay: d.gpApptsPerDay.toFixed(2) + '%', 
-            bookingConversion: d.conversionRatio.toFixed(2),
-            gpDNARate: d.gpDNAPct.toFixed(2) + '%',
-            inboundCalls: d.inboundReceived,
-            forecastExtraSlotsNeeded: d.extraSlotsPerDay.toFixed(1)
-        }));
-
-        const prompt = `
-            You are an expert NHS Practice Manager and Data Analyst using CAIP Analytics.
-            Analyze the following monthly performance data for this NHS GP Practice (${selectedMonth === 'All' ? 'Trend Analysis' : selectedMonth}).
-            
-            Data: ${JSON.stringify(dataSummary)}
-
-            Please provide a concise report in exactly these two sections using bullet points:
-
-            ### ✅ Positives
-            * Highlight metrics that are performing well (e.g., high utilization, low DNA rates, good access ratios).
-
-            ### 🚀 Room for Improvement & Actions
-            * Identify specific issues and provide a direct, actionable solution for each.
-            * Logic to apply:
-                * If **Booking Conversion** (Appts / Answered Calls) is low (<0.5), suggest: "A high volume of calls are not resulting in appointments. Review signposting/navigation scripts or check if patients are calling for non-clinical reasons."
-                * If **Utilization** is low (<95%), suggest: "You have wasted clinical capacity. Review embargo placement or release slots sooner."
-                * If **GP Appts % per Day** is low (<1.1%), suggest: "GP Appointment availability is low relative to population. Consider increasing clinical sessions or reviewing rota capacity."
-                * If **DNA Rate** is high (>4%), suggest: "DNA rate is above target. Review SMS reminder configuration."
-
-            Keep the tone professional, constructive, and specific to NHS Primary Care. Use British English. Format with Markdown.
-        `;
-
-        // Updated Model URL to gemini-2.5-flash
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                contents: [{ parts: [{ text: prompt }] }]
-            })
-        });
-
-        if (!response.ok) {
-            const errData = await response.json();
-            throw new Error(errData.error?.message || 'Failed to generate insights');
-        }
-        
-        const result = await response.json();
-        const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-        
+        const text = await fetchAIReport();
         if (text) {
             setAiReport(text);
         } else {
             throw new Error('No insight generated');
         }
-
     } catch (e) {
         console.error("AI Error:", e);
         setAiError(`AI Error: ${e.message}`);
@@ -785,7 +760,64 @@ export default function App() {
     }
   };
 
-  // --- Filtering ---
+  const handleExportPDF = async () => {
+    setIsExporting(true);
+    try {
+        if (!aiReport) {
+            try {
+                const text = await fetchAIReport();
+                setAiReport(text);
+                await new Promise(resolve => setTimeout(resolve, 500));
+            } catch (e) {
+                console.error("Could not generate AI report for PDF", e);
+            }
+        }
+
+        const container = document.getElementById('pdf-report-container');
+        if (!container) throw new Error("Report container not found");
+
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = pdf.internal.pageSize.getHeight();
+
+        const addSectionToPDF = async (elementId, addPageBreak = true) => {
+            const element = document.getElementById(elementId);
+            if (!element) return;
+
+            const canvas = await html2canvas(element, {
+                scale: 2,
+                useCORS: true,
+                logging: false,
+                backgroundColor: '#ffffff'
+            });
+
+            const imgData = canvas.toDataURL('image/png');
+            const imgWidth = canvas.width;
+            const imgHeight = canvas.height;
+            const ratio = pdfWidth / imgWidth;
+            const scaledHeight = imgHeight * ratio;
+
+            if (addPageBreak) pdf.addPage();
+            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, scaledHeight);
+        };
+
+        await addSectionToPDF('pdf-title-page', false);
+        await addSectionToPDF('pdf-overview-section');
+        await addSectionToPDF('pdf-gp-section');
+        if(config.analyseTelephony) await addSectionToPDF('pdf-telephony-section');
+        await addSectionToPDF('pdf-forecast-section');
+
+        const filename = `CAIP Analysis - ${config.surgeryName || 'Surgery'}.pdf`;
+        pdf.save(filename);
+
+    } catch (err) {
+        console.error("Export failed", err);
+        alert("Failed to export PDF. Please try again.");
+    } finally {
+        setIsExporting(false);
+    }
+  };
+
   const displayedData = useMemo(() => {
     if (!processedData) return null;
     if (selectedMonth === 'All') return processedData;
@@ -797,14 +829,11 @@ export default function App() {
     return ['All', ...processedData.map(d => d.month)];
   }, [processedData]);
 
-  // --- Charts Configuration ---
-
+  // --- CHART OPTIONS ---
   const commonOptions = {
     responsive: true,
     maintainAspectRatio: false,
-    layout: {
-      padding: 20 
-    },
+    layout: { padding: 20 },
     plugins: {
       legend: { position: 'bottom' },
       tooltip: {
@@ -834,6 +863,58 @@ export default function App() {
     }
   };
 
+  // --- PDF SPECIFIC OPTIONS (Disable Animation) ---
+  const pdfChartOptions = {
+    ...commonOptions,
+    animation: false,
+    responsive: true,
+    maintainAspectRatio: false,
+  };
+
+  const pdfTimeOptions = {
+      ...pdfChartOptions,
+      scales: {
+          ...pdfChartOptions.scales,
+          y: {
+              ...pdfChartOptions.scales.y,
+              ticks: {
+                  color: '#64748b',
+                  callback: (v) => `${Math.floor(v/60)}m ${v%60}s`
+              }
+          }
+      }
+  };
+
+  const pdfPercentageOptions = {
+    ...pdfChartOptions,
+    scales: {
+      ...pdfChartOptions.scales,
+      y: {
+        ...pdfChartOptions.scales.y,
+        min: 0, 
+        ticks: {
+          color: '#64748b',
+          callback: (value) => `${Number(value).toFixed(2)}%`
+        }
+      }
+    }
+  };
+
+  const pdfStackedPercentageOptions = {
+    ...pdfPercentageOptions,
+    scales: {
+        x: { 
+          ...commonOptions.scales.x,
+          stacked: true 
+        },
+        y: { 
+          ...pdfPercentageOptions.scales.y,
+          stacked: true,
+          max: 100 
+        }
+      }
+  };
+
   const timeOptions = {
       ...commonOptions,
       scales: {
@@ -854,7 +935,7 @@ export default function App() {
       ...commonOptions.scales,
       y: {
         ...commonOptions.scales.y,
-        min: 0, // Ensure it starts at 0
+        min: 0, 
         ticks: {
           color: '#64748b',
           callback: (value) => `${Number(value).toFixed(2)}%`
@@ -887,12 +968,39 @@ export default function App() {
     }
   };
 
+  const pdfRatioOptions = {
+    ...pdfChartOptions,
+    scales: {
+      ...pdfChartOptions.scales,
+      y: {
+        ...pdfChartOptions.scales.y,
+        min: 0,
+        ticks: {
+          color: '#64748b',
+          callback: (value) => Number(value).toFixed(2)
+        }
+      }
+    }
+  };
+
   const utilizationOptions = {
     ...percentageOptions,
     scales: {
         ...percentageOptions.scales,
         y: {
             ...percentageOptions.scales.y,
+            min: 0,
+            max: 100
+        }
+    }
+  };
+
+  const pdfUtilizationOptions = {
+    ...pdfPercentageOptions,
+    scales: {
+        ...pdfPercentageOptions.scales,
+        y: {
+            ...pdfPercentageOptions.scales.y,
             min: 0,
             max: 100
         }
@@ -911,6 +1019,29 @@ export default function App() {
     },
     plugins: {
         ...percentageOptions.plugins,
+        backgroundBands: {
+            bands: [
+                { from: 0, to: 0.85, color: GP_BAND_RED },
+                { from: 0.85, to: 1.10, color: GP_BAND_AMBER },
+                { from: 1.10, to: 1.30, color: GP_BAND_GREEN },
+                { from: 1.30, to: 5.00, color: GP_BAND_BLUE }, 
+            ]
+        }
+    }
+  };
+
+  const pdfGpBandOptions = {
+    ...pdfPercentageOptions,
+    scales: {
+        ...pdfPercentageOptions.scales,
+        y: {
+            ...pdfPercentageOptions.scales.y,
+            min: 0,
+            suggestedMax: 1.6 
+        }
+    },
+    plugins: {
+        ...pdfPercentageOptions.plugins,
         backgroundBands: {
             bands: [
                 { from: 0, to: 0.85, color: GP_BAND_RED },
@@ -1135,14 +1266,19 @@ export default function App() {
         )}
 
         {processedData && (
-          <div className="animate-in fade-in duration-700">
+          <div className="animate-in fade-in duration-700" id="dashboard-content">
+            <div className="hidden print:block mb-8 text-center">
+                <h1 className="text-3xl font-bold text-slate-900">CAIP Analysis - {config.surgeryName || 'Surgery Report'}</h1>
+                <p className="text-slate-500">Generated on {new Date().toLocaleDateString()}</p>
+            </div>
+
             {aiReport && (
                 <Card className="mb-8 bg-gradient-to-br from-indigo-50 to-white border-indigo-100 animate-in slide-in-from-top-4 duration-500 shadow-md">
                     <div className="flex items-center gap-3 mb-4">
                         <div className="p-2 bg-indigo-100 rounded-lg text-indigo-600">
                             <Sparkles size={20} />
                         </div>
-                        <h3 className="text-lg font-bold text-indigo-900">CAIP Copilot Analysis</h3>
+                        <h3 className="text-lg font-bold text-indigo-900">CAIP Analysis</h3>
                         <button onClick={() => setAiReport(null)} className="ml-auto text-slate-400 hover:text-slate-600 text-sm">Close</button>
                     </div>
                     <div className="prose prose-sm prose-indigo max-w-none">
@@ -1158,19 +1294,37 @@ export default function App() {
                  </div>
             )}
             
-            {/* NEW BUTTON LOCATION: Centered above tabs */}
-            <div className="flex justify-center mb-6">
+            {/* ACTION BUTTONS: Centered above tabs */}
+            <div className="flex justify-center gap-4 mb-6" data-html2canvas-ignore="true">
+                 {/* 1. CAIP Analysis Button */}
                  <button 
                   onClick={generateAIInsights}
                   disabled={isAiLoading}
-                  className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-full hover:from-purple-700 hover:to-indigo-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 transform hover:-translate-y-0.5"
+                  className="group relative inline-flex items-center justify-center px-8 py-3 overflow-hidden rounded-full bg-slate-900 font-medium text-white shadow-2xl transition-all duration-300 hover:scale-105 hover:shadow-purple-500/50 disabled:opacity-70"
                  >
-                  {isAiLoading ? <Loader2 size={18} className="animate-spin"/> : <Sparkles size={18} />}
-                  <span className="font-bold text-sm">Analyse with AI</span>
+                  <span className="absolute inset-0 h-full w-full bg-gradient-to-br from-purple-600 via-indigo-600 to-purple-700 opacity-100 transition-all duration-300 group-hover:from-purple-500 group-hover:via-indigo-500 group-hover:to-purple-600"></span>
+                  <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-1000 group-hover:translate-x-full"></span>
+                  <span className="absolute inset-0 rounded-full border border-white/20"></span>
+                  <span className="relative flex items-center gap-2">
+                    {isAiLoading ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} className="animate-pulse" />}
+                    <span className="font-bold tracking-wide">
+                        C<span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-300 to-pink-300 animate-pulse">AI</span>P Analysis
+                    </span>
+                  </span>
+                 </button>
+
+                 {/* 2. Export to PDF Button */}
+                 <button 
+                  onClick={handleExportPDF}
+                  disabled={isExporting}
+                  className="flex items-center gap-2 px-6 py-3 bg-white text-slate-600 border border-slate-200 rounded-full hover:bg-slate-50 hover:border-slate-300 hover:text-slate-800 transition-all shadow-sm hover:shadow-md disabled:opacity-70"
+                 >
+                  {isExporting ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
+                  <span className="font-semibold">Export to PDF</span>
                  </button>
             </div>
 
-            <div className="flex justify-center mb-8">
+            <div className="flex justify-center mb-8" data-html2canvas-ignore="true">
               <div className="bg-white p-1 rounded-xl shadow-sm border border-slate-200 inline-flex">
                 {[
                     {id: 'dashboard', label: 'Overview', icon: Activity},
@@ -1190,6 +1344,7 @@ export default function App() {
               </div>
             </div>
 
+            {/* --- VISIBLE CONTENT (Interactive) --- */}
             {activeTab === 'dashboard' && (
               <div className="space-y-6">
                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -1446,6 +1601,100 @@ export default function App() {
                     </Card>
                 </div>
             )}
+
+            {/* --- HIDDEN PRINT CONTAINER --- */}
+            {/* This container is rendered off-screen but contains the full expanded report for PDF generation */}
+            <div id="pdf-report-container" style={{ position: 'fixed', top: 0, left: -10000, width: '1200px', background: '#fff', zIndex: -100 }}>
+                
+                {/* Title Page */}
+                <div id="pdf-title-page" className="flex flex-col items-center justify-center h-[800px] p-20 text-center bg-slate-50">
+                    <img src={logo} className="w-32 h-32 mb-8 rounded-xl shadow-lg" />
+                    <h1 className="text-6xl font-bold text-slate-900 mb-4">CAIP Analysis Report</h1>
+                    <h2 className="text-4xl text-blue-600 font-medium mb-12">{config.surgeryName || 'Surgery Report'}</h2>
+                    <p className="text-slate-500 text-xl">Generated on {new Date().toLocaleDateString()}</p>
+                    
+                    {aiReport && (
+                        <div className="mt-12 text-left bg-white p-8 rounded-2xl shadow-sm border border-slate-200 max-w-4xl mx-auto">
+                            <h3 className="text-2xl font-bold text-indigo-900 mb-4 flex items-center gap-2"><Sparkles className="text-indigo-500"/> cAIp Analysis Summary</h3>
+                            <div className="prose prose-lg max-w-none text-slate-700">
+                                <SimpleMarkdown text={aiReport} />
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Overview Section */}
+                <div id="pdf-overview-section" className="p-10 space-y-8">
+                    <h2 className="text-3xl font-bold text-slate-800 border-b border-slate-200 pb-4 mb-6">1. Practice Overview</h2>
+                    <div className="grid grid-cols-3 gap-6">
+                        <MetricCard title="Total Appointments" value={displayedData.reduce((a,b)=>a+b.totalAppts,0).toLocaleString()} icon={Calendar} color="text-blue-600" />
+                        <MetricCard title="Avg Inbound Calls" value={Math.round(displayedData.reduce((a,b)=>a+b.inboundReceived,0)/(selectedMonth==='All'?displayedData.length:1)).toLocaleString()} icon={Phone} color="text-indigo-600" />
+                        <MetricCard title="Avg DNA Rate" value={`${(displayedData.reduce((a,b)=>a+b.allDNAPct,0)/(selectedMonth==='All'?displayedData.length:1)).toFixed(2)}%`} icon={XCircle} color="text-red-500" />
+                    </div>
+                    <div className="h-96 border border-slate-200 rounded-xl p-4"><Line data={createChartData('Total Appointments', 'totalAppts', NHS_BLUE)} options={pdfChartOptions} /></div>
+                    <div className="mt-8">
+                        <h3 className="text-xl font-bold text-slate-700 mb-4">Full Staff Breakdown</h3>
+                        <StaffTable data={aggregatedStaffData} columns={[{header:'Name',accessor:'name'},{header:'Appointments',accessor:'appts'},{header:'Unused',accessor:'unused'},{header:'DNAs',accessor:'dna'}]} isPrint={true} />
+                    </div>
+                </div>
+
+                {/* GP Section */}
+                <div id="pdf-gp-section" className="p-10 space-y-8">
+                    <h2 className="text-3xl font-bold text-slate-800 border-b border-slate-200 pb-4 mb-6">2. GP Metrics</h2>
+                    <div className="h-96 border border-slate-200 rounded-xl p-4"><Line data={createChartData('GP Appts %', 'gpApptsPerDay', NHS_DARK_BLUE, false)} options={pdfGpBandOptions} /></div>
+                    <div className="grid grid-cols-2 gap-6">
+                        <div className="h-80 border border-slate-200 rounded-xl p-4"><Line data={createChartData('Utilisation %', 'gpUtilization', NHS_GREEN)} options={pdfUtilizationOptions} /></div>
+                        <div className="h-80 border border-slate-200 rounded-xl p-4"><Line data={createChartData('GP Conversion Ratio', 'gpConversionRatio', NHS_PURPLE)} options={pdfRatioOptions} /></div>
+                    </div>
+                    <div className="mt-8">
+                        <h3 className="text-xl font-bold text-slate-700 mb-4">GP Staff Performance</h3>
+                        <StaffTable data={aggregatedStaffData.filter(s => s.isGP)} columns={[{header:'GP Name',accessor:'name'},{header:'Appointments',accessor:'appts'},{header:'Unused',accessor:'unused'},{header:'DNAs',accessor:'dna'}]} isPrint={true} />
+                    </div>
+                </div>
+
+                {/* Telephony Section (Conditional) */}
+                {config.analyseTelephony && (
+                    <div id="pdf-telephony-section" className="p-10 space-y-8">
+                        <h2 className="text-3xl font-bold text-slate-800 border-b border-slate-200 pb-4 mb-6">3. Telephony Performance</h2>
+                        {/* Add Metric Cards here */}
+                        <div className="grid grid-cols-5 gap-4 mb-6">
+                            {[
+                                { l: 'Inbound Calls', k: 'inboundReceived', c: 'text-blue-600' },
+                                { l: 'Answered Queue', k: 'answeredFromQueue', c: 'text-green-600', suffix: '%' },
+                                { l: 'Abandoned', k: 'abandonedCalls', c: 'text-amber-600', suffix: '%' },
+                                { l: 'Callbacks Success', k: 'callbacksSuccessful', c: 'text-blue-500' },
+                                { l: 'Avg Wait', k: 'avgQueueTimeAnswered', c: 'text-slate-600', fmt: v => `${Math.floor(v/60)}m ${v%60}s` }
+                            ].map((m, i) => (
+                                <Card key={i} className="p-4">
+                                    <p className="text-xs font-bold text-slate-400 uppercase">{m.l}</p>
+                                    <p className={`text-xl font-bold ${m.c} mt-1`}>
+                                        {m.fmt ? m.fmt(displayedData[displayedData.length-1][m.k]) : 
+                                         `${displayedData[displayedData.length-1][m.k].toLocaleString()}${m.suffix||''}`}
+                                    </p>
+                                    <p className="text-[10px] text-slate-400">{selectedMonth === 'All' ? 'Latest Month' : selectedMonth}</p>
+                                </Card>
+                            ))}
+                        </div>
+                        <div className="grid grid-cols-3 gap-6 h-80">
+                            <div className="border border-slate-200 rounded-xl p-4"><Bar data={{labels:displayedData.map(d=>d.month),datasets:[{label:'Answered %',data:displayedData.map(d=>100-(d.missedFromQueueExRepeatPct||0)),backgroundColor:NHS_GREEN},{label:'Missed %',data:displayedData.map(d=>d.missedFromQueueExRepeatPct||0),backgroundColor:NHS_RED}]}} options={pdfStackedPercentageOptions} /></div>
+                            <div className="border border-slate-200 rounded-xl p-4"><Line data={createChartData('Abandoned %', 'abandonedCalls', NHS_AMBER)} options={pdfPercentageOptions} /></div>
+                            <div className="border border-slate-200 rounded-xl p-4"><Line data={createChartData('Avg Queue Time', 'avgQueueTimeAnswered', NHS_BLUE)} options={pdfTimeOptions} /></div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Forecast Section */}
+                <div id="pdf-forecast-section" className="p-10 space-y-8">
+                    <h2 className="text-3xl font-bold text-slate-800 border-b border-slate-200 pb-4 mb-6">4. Demand Forecast (GP Only)</h2>
+                    <div className="bg-blue-50 p-6 rounded-xl border border-blue-100 text-blue-800 mb-6">
+                        <p className="text-lg">This chart estimates the number of extra GP appointments per day required to meet hidden demand from missed calls.</p>
+                    </div>
+                    <div className="h-96 border border-slate-200 rounded-xl p-4">
+                        <Bar data={{labels:displayedData.map(d=>d.month),datasets:[{label:'Shortfall (Slots/Day)',data:displayedData.map(d=>d.extraSlotsPerDay),backgroundColor:displayedData.map(d=>d.extraSlotsPerDay>0?'#EF4444':'#10B981')}]}} options={pdfChartOptions} />
+                    </div>
+                </div>
+
+            </div>
 
           </div>
         )}
