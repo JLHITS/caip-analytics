@@ -18,7 +18,7 @@ import * as pdfjsLib from 'pdfjs-dist';
 // Set the worker to a CDN to avoid complex build configuration
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
-// Initialize ChartJS
+// Initialize ChartJS // 
 ChartJS.register(
   CategoryScale,
   LinearScale,
