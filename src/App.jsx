@@ -750,7 +750,8 @@ export default function App() {
             Keep the tone professional, constructive, and specific to NHS Primary Care. Use British English. Format with Markdown.
         `;
 
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+        // Updated Model URL to gemini-2.5-flash
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -758,7 +759,10 @@ export default function App() {
             })
         });
 
-        if (!response.ok) throw new Error('Failed to generate insights');
+        if (!response.ok) {
+            const errData = await response.json();
+            throw new Error(errData.error?.message || 'Failed to generate insights');
+        }
         
         const result = await response.json();
         const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -770,8 +774,8 @@ export default function App() {
         }
 
     } catch (e) {
-        console.error(e);
-        setAiError("Could not generate AI report. Please try again.");
+        console.error("AI Error:", e);
+        setAiError(`AI Error: ${e.message}`);
     } finally {
         setIsAiLoading(false);
     }
