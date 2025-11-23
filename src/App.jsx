@@ -247,7 +247,7 @@ export default function App() {
   });
 
   const [processedData, setProcessedData] = useState(null);
-  const [staffData, setStaffData] = useState(null); // New state for Staff Tables
+  const [rawStaffData, setRawStaffData] = useState([]); // Store raw granular staff data
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -318,7 +318,7 @@ export default function App() {
     setIsProcessing(true);
     setError(null);
     setProcessedData(null);
-    setStaffData(null);
+    setRawStaffData([]);
 
     try {
       const fetchFile = async (path, name, type) => {
@@ -379,10 +379,16 @@ export default function App() {
     setIsProcessing(true);
     setError(null);
     setProcessedData(null);
-    setStaffData(null);
+    setRawStaffData([]);
 
     const filesToProcess = customFiles || files;
     const configToUse = customConfig || config; 
+    
+    // --- Define Global Counters at the Top Scope of processFiles ---
+    let globalDNACount = 0;
+    let globalGPDNACount = 0;
+    let globalUnusedCount = 0;
+    let globalGPUnusedCount = 0;
 
     try {
       if (!filesToProcess.appointments) throw new Error("Appointment CSV is required");
@@ -404,7 +410,10 @@ export default function App() {
       }
 
       const months = {};
-      const staffStats = {}; // To store aggregated staff data
+      
+      // Store granular staff data by month+name for proper filtering later
+      // Key: "MonthKey_StaffName", Value: { stats }
+      const monthlyStaffMap = {}; 
 
       const getMonthKey = (dateStr) => {
         const d = new Date(dateStr);
@@ -418,11 +427,14 @@ export default function App() {
         return n.includes('Dr') || n.toLowerCase().includes('locum');
       };
 
-      // Helper to init staff in stats
-      const initStaff = (name) => {
-        if (!staffStats[name]) {
-            staffStats[name] = { name, isGP: isGP(name), appts: 0, dna: 0, unused: 0 };
+      // Helper to update monthly staff stats
+      const updateStaff = (month, name, type, value) => {
+        if (!name) return;
+        const key = `${month}_${name}`;
+        if (!monthlyStaffMap[key]) {
+            monthlyStaffMap[key] = { month, name, isGP: isGP(name), appts: 0, dna: 0, unused: 0 };
         }
+        monthlyStaffMap[key][type] += value;
       };
 
       // --- Process Appointments ---
@@ -469,49 +481,53 @@ export default function App() {
             months[monthKey].staffAppts += count;
           }
 
-          // Staff Table Aggregation
-          initStaff(key);
-          staffStats[key].appts += count;
+          // Staff Aggregation
+          updateStaff(monthKey, key, 'appts', count);
         });
       });
 
       if (Object.keys(months).length === 0) {
           throw new Error("No valid data found. Please check the Date formatting in your Appointments CSV.");
       }
+      
+      // Helper to find which months a staff member worked in (for distrubtion)
+      const getMonthsForStaff = (name) => {
+         return Object.values(monthlyStaffMap).filter(r => r.name === name).map(r => r.month);
+      };
 
       // --- Process DNA ---
-      let globalDNACount = 0;
-      let globalGPDNACount = 0;
-      
       dnaData.forEach(row => {
           const count = parseInt(row['Appointment Count'], 10) || 0;
           const staffName = row['Staff'];
           globalDNACount += count;
-          if (isGP(staffName)) {
-              globalGPDNACount += count;
-          }
-          // Staff Stats
-          if (staffName) {
-            initStaff(staffName);
-            staffStats[staffName].dna += count;
+          if (isGP(staffName)) globalGPDNACount += count;
+          
+          // Distribute to months where this staff member has appointments
+          const workedMonths = getMonthsForStaff(staffName);
+          if (workedMonths.length > 0) {
+             const splitCount = count / workedMonths.length; // Even split approximation
+             workedMonths.forEach(m => updateStaff(m, staffName, 'dna', splitCount));
+          } else {
+             // Staff had DNA but no appts? Assign to first available month of data
+             const firstMonth = Object.keys(months)[0];
+             if(firstMonth) updateStaff(firstMonth, staffName, 'dna', count);
           }
       });
 
       // --- Process Unused ---
-      let globalUnusedCount = 0;
-      let globalGPUnusedCount = 0;
-      
       unusedData.forEach(row => {
           const count = parseInt(row['Unused Slots'], 10) || 0;
           const staffName = row['Staff'];
           globalUnusedCount += count;
-          if (isGP(staffName)) {
-              globalGPUnusedCount += count;
-          }
-          // Staff Stats
-          if (staffName) {
-            initStaff(staffName);
-            staffStats[staffName].unused += count;
+          if (isGP(staffName)) globalGPUnusedCount += count;
+
+          const workedMonths = getMonthsForStaff(staffName);
+          if (workedMonths.length > 0) {
+             const splitCount = count / workedMonths.length;
+             workedMonths.forEach(m => updateStaff(m, staffName, 'unused', splitCount));
+          } else {
+             const firstMonth = Object.keys(months)[0];
+             if(firstMonth) updateStaff(firstMonth, staffName, 'unused', count);
           }
       });
 
@@ -585,9 +601,9 @@ export default function App() {
          const population = parseFloat(configToUse.population) || 1;
          const capitationCalling = t.inboundAnswered ? ((t.inboundAnswered / population) * 100) : 0;
 
-         // Ratios
-         const conversionRatio = t.inboundAnswered > 0 ? (m.totalAppts / t.inboundAnswered) * 100 : 0;
-         const gpConversionRatio = t.inboundAnswered > 0 ? (m.gpAppts / t.inboundAnswered) * 100 : 0;
+         // Ratios - CHANGED TO RAW RATIO (not percentage)
+         const conversionRatio = t.inboundAnswered > 0 ? (m.totalAppts / t.inboundAnswered) : 0;
+         const gpConversionRatio = t.inboundAnswered > 0 ? (m.gpAppts / t.inboundAnswered) : 0;
          
          // Capacity Utilization
          const totalCapacity = m.totalAppts + estimatedUnused;
@@ -648,18 +664,50 @@ export default function App() {
       }
 
       setProcessedData(finalData);
-      setStaffData(Object.values(staffStats).sort((a,b) => b.appts - a.appts)); // Store sorted staff data
+      setRawStaffData(Object.values(monthlyStaffMap)); // Store the granular data
 
     } catch (err) {
       setError(err.message);
       setProcessedData(null); 
-      setStaffData(null);
+      setRawStaffData([]);
       console.error("Processing Failed:", err);
     } finally {
       setIsProcessing(false);
     }
   };
   
+  // --- Aggregated Staff Data (Filtered) ---
+  const aggregatedStaffData = useMemo(() => {
+    if (!rawStaffData || rawStaffData.length === 0) return [];
+    
+    // 1. Filter by month if needed
+    const filtered = selectedMonth === 'All' 
+        ? rawStaffData 
+        : rawStaffData.filter(d => d.month === selectedMonth);
+
+    // 2. Aggregate by name
+    const grouped = filtered.reduce((acc, curr) => {
+        if (!acc[curr.name]) {
+            acc[curr.name] = { 
+                name: curr.name, 
+                isGP: curr.isGP, 
+                appts: 0, 
+                dna: 0, 
+                unused: 0 
+            };
+        }
+        acc[curr.name].appts += curr.appts;
+        acc[curr.name].dna += curr.dna;
+        acc[curr.name].unused += curr.unused;
+        return acc;
+    }, {});
+
+    // 3. Convert to array and sort
+    return Object.values(grouped).sort((a,b) => b.appts - a.appts);
+
+  }, [rawStaffData, selectedMonth]);
+
+
   // --- AI Feature ---
   const generateAIInsights = async () => {
     if (!displayedData || displayedData.length === 0) return;
@@ -674,7 +722,7 @@ export default function App() {
             gpAppts: d.gpAppts,
             utilization: d.utilization.toFixed(1) + '%',
             gpApptsPerDay: d.gpApptsPerDay.toFixed(2) + '%', 
-            bookingConversion: d.conversionRatio.toFixed(1) + '%',
+            bookingConversion: d.conversionRatio.toFixed(2),
             gpDNARate: d.gpDNAPct.toFixed(2) + '%',
             inboundCalls: d.inboundReceived,
             forecastExtraSlotsNeeded: d.extraSlotsPerDay.toFixed(1)
@@ -694,7 +742,7 @@ export default function App() {
             ### 🚀 Room for Improvement & Actions
             * Identify specific issues and provide a direct, actionable solution for each.
             * Logic to apply:
-                * If **Booking Conversion** (Appts / Answered Calls) is low (<30%), suggest: "A high volume of calls are not resulting in appointments. Review signposting/navigation scripts or check if patients are calling for non-clinical reasons."
+                * If **Booking Conversion** (Appts / Answered Calls) is low (<0.5), suggest: "A high volume of calls are not resulting in appointments. Review signposting/navigation scripts or check if patients are calling for non-clinical reasons."
                 * If **Utilization** is low (<95%), suggest: "You have wasted clinical capacity. Review embargo placement or release slots sooner."
                 * If **GP Appts % per Day** is low (<1.1%), suggest: "GP Appointment availability is low relative to population. Consider increasing clinical sessions or reviewing rota capacity."
                 * If **DNA Rate** is high (>4%), suggest: "DNA rate is above target. Review SMS reminder configuration."
@@ -760,6 +808,7 @@ export default function App() {
     },
     scales: {
       y: {
+        beginAtZero: true,
         grid: { color: '#f1f5f9' },
         ticks: { color: '#64748b' }
       },
@@ -794,6 +843,7 @@ export default function App() {
       ...commonOptions.scales,
       y: {
         ...commonOptions.scales.y,
+        min: 0, // Ensure it starts at 0
         ticks: {
           color: '#64748b',
           callback: (value) => `${Number(value).toFixed(2)}%`
@@ -801,9 +851,53 @@ export default function App() {
       }
     }
   };
+  
+  const ratioOptions = {
+    ...commonOptions,
+    scales: {
+      ...commonOptions.scales,
+      y: {
+        ...commonOptions.scales.y,
+        min: 0,
+        ticks: {
+          color: '#64748b',
+          callback: (value) => Number(value).toFixed(2)
+        }
+      }
+    },
+    plugins: {
+        ...commonOptions.plugins,
+        tooltip: {
+            ...commonOptions.plugins.tooltip,
+            callbacks: {
+                label: (ctx) => `${ctx.dataset.label}: ${Number(ctx.raw).toFixed(2)}`
+            }
+        }
+    }
+  };
+
+  const utilizationOptions = {
+    ...percentageOptions,
+    scales: {
+        ...percentageOptions.scales,
+        y: {
+            ...percentageOptions.scales.y,
+            min: 0,
+            max: 100
+        }
+    }
+  };
 
   const gpBandOptions = {
     ...percentageOptions,
+    scales: {
+        ...percentageOptions.scales,
+        y: {
+            ...percentageOptions.scales.y,
+            min: 0,
+            suggestedMax: 1.6 
+        }
+    },
     plugins: {
         ...percentageOptions.plugins,
         backgroundBands: {
@@ -1110,16 +1204,16 @@ export default function App() {
                         <Line data={createChartData('Total Appointments', 'totalAppts', NHS_BLUE)} options={commonOptions} />
                     </Card>
                     <Card className="h-80 lg:col-span-1">
-                        <h3 className="font-bold text-slate-700 mb-4">Booking Conversion Rate (%)</h3>
-                        <p className="text-xs text-slate-400 mb-2">Appointments booked per 100 answered calls</p>
-                        <Line data={createChartData('Conversion %', 'conversionRatio', NHS_PURPLE)} options={percentageOptions} />
+                        <h3 className="font-bold text-slate-700 mb-4">Booking Conversion Ratio</h3>
+                        <p className="text-xs text-slate-400 mb-2">Appointments booked per answered call</p>
+                        <Line data={createChartData('Conversion Ratio', 'conversionRatio', NHS_PURPLE)} options={ratioOptions} />
                     </Card>
                  </div>
                  
                  <Accordion title="Staff Breakdown (All Staff)" icon={Users}>
-                    {staffData && (
+                    {aggregatedStaffData && (
                         <StaffTable 
-                            data={staffData} 
+                            data={aggregatedStaffData} 
                             columns={[
                                 { header: 'Name', accessor: 'name' },
                                 { header: 'Appointments', accessor: 'appts' },
@@ -1135,7 +1229,7 @@ export default function App() {
             {activeTab === 'gp' && (
                 <div className="space-y-6">
                     <Card className="h-96 border-2 border-blue-100 shadow-md">
-                        <h3 className="font-bold text-slate-800 mb-2 text-lg">Patients with GP Appointment (%)</h3>
+                        <h3 className="font-bold text-slate-800 mb-2 text-lg">Patients with GP Appointment per Day (%)</h3>
                         <p className="text-sm text-slate-500 mb-4">Performance Bands: Red (&lt;0.85%), Amber (0.85-1.10%), Green (1.10-1.30%), Blue (&gt;1.30%)</p>
                         <div className="h-72">
                             <Line data={createChartData('GP Appts %', 'gpApptsPerDay', NHS_DARK_BLUE, false)} options={gpBandOptions} />
@@ -1144,14 +1238,14 @@ export default function App() {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <Card className="h-80">
-                            <h3 className="font-bold text-slate-700 mb-2">GP Capacity Utilization</h3>
+                            <h3 className="font-bold text-slate-700 mb-2">GP Capacity Utilisation</h3>
                             <p className="text-xs text-slate-400 mb-4">% of total GP capacity (Appts + Unused) that was used</p>
-                            <Line data={createChartData('Utilization %', 'gpUtilization', NHS_GREEN)} options={percentageOptions} />
+                            <Line data={createChartData('Utilisation %', 'gpUtilization', NHS_GREEN)} options={utilizationOptions} />
                         </Card>
                         <Card className="h-80">
                             <h3 className="font-bold text-slate-700 mb-2">GP Booking Conversion</h3>
-                            <p className="text-xs text-slate-400 mb-4">GP Appointments per 100 answered calls</p>
-                            <Line data={createChartData('GP Conversion %', 'gpConversionRatio', NHS_PURPLE)} options={percentageOptions} />
+                            <p className="text-xs text-slate-400 mb-4">GP Appointments per answered call</p>
+                            <Line data={createChartData('GP Conversion Ratio', 'gpConversionRatio', NHS_PURPLE)} options={ratioOptions} />
                         </Card>
                     </div>
 
@@ -1184,9 +1278,9 @@ export default function App() {
                     </div>
 
                     <Accordion title="GP Performance Breakdown" icon={User}>
-                        {staffData && (
+                        {aggregatedStaffData && (
                             <StaffTable 
-                                data={staffData.filter(s => s.isGP)} 
+                                data={aggregatedStaffData.filter(s => s.isGP)} 
                                 columns={[
                                     { header: 'GP Name', accessor: 'name' },
                                     { header: 'Appointments', accessor: 'appts' },
