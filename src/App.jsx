@@ -12,7 +12,7 @@ import {
   Legend,
   Filler,
 } from 'chart.js';
-import { Upload, Activity, Calendar, Users, Phone, AlertCircle, CheckCircle, XCircle, ChevronDown, Info, Sparkles, Loader2 } from 'lucide-react';
+import { Upload, Activity, Calendar, Users, Phone, AlertCircle, CheckCircle, XCircle, ChevronDown, Info, Sparkles, Loader2, PlayCircle } from 'lucide-react';
 
 // --- PRODUCTION IMPORTS ---
 import Papa from 'papaparse';
@@ -27,6 +27,15 @@ import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import logo from './assets/logo.png';
 import rushcliffeLogo from './assets/rushcliffe.png';
 import nottsWestLogo from './assets/nottswest.png';
+
+// --- SAMPLE DATA IMPORTS ---
+// FIXED: Added ?url to ensure Vite imports the file path string, not the content
+import sampleAppt from './assets/sampledata/AppointmentReport.csv?url';
+import sampleDNA from './assets/sampledata/DNA.csv?url';
+import sampleUnused from './assets/sampledata/Unused.csv?url';
+import sampleAug from './assets/sampledata/aug.pdf?url';
+import sampleSep from './assets/sampledata/sep.pdf?url';
+import sampleOct from './assets/sampledata/oct.pdf?url';
 
 // Set the worker source
 GlobalWorkerOptions.workerSrc = pdfWorker;
@@ -207,7 +216,6 @@ export default function App() {
       const pdf = await getDocument(arrayBuffer).promise;
       let fullText = '';
       
-      // Safety check: empty PDF
       if (pdf.numPages === 0) throw new Error("PDF has no pages.");
 
       const maxPages = Math.min(pdf.numPages, 3); 
@@ -227,6 +235,58 @@ export default function App() {
     }
   };
 
+  // --- Sample Data Loader ---
+  const loadExampleData = async () => {
+    setIsProcessing(true);
+    setError(null);
+    setProcessedData(null);
+
+    try {
+      // Helper to fetch file and convert to Blob/File
+      const fetchFile = async (path, name, type) => {
+        const response = await fetch(path);
+        const blob = await response.blob();
+        return new File([blob], name, { type });
+      };
+
+      // Load all assets
+      const apptFile = await fetchFile(sampleAppt, 'AppointmentReport.csv', 'text/csv');
+      const dnaFile = await fetchFile(sampleDNA, 'DNA.csv', 'text/csv');
+      const unusedFile = await fetchFile(sampleUnused, 'Unused.csv', 'text/csv');
+      
+      const pdf1 = await fetchFile(sampleAug, 'aug.pdf', 'application/pdf');
+      const pdf2 = await fetchFile(sampleSep, 'sep.pdf', 'application/pdf');
+      const pdf3 = await fetchFile(sampleOct, 'oct.pdf', 'application/pdf');
+
+      const exampleFiles = {
+        appointments: apptFile,
+        dna: dnaFile,
+        unused: unusedFile,
+        telephony: [pdf1, pdf2, pdf3]
+      };
+
+      // Set config for the example - UPDATED TO 5600
+      const exampleConfig = {
+        surgeryName: 'Example Surgery',
+        population: 5600,
+        analyseTelephony: true
+      };
+
+      // Update state (for the UI)
+      setConfig(exampleConfig);
+      setFiles(exampleFiles);
+
+      // Process immediately passing BOTH files and config manually
+      // This ensures we use the values we just defined, not the stale state
+      await processFiles(exampleFiles, exampleConfig);
+
+    } catch (err) {
+      console.error("Example Load Error", err);
+      setError("Could not load example data. Please try uploading your own files.");
+      setIsProcessing(false);
+    }
+  };
+
   // --- Validation Helpers ---
   const validateHeaders = (data, requiredColumns, fileName) => {
     if (!data || data.length === 0) {
@@ -242,27 +302,33 @@ export default function App() {
 
   // --- Main Processing Logic ---
 
-  const processFiles = async () => {
+  // Now accepts optional customFiles AND customConfig to avoid stale state issues
+  const processFiles = async (customFiles = null, customConfig = null) => {
     setIsProcessing(true);
     setError(null);
-    setProcessedData(null); // Clear previous data immediately
+    setProcessedData(null); 
+
+    // Use custom inputs if provided, otherwise fall back to state
+    const filesToProcess = customFiles || files;
+    const configToUse = customConfig || config; 
 
     try {
-      if (!files.appointments) throw new Error("Appointment CSV is required");
+      if (!filesToProcess.appointments) throw new Error("Appointment CSV is required");
       
       // 1. Parse Files
-      const apptData = await parseCSV(files.appointments);
-      const dnaData = files.dna ? await parseCSV(files.dna) : [];
-      const unusedData = files.unused ? await parseCSV(files.unused) : [];
+      const apptData = await parseCSV(filesToProcess.appointments);
+      const dnaData = filesToProcess.dna ? await parseCSV(filesToProcess.dna) : [];
+      const unusedData = filesToProcess.unused ? await parseCSV(filesToProcess.unused) : [];
 
       // 2. Validate Headers
       validateHeaders(apptData, ['Date', 'Day'], 'Appointments CSV');
-      if (files.dna) validateHeaders(dnaData, ['Staff', 'Appointment Count'], 'DNA CSV');
-      if (files.unused) validateHeaders(unusedData, ['Staff', 'Unused Slots'], 'Unused CSV');
+      if (filesToProcess.dna) validateHeaders(dnaData, ['Staff', 'Appointment Count'], 'DNA CSV');
+      if (filesToProcess.unused) validateHeaders(unusedData, ['Staff', 'Unused Slots'], 'Unused CSV');
 
       let telephonyData = [];
-      if (config.analyseTelephony && files.telephony.length > 0) {
-        for (const file of files.telephony) {
+      // Use configToUse instead of config state
+      if (configToUse.analyseTelephony && filesToProcess.telephony && filesToProcess.telephony.length > 0) {
+        for (const file of filesToProcess.telephony) {
           const text = await extractTextFromPDF(file);
           telephonyData.push({ filename: file.name, text });
         }
@@ -287,7 +353,7 @@ export default function App() {
         const date = row['Date'];
         if (!date) return;
         const monthKey = getMonthKey(date);
-        if (!monthKey) return; // Skip invalid dates
+        if (!monthKey) return; 
 
         if (!months[monthKey]) {
           months[monthKey] = {
@@ -422,7 +488,8 @@ export default function App() {
          const estimatedGPUnused = Math.round(globalGPUnusedCount * gpWeight);
          
          const t = m.telephony || {};
-         const population = parseFloat(config.population) || 1;
+         // Use configToUse here for the correct calculation
+         const population = parseFloat(configToUse.population) || 1;
          const capitationCalling = t.inboundAnswered ? ((t.inboundAnswered / population) * 100) : 0;
 
          // Ideal Forecast (GP ONLY)
@@ -711,6 +778,18 @@ export default function App() {
                 </a>
              </div>
 
+             {/* "See Example" Button - Only show if no data */}
+             {!processedData && (
+               <button 
+                 onClick={loadExampleData}
+                 disabled={isProcessing}
+                 className="flex items-center gap-2 px-3 py-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-full transition-all text-sm font-medium"
+               >
+                 {isProcessing ? <Loader2 size={14} className="animate-spin" /> : <PlayCircle size={14} />}
+                 See Example
+               </button>
+             )}
+
              {processedData && (
                <div className="flex items-center gap-4 text-sm">
                  <div className="relative group">
@@ -739,7 +818,7 @@ export default function App() {
                  </button>
 
                  <button 
-                   onClick={() => { setProcessedData(null); setSelectedMonth('All'); setAiReport(null); }} 
+                   onClick={() => { setProcessedData(null); setSelectedMonth('All'); setAiReport(null); setConfig({...config, surgeryName: '', population: 10000}); setFiles({appointments:null, dna:null, unused:null, telephony:[]}); }} 
                    className="text-slate-500 hover:text-red-600 transition-colors text-xs font-medium"
                  >
                    Reset
@@ -837,7 +916,7 @@ export default function App() {
                )}
 
                <button 
-                 onClick={processFiles}
+                 onClick={() => processFiles()}
                  disabled={isProcessing || !files.appointments}
                  className={`w-full py-3 rounded-xl font-bold text-white shadow-lg shadow-blue-500/20 transition-all
                    ${isProcessing || !files.appointments ? 'bg-slate-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 hover:scale-[1.02] active:scale-[0.98]'}
