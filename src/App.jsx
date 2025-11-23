@@ -14,18 +14,22 @@ import {
 } from 'chart.js';
 import { Upload, Activity, Calendar, Users, Phone, AlertCircle, CheckCircle, XCircle, ChevronDown, Info, Sparkles, Loader2 } from 'lucide-react';
 
-// --- UNIVERSAL IMPORTS (CDN for Chat Preview) ---
-// In a local Vite project, you would install these via npm and use:
-// import Papa from 'papaparse';
-// import * as pdfjsLib from 'pdfjs-dist';
-import Papa from 'https://esm.sh/papaparse@5.4.1';
-import * as pdfjsLib from 'https://esm.sh/pdfjs-dist@3.11.174';
+// --- PRODUCTION IMPORTS (For your Local App/Vercel) ---
+import Papa from 'papaparse';
 
-// Set the worker source to the matching CDN version
-pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://esm.sh/pdfjs-dist@3.11.174/build/pdf.worker.min.mjs';
+// PDF.js Import Strategy for Vite
+// We import specific named exports to ensure tree-shaking works
+import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
 
-// API Key - Safe check
-const apiKey = (import.meta && import.meta.env && import.meta.env.VITE_GEMINI_KEY) || "";
+// Import the worker specifically as a URL so Vite bundles it correctly
+// This ?url syntax is specific to Vite and fixes the worker loading issues
+import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+
+// Set the worker source
+GlobalWorkerOptions.workerSrc = pdfWorker;
+
+// API Key
+const apiKey = import.meta.env.VITE_GEMINI_KEY || "";
 
 // Initialize ChartJS
 ChartJS.register(
@@ -186,7 +190,8 @@ export default function App() {
   const extractTextFromPDF = async (file) => {
     try {
       const arrayBuffer = await file.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+      // Initialize PDF document using the imported getDocument
+      const pdf = await getDocument(arrayBuffer).promise;
       let fullText = '';
       
       const maxPages = Math.min(pdf.numPages, 3); 
