@@ -195,11 +195,15 @@ const StaffTable = ({ data, columns }) => {
 const SimpleMarkdown = ({ text }) => {
   if (!text) return null;
 
+  // Helper to parse **bold** and *bold/italic* text
+  // Updated regex to capture both **double** and *single* asterisks
   const parseBold = (line) => {
-    const parts = line.split(/(\*\*.*?\*\*)/g);
+    const parts = line.split(/(\*\*.*?\*\*|\*.*?\*)/g);
     return parts.map((part, i) => {
-      if (part.startsWith('**') && part.endsWith('**')) {
-        return <strong key={i} className="font-bold text-indigo-900">{part.slice(2, -2)}</strong>;
+      if ((part.startsWith('**') && part.endsWith('**')) || (part.startsWith('*') && part.endsWith('*'))) {
+        // Remove markers
+        const clean = part.replace(/^[\*]+|[\*]+$/g, '');
+        return <strong key={i} className="font-bold text-indigo-900">{clean}</strong>;
       }
       return part;
     });
@@ -798,6 +802,9 @@ export default function App() {
   const commonOptions = {
     responsive: true,
     maintainAspectRatio: false,
+    layout: {
+      padding: 20 
+    },
     plugins: {
       legend: { position: 'bottom' },
       tooltip: {
@@ -1012,15 +1019,6 @@ export default function App() {
                        <ChevronDown size={12} className="absolute right-3 pointer-events-none" />
                     </div>
                  </div>
-                 
-                 <button 
-                  onClick={generateAIInsights}
-                  disabled={isAiLoading}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-all shadow-sm disabled:opacity-50"
-                 >
-                  {isAiLoading ? <Loader2 size={14} className="animate-spin"/> : <Sparkles size={14} />}
-                  <span className="font-medium">Analyze with AI</span>
-                 </button>
 
                  <button 
                    onClick={() => { setProcessedData(null); setSelectedMonth('All'); setAiReport(null); setConfig({...config, surgeryName: '', population: 10000}); setFiles({appointments:null, dna:null, unused:null, telephony:[]}); }} 
@@ -1160,6 +1158,18 @@ export default function App() {
                  </div>
             )}
             
+            {/* NEW BUTTON LOCATION: Centered above tabs */}
+            <div className="flex justify-center mb-6">
+                 <button 
+                  onClick={generateAIInsights}
+                  disabled={isAiLoading}
+                  className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-full hover:from-purple-700 hover:to-indigo-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 transform hover:-translate-y-0.5"
+                 >
+                  {isAiLoading ? <Loader2 size={18} className="animate-spin"/> : <Sparkles size={18} />}
+                  <span className="font-bold text-sm">Analyse with AI</span>
+                 </button>
+            </div>
+
             <div className="flex justify-center mb-8">
               <div className="bg-white p-1 rounded-xl shadow-sm border border-slate-200 inline-flex">
                 {[
