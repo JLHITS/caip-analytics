@@ -14,22 +14,27 @@ import {
 } from 'chart.js';
 import { Upload, Activity, Calendar, Users, Phone, AlertCircle, CheckCircle, XCircle, ChevronDown, Info, Sparkles, Loader2 } from 'lucide-react';
 
-// --- PRODUCTION IMPORTS (For your Local App/Vercel) ---
+// --- PRODUCTION IMPORTS ---
 import Papa from 'papaparse';
 
-// PDF.js Import Strategy for Vite
-// We import specific named exports to ensure tree-shaking works
+// PDF.js v5+ Import Strategy for Vite
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
 
 // Import the worker specifically as a URL so Vite bundles it correctly
-// This ?url syntax is specific to Vite and fixes the worker loading issues
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+
+// --- ASSET IMPORTS ---
+// Ensure these files exist in your src/assets folder
+// If your file extensions differ (.jpg vs .png), please update them here
+import logo from './assets/logo.png';
+import rushcliffeLogo from './assets/rushcliffe.png'; // Name checking: ensure this matches your file
+import nottsWestLogo from './assets/nottswest.png';   // Name checking: ensure this matches your file
 
 // Set the worker source
 GlobalWorkerOptions.workerSrc = pdfWorker;
 
 // API Key
-const apiKey = import.meta.env.VITE_GEMINI_KEY || "";
+const apiKey = (import.meta && import.meta.env && import.meta.env.VITE_GEMINI_KEY) || "";
 
 // Initialize ChartJS
 ChartJS.register(
@@ -103,6 +108,7 @@ const SectionHeader = ({ title, subtitle }) => (
 );
 
 // --- Custom Markdown Renderer Component ---
+// Improved parsing for AI headers and bold text
 const SimpleMarkdown = ({ text }) => {
   if (!text) return null;
 
@@ -118,14 +124,16 @@ const SimpleMarkdown = ({ text }) => {
   };
 
   return (
-    <div className="space-y-2 text-slate-700">
+    <div className="space-y-3 text-slate-700">
       {text.split('\n').map((line, index) => {
         const trimmed = line.trim();
         if (!trimmed) return null;
 
-        // Headers (###)
-        if (trimmed.startsWith('###')) {
-          return <h3 key={index} className="text-lg font-bold text-indigo-800 mt-4 mb-2">{trimmed.replace(/^###\s*/, '')}</h3>;
+        // Headers (### or ##)
+        if (trimmed.startsWith('###') || trimmed.startsWith('##')) {
+          // Remove Markdown header symbols
+          const cleanText = trimmed.replace(/^#+\s*/, '');
+          return <h3 key={index} className="text-lg font-bold text-indigo-800 mt-6 mb-2 border-b border-indigo-100 pb-1">{cleanText}</h3>;
         }
         
         // Bullet points (* or -)
@@ -173,6 +181,11 @@ export default function App() {
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiError, setAiError] = useState(null);
 
+  // Set Page Title
+  useEffect(() => {
+    document.title = "CAIP Analytics";
+  }, []);
+
   // --- Parsers ---
 
   const parseCSV = (file) => {
@@ -190,7 +203,6 @@ export default function App() {
   const extractTextFromPDF = async (file) => {
     try {
       const arrayBuffer = await file.arrayBuffer();
-      // Initialize PDF document using the imported getDocument
       const pdf = await getDocument(arrayBuffer).promise;
       let fullText = '';
       
@@ -448,7 +460,7 @@ export default function App() {
             forecastExtraSlotsNeeded: d.extraSlotsPerDay.toFixed(1)
         }));
 
-        // Updated Prompt: Uses generic "this NHS GP Practice" instead of user config name
+        // Prompt with Generic Name "this NHS GP Practice"
         const prompt = `
             You are an expert NHS Practice Manager and Data Analyst using CAIP Analytics.
             Analyze the following monthly performance data for this NHS GP Practice (${selectedMonth === 'All' ? 'Trend Analysis' : selectedMonth}).
@@ -636,48 +648,62 @@ export default function App() {
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800 pb-20">
       <header className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold">C</div>
-             <h1 className="text-xl font-bold text-slate-900">CAIP Analytics</h1>
-          </div>
-          {processedData && (
-             <div className="flex items-center gap-4 text-sm">
-               <div className="relative group">
-                  <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-lg text-slate-600 cursor-pointer">
-                     <Calendar size={14} />
-                     <select 
-                        value={selectedMonth} 
-                        onChange={(e) => setSelectedMonth(e.target.value)}
-                        className="bg-transparent border-none outline-none cursor-pointer text-sm font-medium appearance-none pr-4"
-                     >
-                        {availableMonths.map(m => (
-                           <option key={m} value={m}>{m === 'All' ? 'All Months' : m}</option>
-                        ))}
-                     </select>
-                     <ChevronDown size={12} className="absolute right-3 pointer-events-none" />
-                  </div>
-               </div>
-               
-               <button 
-                onClick={generateAIInsights}
-                disabled={isAiLoading}
-                className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-all shadow-sm disabled:opacity-50"
-               >
-                {isAiLoading ? <Loader2 size={14} className="animate-spin"/> : <Sparkles size={14} />}
-                <span className="font-medium">Analyze with AI</span>
-               </button>
-
-               <span className="px-3 py-1 bg-blue-50 text-blue-700 rounded-full font-medium hidden sm:block">
-                 {config.surgeryName || 'Surgery Dashboard'}
-               </span>
-               <button 
-                 onClick={() => { setProcessedData(null); setSelectedMonth('All'); setAiReport(null); }} 
-                 className="text-slate-500 hover:text-red-600 transition-colors"
-               >
-                 Reset
-               </button>
+          <div className="flex items-center gap-2 sm:gap-4">
+             <img src={logo} alt="CAIP Logo" className="h-10 w-10 rounded-lg object-cover" />
+             <div>
+               <h1 className="text-xl font-bold text-slate-900 leading-tight">CAIP Analytics</h1>
+               <p className="text-[10px] sm:text-xs text-slate-500 font-medium hidden sm:block">Free data analytics to help you improve capacity and access in primary care</p>
              </div>
-          )}
+          </div>
+          
+          <div className="flex items-center gap-4">
+             {/* Made in Section */}
+             <div className="hidden lg:flex items-center gap-3 bg-white dark:bg-slate-700 px-4 py-2 rounded-full border border-slate-200 dark:border-slate-600 shadow-sm">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Made in</span>
+                <a href="https://www.rushcliffehealth.org" target="_blank" rel="noopener noreferrer">
+                  <img src={rushcliffeLogo} alt="Rushcliffe PCN" className="h-8 w-auto grayscale hover:grayscale-0 transition-all duration-300 opacity-80 hover:opacity-100" />
+                </a>
+                <a href="https://www.nottinghamwestpcn.co.uk" target="_blank" rel="noopener noreferrer">
+                  <img src={nottsWestLogo} alt="Nottingham West PCN" className="h-8 w-auto grayscale hover:grayscale-0 transition-all duration-300 opacity-80 hover:opacity-100" />
+                </a>
+             </div>
+
+             {processedData && (
+               <div className="flex items-center gap-4 text-sm">
+                 <div className="relative group">
+                    <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-lg text-slate-600 cursor-pointer">
+                       <Calendar size={14} />
+                       <select 
+                          value={selectedMonth} 
+                          onChange={(e) => setSelectedMonth(e.target.value)}
+                          className="bg-transparent border-none outline-none cursor-pointer text-sm font-medium appearance-none pr-4"
+                       >
+                          {availableMonths.map(m => (
+                             <option key={m} value={m}>{m === 'All' ? 'All Months' : m}</option>
+                          ))}
+                       </select>
+                       <ChevronDown size={12} className="absolute right-3 pointer-events-none" />
+                    </div>
+                 </div>
+                 
+                 <button 
+                  onClick={generateAIInsights}
+                  disabled={isAiLoading}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-all shadow-sm disabled:opacity-50"
+                 >
+                  {isAiLoading ? <Loader2 size={14} className="animate-spin"/> : <Sparkles size={14} />}
+                  <span className="font-medium">Analyze with AI</span>
+                 </button>
+
+                 <button 
+                   onClick={() => { setProcessedData(null); setSelectedMonth('All'); setAiReport(null); }} 
+                   className="text-slate-500 hover:text-red-600 transition-colors text-xs font-medium"
+                 >
+                   Reset
+                 </button>
+               </div>
+             )}
+          </div>
         </div>
       </header>
 
@@ -685,6 +711,11 @@ export default function App() {
         {!processedData && (
           <div className="max-w-2xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
              <div className="text-center mb-10">
+               <div className="flex justify-center mb-4">
+                 <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 shadow-sm">
+                    <Activity size={32} />
+                 </div>
+               </div>
                <h2 className="text-3xl font-bold text-slate-900 mb-2">Let's analyse your demand</h2>
                <p className="text-slate-500">Upload your SystmOne extracts and Surgery Connect reports.</p>
              </div>
@@ -697,7 +728,7 @@ export default function App() {
                     <input 
                       type="text" 
                       className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all"
-                      placeholder="e.g. Giltbrook Surgery"
+                      placeholder="e.g. High Street Practice"
                       value={config.surgeryName}
                       onChange={e => setConfig({...config, surgeryName: e.target.value})}
                     />
@@ -778,7 +809,7 @@ export default function App() {
         {processedData && (
           <div className="animate-in fade-in duration-700">
             {aiReport && (
-                <Card className="mb-8 bg-gradient-to-br from-indigo-50 to-white border-indigo-100 animate-in slide-in-from-top-4 duration-500">
+                <Card className="mb-8 bg-gradient-to-br from-indigo-50 to-white border-indigo-100 animate-in slide-in-from-top-4 duration-500 shadow-md">
                     <div className="flex items-center gap-3 mb-4">
                         <div className="p-2 bg-indigo-100 rounded-lg text-indigo-600">
                             <Sparkles size={20} />
@@ -787,7 +818,6 @@ export default function App() {
                         <button onClick={() => setAiReport(null)} className="ml-auto text-slate-400 hover:text-slate-600 text-sm">Close</button>
                     </div>
                     <div className="prose prose-sm prose-indigo max-w-none">
-                        {/* Use our custom renderer instead of raw text */}
                         <SimpleMarkdown text={aiReport} />
                     </div>
                 </Card>
