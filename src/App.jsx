@@ -14,20 +14,18 @@ import {
 } from 'chart.js';
 import { Upload, Activity, Calendar, Users, Phone, AlertCircle, CheckCircle, XCircle, ChevronDown, Info, Sparkles, Loader2 } from 'lucide-react';
 
-// --- PRODUCTION IMPORTS ---
-// We now use the locally installed packages. 
-// This is much more stable for Vercel deployments.
-import Papa from 'papaparse';
-import * as pdfjsLib from 'pdfjs-dist';
+// --- UNIVERSAL IMPORTS (CDN for Chat Preview) ---
+// In a local Vite project, you would install these via npm and use:
+// import Papa from 'papaparse';
+// import * as pdfjsLib from 'pdfjs-dist';
+import Papa from 'https://esm.sh/papaparse@5.4.1';
+import * as pdfjsLib from 'https://esm.sh/pdfjs-dist@3.11.174';
 
-// Import the worker specifically as a URL so Vite bundles it correctly
-import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+// Set the worker source to the matching CDN version
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://esm.sh/pdfjs-dist@3.11.174/build/pdf.worker.min.mjs';
 
-// Set the worker source
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
-
-// API Key
-const apiKey = import.meta.env.VITE_GEMINI_KEY || "";
+// API Key - Safe check
+const apiKey = (import.meta && import.meta.env && import.meta.env.VITE_GEMINI_KEY) || "";
 
 // Initialize ChartJS
 ChartJS.register(
@@ -100,6 +98,49 @@ const SectionHeader = ({ title, subtitle }) => (
   </div>
 );
 
+// --- Custom Markdown Renderer Component ---
+const SimpleMarkdown = ({ text }) => {
+  if (!text) return null;
+
+  // Helper to parse **bold** text
+  const parseBold = (line) => {
+    const parts = line.split(/(\*\*.*?\*\*)/g);
+    return parts.map((part, i) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        return <strong key={i} className="font-bold text-indigo-900">{part.slice(2, -2)}</strong>;
+      }
+      return part;
+    });
+  };
+
+  return (
+    <div className="space-y-2 text-slate-700">
+      {text.split('\n').map((line, index) => {
+        const trimmed = line.trim();
+        if (!trimmed) return null;
+
+        // Headers (###)
+        if (trimmed.startsWith('###')) {
+          return <h3 key={index} className="text-lg font-bold text-indigo-800 mt-4 mb-2">{trimmed.replace(/^###\s*/, '')}</h3>;
+        }
+        
+        // Bullet points (* or -)
+        if (trimmed.startsWith('* ') || trimmed.startsWith('- ')) {
+          return (
+            <div key={index} className="flex items-start gap-2 ml-2">
+              <span className="text-indigo-500 mt-1.5">•</span>
+              <p className="flex-1">{parseBold(trimmed.replace(/^[\*\-]\s*/, ''))}</p>
+            </div>
+          );
+        }
+
+        // Regular paragraphs
+        return <p key={index} className="leading-relaxed">{parseBold(trimmed)}</p>;
+      })}
+    </div>
+  );
+};
+
 export default function App() {
   // --- State ---
   const [config, setConfig] = useState({
@@ -145,7 +186,6 @@ export default function App() {
   const extractTextFromPDF = async (file) => {
     try {
       const arrayBuffer = await file.arrayBuffer();
-      // Initialize PDF document
       const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
       let fullText = '';
       
@@ -403,9 +443,10 @@ export default function App() {
             forecastExtraSlotsNeeded: d.extraSlotsPerDay.toFixed(1)
         }));
 
+        // Updated Prompt: Uses generic "this NHS GP Practice" instead of user config name
         const prompt = `
             You are an expert NHS Practice Manager and Data Analyst using CAIP Analytics.
-            Analyze the following monthly performance data for ${config.surgeryName || 'the surgery'} (${selectedMonth === 'All' ? 'Trend Analysis' : selectedMonth}).
+            Analyze the following monthly performance data for this NHS GP Practice (${selectedMonth === 'All' ? 'Trend Analysis' : selectedMonth}).
             
             Data: ${JSON.stringify(dataSummary)}
 
@@ -741,9 +782,8 @@ export default function App() {
                         <button onClick={() => setAiReport(null)} className="ml-auto text-slate-400 hover:text-slate-600 text-sm">Close</button>
                     </div>
                     <div className="prose prose-sm prose-indigo max-w-none">
-                        <div className="whitespace-pre-line text-slate-700">
-                            {aiReport}
-                        </div>
+                        {/* Use our custom renderer instead of raw text */}
+                        <SimpleMarkdown text={aiReport} />
                     </div>
                 </Card>
             )}
