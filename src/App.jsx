@@ -24,11 +24,9 @@ import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
 // --- ASSET IMPORTS ---
-// Ensure these files exist in your src/assets folder
-// If your file extensions differ (.jpg vs .png), please update them here
 import logo from './assets/logo.png';
-import rushcliffeLogo from './assets/rushcliffe.png'; // Name checking: ensure this matches your file
-import nottsWestLogo from './assets/nottswest.png';   // Name checking: ensure this matches your file
+import rushcliffeLogo from './assets/rushcliffe.png';
+import nottsWestLogo from './assets/nottswest.png';
 
 // Set the worker source
 GlobalWorkerOptions.workerSrc = pdfWorker;
@@ -108,11 +106,9 @@ const SectionHeader = ({ title, subtitle }) => (
 );
 
 // --- Custom Markdown Renderer Component ---
-// Improved parsing for AI headers and bold text
 const SimpleMarkdown = ({ text }) => {
   if (!text) return null;
 
-  // Helper to parse **bold** text
   const parseBold = (line) => {
     const parts = line.split(/(\*\*.*?\*\*)/g);
     return parts.map((part, i) => {
@@ -129,14 +125,11 @@ const SimpleMarkdown = ({ text }) => {
         const trimmed = line.trim();
         if (!trimmed) return null;
 
-        // Headers (### or ##)
         if (trimmed.startsWith('###') || trimmed.startsWith('##')) {
-          // Remove Markdown header symbols
           const cleanText = trimmed.replace(/^#+\s*/, '');
           return <h3 key={index} className="text-lg font-bold text-indigo-800 mt-6 mb-2 border-b border-indigo-100 pb-1">{cleanText}</h3>;
         }
         
-        // Bullet points (* or -)
         if (trimmed.startsWith('* ') || trimmed.startsWith('- ')) {
           return (
             <div key={index} className="flex items-start gap-2 ml-2">
@@ -146,7 +139,6 @@ const SimpleMarkdown = ({ text }) => {
           );
         }
 
-        // Regular paragraphs
         return <p key={index} className="leading-relaxed">{parseBold(trimmed)}</p>;
       })}
     </div>
@@ -181,9 +173,18 @@ export default function App() {
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiError, setAiError] = useState(null);
 
-  // Set Page Title
+  // --- Effects: Title & Favicon ---
   useEffect(() => {
     document.title = "CAIP Analytics";
+    const link = document.querySelector("link[rel~='icon']");
+    if (!link) {
+      const newLink = document.createElement('link');
+      newLink.rel = 'icon';
+      newLink.href = logo;
+      document.head.appendChild(newLink);
+    } else {
+      link.href = logo;
+    }
   }, []);
 
   // --- Parsers ---
@@ -206,17 +207,36 @@ export default function App() {
       const pdf = await getDocument(arrayBuffer).promise;
       let fullText = '';
       
+      // Safety check: empty PDF
+      if (pdf.numPages === 0) throw new Error("PDF has no pages.");
+
       const maxPages = Math.min(pdf.numPages, 3); 
       for (let i = 1; i <= maxPages; i++) {
         const page = await pdf.getPage(i);
         const textContent = await page.getTextContent();
+        if (!textContent.items.length) continue;
         const pageText = textContent.items.map((item) => item.str).join(' ');
         fullText += ` --- PAGE ${i} --- \n ${pageText}`;
       }
+      
+      if (!fullText.trim()) throw new Error("No text found in PDF (it might be an image scan).");
       return fullText;
     } catch (e) {
       console.error("PDF Parse Error", e);
-      throw new Error(`Could not parse PDF: ${file.name}. Please ensure it is a valid text-based PDF.`);
+      throw new Error(`Error reading ${file.name}: ${e.message}`);
+    }
+  };
+
+  // --- Validation Helpers ---
+  const validateHeaders = (data, requiredColumns, fileName) => {
+    if (!data || data.length === 0) {
+        throw new Error(`The file "${fileName}" appears to be empty.`);
+    }
+    const headers = Object.keys(data[0]);
+    const missing = requiredColumns.filter(col => !headers.includes(col));
+    
+    if (missing.length > 0) {
+        throw new Error(`The file "${fileName}" is missing required columns: ${missing.join(', ')}. Please check you uploaded the correct report.`);
     }
   };
 
@@ -225,13 +245,20 @@ export default function App() {
   const processFiles = async () => {
     setIsProcessing(true);
     setError(null);
+    setProcessedData(null); // Clear previous data immediately
 
     try {
       if (!files.appointments) throw new Error("Appointment CSV is required");
       
+      // 1. Parse Files
       const apptData = await parseCSV(files.appointments);
       const dnaData = files.dna ? await parseCSV(files.dna) : [];
       const unusedData = files.unused ? await parseCSV(files.unused) : [];
+
+      // 2. Validate Headers
+      validateHeaders(apptData, ['Date', 'Day'], 'Appointments CSV');
+      if (files.dna) validateHeaders(dnaData, ['Staff', 'Appointment Count'], 'DNA CSV');
+      if (files.unused) validateHeaders(unusedData, ['Staff', 'Unused Slots'], 'Unused CSV');
 
       let telephonyData = [];
       if (config.analyseTelephony && files.telephony.length > 0) {
@@ -260,7 +287,7 @@ export default function App() {
         const date = row['Date'];
         if (!date) return;
         const monthKey = getMonthKey(date);
-        if (!monthKey) return;
+        if (!monthKey) return; // Skip invalid dates
 
         if (!months[monthKey]) {
           months[monthKey] = {
@@ -299,6 +326,10 @@ export default function App() {
           }
         });
       });
+
+      if (Object.keys(months).length === 0) {
+          throw new Error("No valid data found. Please check the Date formatting in your Appointments CSV.");
+      }
 
       // --- Process DNA ---
       let globalDNACount = 0;
@@ -428,11 +459,23 @@ export default function App() {
          };
       });
 
+      // 3. Final Sanity Check
+      const hasNaN = finalData.some(d => 
+        isNaN(d.gpApptsPerDay) || 
+        isNaN(d.allApptsPerDay) || 
+        !isFinite(d.gpApptsPerDay)
+      );
+
+      if (hasNaN || finalData.length === 0) {
+        throw new Error("Processing resulted in invalid numbers. Please check if your input files contain valid numeric data.");
+      }
+
       setProcessedData(finalData);
 
     } catch (err) {
       setError(err.message);
-      console.error(err);
+      setProcessedData(null); // Ensure dashboard is hidden
+      console.error("Processing Failed:", err);
     } finally {
       setIsProcessing(false);
     }
@@ -787,9 +830,9 @@ export default function App() {
                )}
 
                {error && (
-                 <div className="mb-4 p-4 bg-red-50 text-red-700 rounded-xl flex items-center gap-2 text-sm">
-                   <AlertCircle size={16} />
-                   {error}
+                 <div className="mb-4 p-4 bg-red-50 text-red-700 rounded-xl flex items-start gap-3 text-sm border border-red-100">
+                   <AlertCircle size={18} className="shrink-0 mt-0.5" />
+                   <span className="font-medium">{error}</span>
                  </div>
                )}
 
