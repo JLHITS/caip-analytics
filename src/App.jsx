@@ -13,7 +13,7 @@ import {
   Legend,
   Filler,
 } from 'chart.js';
-import { Upload, Activity, Calendar, Users, Phone, AlertCircle, CheckCircle, XCircle, ChevronDown, ChevronUp, Info, Sparkles, Loader2, PlayCircle, Search, User, Download, FileText } from 'lucide-react';
+import { Upload, Activity, Calendar, Users, Phone, AlertCircle, CheckCircle, XCircle, ChevronDown, ChevronUp, Info, Sparkles, Loader2, PlayCircle, Search, User, Download, FileText, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 
 // --- PRODUCTION IMPORTS ---
 import Papa from 'papaparse';
@@ -143,15 +143,43 @@ const Accordion = ({ title, children, defaultOpen = false, icon: Icon }) => {
   );
 };
 
-const StaffTable = ({ data, columns, isPrint = false }) => {
+const SortableTable = ({ data, columns, isPrint = false, searchPlaceholder = "Search..." }) => {
   const [search, setSearch] = useState('');
-  
-  const filteredData = data.filter(row => 
-    row.name.toLowerCase().includes(search.toLowerCase())
-  );
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'desc' });
 
-  // If printing, show ALL rows. If not, show top 50.
-  const displayData = isPrint ? filteredData : filteredData.slice(0, 50);
+  const filteredData = useMemo(() => {
+    if (!search) return data;
+    return data.filter(row => 
+      Object.values(row).some(val => 
+        String(val).toLowerCase().includes(search.toLowerCase())
+      )
+    );
+  }, [data, search]);
+
+  const sortedData = useMemo(() => {
+    let sortableItems = [...filteredData];
+    if (sortConfig.key !== null) {
+      sortableItems.sort((a, b) => {
+        const aVal = a[sortConfig.key];
+        const bVal = b[sortConfig.key];
+        
+        if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+    return sortableItems;
+  }, [filteredData, sortConfig]);
+
+  const requestSort = (key) => {
+    let direction = 'desc';
+    if (sortConfig.key === key && sortConfig.direction === 'desc') {
+      direction = 'asc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const displayData = isPrint ? sortedData : sortedData.slice(0, 50);
 
   return (
     <div>
@@ -160,7 +188,7 @@ const StaffTable = ({ data, columns, isPrint = false }) => {
             <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
             <input 
             type="text" 
-            placeholder="Search staff name..." 
+            placeholder={searchPlaceholder} 
             className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -172,7 +200,20 @@ const StaffTable = ({ data, columns, isPrint = false }) => {
           <thead className="bg-slate-50 text-slate-700 uppercase font-bold text-xs">
             <tr>
               {columns.map((col, i) => (
-                <th key={i} className="px-4 py-3">{col.header}</th>
+                <th 
+                  key={i} 
+                  className="px-4 py-3 cursor-pointer hover:bg-slate-100 transition-colors select-none group"
+                  onClick={() => requestSort(col.accessor)}
+                >
+                  <div className="flex items-center gap-1">
+                    {col.header}
+                    {sortConfig.key === col.accessor ? (
+                       sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-blue-600" /> : <ArrowDown size={14} className="text-blue-600" />
+                    ) : (
+                       <ArrowUpDown size={14} className="text-slate-300 group-hover:text-slate-400" />
+                    )}
+                  </div>
+                </th>
               ))}
             </tr>
           </thead>
@@ -186,12 +227,12 @@ const StaffTable = ({ data, columns, isPrint = false }) => {
                 ))}
               </tr>
             ))}
-            {filteredData.length === 0 && (
-                <tr><td colSpan={columns.length} className="p-4 text-center text-slate-400">No matching staff found</td></tr>
+            {sortedData.length === 0 && (
+                <tr><td colSpan={columns.length} className="p-4 text-center text-slate-400">No matching records found</td></tr>
             )}
           </tbody>
         </table>
-        {!isPrint && filteredData.length > 50 && <p className="text-xs text-slate-400 text-center mt-2">Showing top 50 matches</p>}
+        {!isPrint && sortedData.length > 50 && <p className="text-xs text-slate-400 text-center mt-2">Showing top 50 matches (sort to see more)</p>}
       </div>
     </div>
   );
@@ -255,7 +296,9 @@ export default function App() {
   });
 
   const [processedData, setProcessedData] = useState(null);
-  const [rawStaffData, setRawStaffData] = useState([]); 
+  const [rawStaffData, setRawStaffData] = useState([]); // Store granular staff data
+  const [rawSlotData, setRawSlotData] = useState([]);   // Store granular slot data
+  const [rawCombinedData, setRawCombinedData] = useState([]); // Store granular combined (staff+slot) data
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -328,6 +371,8 @@ export default function App() {
     setError(null);
     setProcessedData(null);
     setRawStaffData([]);
+    setRawSlotData([]);
+    setRawCombinedData([]);
 
     try {
       const fetchFile = async (path, name, type) => {
@@ -389,6 +434,8 @@ export default function App() {
     setError(null);
     setProcessedData(null);
     setRawStaffData([]);
+    setRawSlotData([]);
+    setRawCombinedData([]);
 
     const filesToProcess = customFiles || files;
     const configToUse = customConfig || config; 
@@ -419,6 +466,8 @@ export default function App() {
 
       const months = {};
       const monthlyStaffMap = {}; 
+      const monthlySlotMap = {}; 
+      const monthlyCombinedMap = {}; // New map for Staff + Slot
 
       const getMonthKey = (dateStr) => {
         const d = new Date(dateStr);
@@ -432,6 +481,7 @@ export default function App() {
         return n.includes('Dr') || n.toLowerCase().includes('locum');
       };
 
+      // Helper to update monthly staff stats
       const updateStaff = (month, name, type, value) => {
         if (!name) return;
         const key = `${month}_${name}`;
@@ -441,6 +491,38 @@ export default function App() {
         monthlyStaffMap[key][type] += value;
       };
 
+      // Helper to update monthly slot stats
+      const updateSlot = (month, slotName, type, value, associatedStaffName) => {
+        if (!slotName) return;
+        const key = `${month}_${slotName}`;
+        if (!monthlySlotMap[key]) {
+            monthlySlotMap[key] = { month, name: slotName, hasGPActivity: false, appts: 0, dna: 0, unused: 0 };
+        }
+        monthlySlotMap[key][type] += value;
+        if (associatedStaffName && isGP(associatedStaffName)) {
+            monthlySlotMap[key].hasGPActivity = true;
+        }
+      };
+
+      // Helper to update combined stats
+      const updateCombined = (month, staffName, slotName, type, value) => {
+        if (!staffName || !slotName) return;
+        const key = `${month}_${staffName}_${slotName}`;
+        if (!monthlyCombinedMap[key]) {
+            monthlyCombinedMap[key] = { 
+                month, 
+                name: staffName, 
+                slot: slotName, 
+                isGP: isGP(staffName), 
+                appts: 0, 
+                dna: 0, 
+                unused: 0 
+            };
+        }
+        monthlyCombinedMap[key][type] += value;
+      };
+
+      // --- Process Appointments ---
       apptData.forEach(row => {
         const date = row['Date'];
         if (!date) return;
@@ -476,6 +558,7 @@ export default function App() {
           
           if (isNaN(count)) return;
           
+          // Monthly Aggregation
           months[monthKey].totalAppts += count;
           if (isGP(key)) {
             months[monthKey].gpAppts += count;
@@ -483,6 +566,7 @@ export default function App() {
             months[monthKey].staffAppts += count;
           }
 
+          // Staff Aggregation (Main Staff Table Source)
           updateStaff(monthKey, key, 'appts', count);
         });
       });
@@ -495,38 +579,82 @@ export default function App() {
          return Object.values(monthlyStaffMap).filter(r => r.name === name).map(r => r.month);
       };
 
+      // --- Process DNA ---
       dnaData.forEach(row => {
           const count = parseInt(row['Appointment Count'], 10) || 0;
           const staffName = row['Staff'];
+          const slotName = row['Slot Type'];
+          
           globalDNACount += count;
           if (isGP(staffName)) globalGPDNACount += count;
           
           const workedMonths = getMonthsForStaff(staffName);
           if (workedMonths.length > 0) {
              const splitCount = count / workedMonths.length;
-             workedMonths.forEach(m => updateStaff(m, staffName, 'dna', splitCount));
+             workedMonths.forEach(m => {
+                 updateStaff(m, staffName, 'dna', splitCount);
+                 if (slotName) {
+                     updateSlot(m, slotName, 'dna', splitCount, staffName);
+                     updateCombined(m, staffName, slotName, 'dna', splitCount);
+                 }
+             });
           } else {
              const firstMonth = Object.keys(months)[0];
-             if(firstMonth) updateStaff(firstMonth, staffName, 'dna', count);
+             if(firstMonth) {
+                 updateStaff(firstMonth, staffName, 'dna', count);
+                 if (slotName) {
+                     updateSlot(firstMonth, slotName, 'dna', count, staffName);
+                     updateCombined(firstMonth, staffName, slotName, 'dna', count);
+                 }
+             }
           }
       });
 
+      // --- Process Unused ---
       unusedData.forEach(row => {
           const count = parseInt(row['Unused Slots'], 10) || 0;
+          const totalSlots = parseInt(row['Total Slots'], 10) || 0; // Use Total Slots for calculation
+          const booked = Math.max(0, totalSlots - count); // Calculate actual booked appointments
+
           const staffName = row['Staff'];
+          const slotName = row['Slot Type'];
+
           globalUnusedCount += count;
           if (isGP(staffName)) globalGPUnusedCount += count;
 
           const workedMonths = getMonthsForStaff(staffName);
           if (workedMonths.length > 0) {
              const splitCount = count / workedMonths.length;
-             workedMonths.forEach(m => updateStaff(m, staffName, 'unused', splitCount));
+             const splitBooked = booked / workedMonths.length;
+
+             workedMonths.forEach(m => {
+                 updateStaff(m, staffName, 'unused', splitCount);
+                 if (slotName) {
+                     // NOTE: We use "Booked" (calculated from Total Slots) for the Slot tables
+                     // instead of the count from AppointmentReport, as per user request.
+                     updateSlot(m, slotName, 'unused', splitCount, staffName);
+                     updateSlot(m, slotName, 'appts', splitBooked, staffName);
+
+                     updateCombined(m, staffName, slotName, 'unused', splitCount);
+                     updateCombined(m, staffName, slotName, 'appts', splitBooked);
+                 }
+             });
           } else {
              const firstMonth = Object.keys(months)[0];
-             if(firstMonth) updateStaff(firstMonth, staffName, 'unused', count);
+             if(firstMonth) {
+                 updateStaff(firstMonth, staffName, 'unused', count);
+                 if (slotName) {
+                     updateSlot(firstMonth, slotName, 'unused', count, staffName);
+                     updateSlot(firstMonth, slotName, 'appts', booked, staffName);
+
+                     updateCombined(firstMonth, staffName, slotName, 'unused', count);
+                     updateCombined(firstMonth, staffName, slotName, 'appts', booked);
+                 }
+             }
           }
       });
 
+      // --- Process Telephony ---
       telephonyData.forEach(item => {
         const text = item.text;
         const monthMatch = text.match(/(January|February|March|April|May|June|July|August|September|October|November|December)\s20\d{2}/i);
@@ -651,43 +779,56 @@ export default function App() {
 
       setProcessedData(finalData);
       setRawStaffData(Object.values(monthlyStaffMap)); 
+      setRawSlotData(Object.values(monthlySlotMap)); 
+      setRawCombinedData(Object.values(monthlyCombinedMap));
 
     } catch (err) {
       setError(err.message);
       setProcessedData(null); 
       setRawStaffData([]);
+      setRawSlotData([]);
+      setRawCombinedData([]);
       console.error("Processing Failed:", err);
     } finally {
       setIsProcessing(false);
     }
   };
   
-  const aggregatedStaffData = useMemo(() => {
-    if (!rawStaffData || rawStaffData.length === 0) return [];
+  // --- Aggregated Data Helpers (Filtered) ---
+  
+  const getAggregatedData = (rawData) => {
+    if (!rawData || rawData.length === 0) return [];
     
     const filtered = selectedMonth === 'All' 
-        ? rawStaffData 
-        : rawStaffData.filter(d => d.month === selectedMonth);
+        ? rawData 
+        : rawData.filter(d => d.month === selectedMonth);
 
     const grouped = filtered.reduce((acc, curr) => {
-        if (!acc[curr.name]) {
-            acc[curr.name] = { 
+        const key = curr.name + (curr.slot ? `_${curr.slot}` : '');
+        if (!acc[key]) {
+            acc[key] = { 
                 name: curr.name, 
-                isGP: curr.isGP, 
+                slot: curr.slot || null,
+                isGP: curr.isGP,
+                hasGPActivity: curr.hasGPActivity || false,
                 appts: 0, 
                 dna: 0, 
                 unused: 0 
             };
         }
-        acc[curr.name].appts += curr.appts;
-        acc[curr.name].dna += curr.dna;
-        acc[curr.name].unused += curr.unused;
+        acc[key].appts += curr.appts;
+        acc[key].dna += curr.dna;
+        acc[key].unused += curr.unused;
+        if (curr.hasGPActivity) acc[key].hasGPActivity = true; 
         return acc;
     }, {});
 
     return Object.values(grouped).sort((a,b) => b.appts - a.appts);
+  };
 
-  }, [rawStaffData, selectedMonth]);
+  const aggregatedStaffData = useMemo(() => getAggregatedData(rawStaffData), [rawStaffData, selectedMonth]);
+  const aggregatedSlotData = useMemo(() => getAggregatedData(rawSlotData), [rawSlotData, selectedMonth]);
+  const aggregatedCombinedData = useMemo(() => getAggregatedData(rawCombinedData), [rawCombinedData, selectedMonth]);
 
   const fetchAIReport = async () => {
     const dataSummary = displayedData.map(d => ({
@@ -829,11 +970,12 @@ export default function App() {
     return ['All', ...processedData.map(d => d.month)];
   }, [processedData]);
 
-  // --- CHART OPTIONS ---
   const commonOptions = {
     responsive: true,
     maintainAspectRatio: false,
-    layout: { padding: 20 },
+    layout: {
+      padding: 20 
+    },
     plugins: {
       legend: { position: 'bottom' },
       tooltip: {
@@ -861,58 +1003,6 @@ export default function App() {
         line: { tension: 0.4 },
         point: { radius: 4, hoverRadius: 6 }
     }
-  };
-
-  // --- PDF SPECIFIC OPTIONS (Disable Animation) ---
-  const pdfChartOptions = {
-    ...commonOptions,
-    animation: false,
-    responsive: true,
-    maintainAspectRatio: false,
-  };
-
-  const pdfTimeOptions = {
-      ...pdfChartOptions,
-      scales: {
-          ...pdfChartOptions.scales,
-          y: {
-              ...pdfChartOptions.scales.y,
-              ticks: {
-                  color: '#64748b',
-                  callback: (v) => `${Math.floor(v/60)}m ${v%60}s`
-              }
-          }
-      }
-  };
-
-  const pdfPercentageOptions = {
-    ...pdfChartOptions,
-    scales: {
-      ...pdfChartOptions.scales,
-      y: {
-        ...pdfChartOptions.scales.y,
-        min: 0, 
-        ticks: {
-          color: '#64748b',
-          callback: (value) => `${Number(value).toFixed(2)}%`
-        }
-      }
-    }
-  };
-
-  const pdfStackedPercentageOptions = {
-    ...pdfPercentageOptions,
-    scales: {
-        x: { 
-          ...commonOptions.scales.x,
-          stacked: true 
-        },
-        y: { 
-          ...pdfPercentageOptions.scales.y,
-          stacked: true,
-          max: 100 
-        }
-      }
   };
 
   const timeOptions = {
@@ -968,39 +1058,12 @@ export default function App() {
     }
   };
 
-  const pdfRatioOptions = {
-    ...pdfChartOptions,
-    scales: {
-      ...pdfChartOptions.scales,
-      y: {
-        ...pdfChartOptions.scales.y,
-        min: 0,
-        ticks: {
-          color: '#64748b',
-          callback: (value) => Number(value).toFixed(2)
-        }
-      }
-    }
-  };
-
   const utilizationOptions = {
     ...percentageOptions,
     scales: {
         ...percentageOptions.scales,
         y: {
             ...percentageOptions.scales.y,
-            min: 0,
-            max: 100
-        }
-    }
-  };
-
-  const pdfUtilizationOptions = {
-    ...pdfPercentageOptions,
-    scales: {
-        ...pdfPercentageOptions.scales,
-        y: {
-            ...pdfPercentageOptions.scales.y,
             min: 0,
             max: 100
         }
@@ -1026,6 +1089,84 @@ export default function App() {
                 { from: 1.10, to: 1.30, color: GP_BAND_GREEN },
                 { from: 1.30, to: 5.00, color: GP_BAND_BLUE }, 
             ]
+        }
+    }
+  };
+
+  const pdfChartOptions = {
+    ...commonOptions,
+    animation: false,
+    responsive: true,
+    maintainAspectRatio: false,
+  };
+
+  const pdfTimeOptions = {
+      ...pdfChartOptions,
+      scales: {
+          ...pdfChartOptions.scales,
+          y: {
+              ...pdfChartOptions.scales.y,
+              ticks: {
+                  color: '#64748b',
+                  callback: (v) => `${Math.floor(v/60)}m ${v%60}s`
+              }
+          }
+      }
+  };
+
+  const pdfPercentageOptions = {
+    ...pdfChartOptions,
+    scales: {
+      ...pdfChartOptions.scales,
+      y: {
+        ...pdfChartOptions.scales.y,
+        min: 0, 
+        ticks: {
+          color: '#64748b',
+          callback: (value) => `${Number(value).toFixed(2)}%`
+        }
+      }
+    }
+  };
+
+  const pdfStackedPercentageOptions = {
+    ...pdfPercentageOptions,
+    scales: {
+        x: { 
+          ...commonOptions.scales.x,
+          stacked: true 
+        },
+        y: { 
+          ...pdfPercentageOptions.scales.y,
+          stacked: true,
+          max: 100 
+        }
+      }
+  };
+
+  const pdfRatioOptions = {
+    ...pdfChartOptions,
+    scales: {
+      ...pdfChartOptions.scales,
+      y: {
+        ...pdfChartOptions.scales.y,
+        min: 0,
+        ticks: {
+          color: '#64748b',
+          callback: (value) => Number(value).toFixed(2)
+        }
+      }
+    }
+  };
+
+  const pdfUtilizationOptions = {
+    ...pdfPercentageOptions,
+    scales: {
+        ...pdfPercentageOptions.scales,
+        y: {
+            ...pdfPercentageOptions.scales.y,
+            min: 0,
+            max: 100
         }
     }
   };
@@ -1385,13 +1526,44 @@ export default function App() {
                  
                  <Accordion title="Staff Breakdown (All Staff)" icon={Users}>
                     {aggregatedStaffData && (
-                        <StaffTable 
+                        <SortableTable 
                             data={aggregatedStaffData} 
                             columns={[
                                 { header: 'Name', accessor: 'name' },
-                                { header: 'Appointments', accessor: 'appts' },
-                                { header: 'Unused Slots', accessor: 'unused' },
-                                { header: 'DNAs', accessor: 'dna' }
+                                { header: 'Appointments', accessor: 'appts', render: (row) => Math.round(row.appts).toLocaleString() },
+                                { header: 'Unused Slots', accessor: 'unused', render: (row) => Math.round(row.unused).toLocaleString() },
+                                { header: 'DNAs', accessor: 'dna', render: (row) => Math.round(row.dna).toLocaleString() }
+                            ]}
+                        />
+                    )}
+                 </Accordion>
+
+                 <Accordion title="Slot Type Breakdown (All Slots)" icon={Activity}>
+                    {aggregatedSlotData && (
+                        <SortableTable 
+                            data={aggregatedSlotData}
+                            searchPlaceholder="Search slot type..."
+                            columns={[
+                                { header: 'Slot Type', accessor: 'name' },
+                                { header: 'Appointments', accessor: 'appts', render: (row) => Math.round(row.appts).toLocaleString() },
+                                { header: 'Unused Slots', accessor: 'unused', render: (row) => Math.round(row.unused).toLocaleString() },
+                                { header: 'DNAs', accessor: 'dna', render: (row) => Math.round(row.dna).toLocaleString() }
+                            ]}
+                        />
+                    )}
+                 </Accordion>
+
+                 <Accordion title="Staff & Slot Performance" icon={User}>
+                    {aggregatedCombinedData && (
+                        <SortableTable 
+                            data={aggregatedCombinedData}
+                            searchPlaceholder="Search staff or slot..."
+                            columns={[
+                                { header: 'Name', accessor: 'name' },
+                                { header: 'Slot Type', accessor: 'slot', render: (row) => row.slot || '-' },
+                                { header: 'Appointments', accessor: 'appts', render: (row) => Math.round(row.appts).toLocaleString() },
+                                { header: 'Unused Slots', accessor: 'unused', render: (row) => Math.round(row.unused).toLocaleString() },
+                                { header: 'DNAs', accessor: 'dna', render: (row) => Math.round(row.dna).toLocaleString() }
                             ]}
                         />
                     )}
@@ -1452,13 +1624,44 @@ export default function App() {
 
                     <Accordion title="GP Performance Breakdown" icon={User}>
                         {aggregatedStaffData && (
-                            <StaffTable 
+                            <SortableTable 
                                 data={aggregatedStaffData.filter(s => s.isGP)} 
                                 columns={[
                                     { header: 'GP Name', accessor: 'name' },
-                                    { header: 'Appointments', accessor: 'appts' },
-                                    { header: 'Unused Slots', accessor: 'unused' },
-                                    { header: 'DNAs', accessor: 'dna' }
+                                    { header: 'Appointments', accessor: 'appts', render: (row) => Math.round(row.appts).toLocaleString() },
+                                    { header: 'Unused Slots', accessor: 'unused', render: (row) => Math.round(row.unused).toLocaleString() },
+                                    { header: 'DNAs', accessor: 'dna', render: (row) => Math.round(row.dna).toLocaleString() }
+                                ]}
+                            />
+                        )}
+                    </Accordion>
+
+                    <Accordion title="GP Slot Type Breakdown" icon={Activity}>
+                        {aggregatedSlotData && (
+                            <SortableTable 
+                                data={aggregatedSlotData.filter(s => s.hasGPActivity)}
+                                searchPlaceholder="Search slot type..."
+                                columns={[
+                                    { header: 'Slot Type', accessor: 'name' },
+                                    { header: 'Appointments', accessor: 'appts', render: (row) => Math.round(row.appts).toLocaleString() },
+                                    { header: 'Unused Slots', accessor: 'unused', render: (row) => Math.round(row.unused).toLocaleString() },
+                                    { header: 'DNAs', accessor: 'dna', render: (row) => Math.round(row.dna).toLocaleString() }
+                                ]}
+                            />
+                        )}
+                    </Accordion>
+
+                    <Accordion title="GP Staff & Slot Performance" icon={User}>
+                        {aggregatedCombinedData && (
+                            <SortableTable 
+                                data={aggregatedCombinedData.filter(s => s.isGP)}
+                                searchPlaceholder="Search GP or slot..."
+                                columns={[
+                                    { header: 'Name', accessor: 'name' },
+                                    { header: 'Slot Type', accessor: 'slot', render: (row) => row.slot || '-' },
+                                    { header: 'Appointments', accessor: 'appts', render: (row) => Math.round(row.appts).toLocaleString() },
+                                    { header: 'Unused Slots', accessor: 'unused', render: (row) => Math.round(row.unused).toLocaleString() },
+                                    { header: 'DNAs', accessor: 'dna', render: (row) => Math.round(row.dna).toLocaleString() }
                                 ]}
                             />
                         )}
@@ -1603,7 +1806,6 @@ export default function App() {
             )}
 
             {/* --- HIDDEN PRINT CONTAINER --- */}
-            {/* This container is rendered off-screen but contains the full expanded report for PDF generation */}
             <div id="pdf-report-container" style={{ position: 'fixed', top: 0, left: -10000, width: '1200px', background: '#fff', zIndex: -100 }}>
                 
                 {/* Title Page */}
@@ -1615,7 +1817,7 @@ export default function App() {
                     
                     {aiReport && (
                         <div className="mt-12 text-left bg-white p-8 rounded-2xl shadow-sm border border-slate-200 max-w-4xl mx-auto">
-                            <h3 className="text-2xl font-bold text-indigo-900 mb-4 flex items-center gap-2"><Sparkles className="text-indigo-500"/> cAIp Analysis Summary</h3>
+                            <h3 className="text-2xl font-bold text-indigo-900 mb-4 flex items-center gap-2"><Sparkles className="text-indigo-500"/> CAIP Analysis Summary</h3>
                             <div className="prose prose-lg max-w-none text-slate-700">
                                 <SimpleMarkdown text={aiReport} />
                             </div>
@@ -1632,9 +1834,48 @@ export default function App() {
                         <MetricCard title="Avg DNA Rate" value={`${(displayedData.reduce((a,b)=>a+b.allDNAPct,0)/(selectedMonth==='All'?displayedData.length:1)).toFixed(2)}%`} icon={XCircle} color="text-red-500" />
                     </div>
                     <div className="h-96 border border-slate-200 rounded-xl p-4"><Line data={createChartData('Total Appointments', 'totalAppts', NHS_BLUE)} options={pdfChartOptions} /></div>
+                    
                     <div className="mt-8">
                         <h3 className="text-xl font-bold text-slate-700 mb-4">Full Staff Breakdown</h3>
-                        <StaffTable data={aggregatedStaffData} columns={[{header:'Name',accessor:'name'},{header:'Appointments',accessor:'appts'},{header:'Unused',accessor:'unused'},{header:'DNAs',accessor:'dna'}]} isPrint={true} />
+                        <SortableTable 
+                            data={aggregatedStaffData} 
+                            columns={[
+                                { header: 'Name', accessor: 'name' },
+                                { header: 'Appointments', accessor: 'appts', render: (row) => Math.round(row.appts).toLocaleString() },
+                                { header: 'Unused', accessor: 'unused', render: (row) => Math.round(row.unused).toLocaleString() },
+                                { header: 'DNAs', accessor: 'dna', render: (row) => Math.round(row.dna).toLocaleString() }
+                            ]} 
+                            isPrint={true} 
+                        />
+                    </div>
+
+                    <div className="mt-8">
+                        <h3 className="text-xl font-bold text-slate-700 mb-4">Slot Type Breakdown</h3>
+                        <SortableTable 
+                            data={aggregatedSlotData} 
+                            columns={[
+                                { header: 'Slot Type', accessor: 'name' },
+                                { header: 'Appointments', accessor: 'appts', render: (row) => Math.round(row.appts).toLocaleString() },
+                                { header: 'Unused', accessor: 'unused', render: (row) => Math.round(row.unused).toLocaleString() },
+                                { header: 'DNAs', accessor: 'dna', render: (row) => Math.round(row.dna).toLocaleString() }
+                            ]} 
+                            isPrint={true} 
+                        />
+                    </div>
+
+                    <div className="mt-8">
+                        <h3 className="text-xl font-bold text-slate-700 mb-4">Staff & Slot Performance</h3>
+                        <SortableTable 
+                            data={aggregatedCombinedData} 
+                            columns={[
+                                { header: 'Name', accessor: 'name' },
+                                { header: 'Slot Type', accessor: 'slot', render: (row) => row.slot || '-' },
+                                { header: 'Appointments', accessor: 'appts', render: (row) => Math.round(row.appts).toLocaleString() },
+                                { header: 'Unused', accessor: 'unused', render: (row) => Math.round(row.unused).toLocaleString() },
+                                { header: 'DNAs', accessor: 'dna', render: (row) => Math.round(row.dna).toLocaleString() }
+                            ]} 
+                            isPrint={true} 
+                        />
                     </div>
                 </div>
 
@@ -1646,9 +1887,48 @@ export default function App() {
                         <div className="h-80 border border-slate-200 rounded-xl p-4"><Line data={createChartData('Utilisation %', 'gpUtilization', NHS_GREEN)} options={pdfUtilizationOptions} /></div>
                         <div className="h-80 border border-slate-200 rounded-xl p-4"><Line data={createChartData('GP Conversion Ratio', 'gpConversionRatio', NHS_PURPLE)} options={pdfRatioOptions} /></div>
                     </div>
+                    
                     <div className="mt-8">
                         <h3 className="text-xl font-bold text-slate-700 mb-4">GP Staff Performance</h3>
-                        <StaffTable data={aggregatedStaffData.filter(s => s.isGP)} columns={[{header:'GP Name',accessor:'name'},{header:'Appointments',accessor:'appts'},{header:'Unused',accessor:'unused'},{header:'DNAs',accessor:'dna'}]} isPrint={true} />
+                        <SortableTable 
+                            data={aggregatedStaffData.filter(s => s.isGP)} 
+                            columns={[
+                                { header: 'GP Name', accessor: 'name' },
+                                { header: 'Appointments', accessor: 'appts', render: (row) => Math.round(row.appts).toLocaleString() },
+                                { header: 'Unused', accessor: 'unused', render: (row) => Math.round(row.unused).toLocaleString() },
+                                { header: 'DNAs', accessor: 'dna', render: (row) => Math.round(row.dna).toLocaleString() }
+                            ]} 
+                            isPrint={true} 
+                        />
+                    </div>
+
+                    <div className="mt-8">
+                        <h3 className="text-xl font-bold text-slate-700 mb-4">GP Slot Type Breakdown</h3>
+                        <SortableTable 
+                            data={aggregatedSlotData.filter(s => s.hasGPActivity)} 
+                            columns={[
+                                { header: 'Slot Type', accessor: 'name' },
+                                { header: 'Appointments', accessor: 'appts', render: (row) => Math.round(row.appts).toLocaleString() },
+                                { header: 'Unused', accessor: 'unused', render: (row) => Math.round(row.unused).toLocaleString() },
+                                { header: 'DNAs', accessor: 'dna', render: (row) => Math.round(row.dna).toLocaleString() }
+                            ]} 
+                            isPrint={true} 
+                        />
+                    </div>
+
+                    <div className="mt-8">
+                        <h3 className="text-xl font-bold text-slate-700 mb-4">GP Staff & Slot Performance</h3>
+                        <SortableTable 
+                            data={aggregatedCombinedData.filter(s => s.isGP)} 
+                            columns={[
+                                { header: 'Name', accessor: 'name' },
+                                { header: 'Slot Type', accessor: 'slot', render: (row) => row.slot || '-' },
+                                { header: 'Appointments', accessor: 'appts', render: (row) => Math.round(row.appts).toLocaleString() },
+                                { header: 'Unused', accessor: 'unused', render: (row) => Math.round(row.unused).toLocaleString() },
+                                { header: 'DNAs', accessor: 'dna', render: (row) => Math.round(row.dna).toLocaleString() }
+                            ]} 
+                            isPrint={true} 
+                        />
                     </div>
                 </div>
 
@@ -1656,7 +1936,7 @@ export default function App() {
                 {config.analyseTelephony && (
                     <div id="pdf-telephony-section" className="p-10 space-y-8">
                         <h2 className="text-3xl font-bold text-slate-800 border-b border-slate-200 pb-4 mb-6">3. Telephony Performance</h2>
-                        {/* Add Metric Cards here */}
+                        {/* Metric Cards */}
                         <div className="grid grid-cols-5 gap-4 mb-6">
                             {[
                                 { l: 'Inbound Calls', k: 'inboundReceived', c: 'text-blue-600' },
@@ -1665,7 +1945,7 @@ export default function App() {
                                 { l: 'Callbacks Success', k: 'callbacksSuccessful', c: 'text-blue-500' },
                                 { l: 'Avg Wait', k: 'avgQueueTimeAnswered', c: 'text-slate-600', fmt: v => `${Math.floor(v/60)}m ${v%60}s` }
                             ].map((m, i) => (
-                                <Card key={i} className="p-4">
+                                <Card key={i} className="p-4 border border-slate-200 shadow-none bg-slate-50">
                                     <p className="text-xs font-bold text-slate-400 uppercase">{m.l}</p>
                                     <p className={`text-xl font-bold ${m.c} mt-1`}>
                                         {m.fmt ? m.fmt(displayedData[displayedData.length-1][m.k]) : 
