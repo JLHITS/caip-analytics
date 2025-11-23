@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Line, Bar } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -12,13 +12,23 @@ import {
   Legend,
   Filler,
 } from 'chart.js';
-import { Upload, FileText, Activity, Calendar, Users, Phone, AlertCircle, CheckCircle, XCircle, ChevronDown, ChevronUp, Info, Filter, Sparkles, Loader2 } from 'lucide-react';
-import Papa from 'papaparse';
-import * as pdfjsLib from 'pdfjs-dist';
-// Set the worker to a CDN to avoid complex build configuration
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+import { Upload, Activity, Calendar, Users, Phone, AlertCircle, CheckCircle, XCircle, ChevronDown, Info, Sparkles, Loader2 } from 'lucide-react';
 
-// Initialize ChartJS // 
+// --- 1. REAL IMPORTS (No CDNs) ---
+import Papa from 'papaparse';
+
+// PDF.js Import Strategy for Vite
+import * as pdfjsLib from 'pdfjs-dist';
+// This ?url syntax tells Vite to bundle the worker file correctly
+import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+
+// Set worker source
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
+
+// API Key
+const apiKey = import.meta.env.VITE_GEMINI_KEY || "";
+
+// Initialize ChartJS
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -28,48 +38,36 @@ ChartJS.register(
   Title,
   Tooltip,
   Legend,
-  Filler
+  Filler,
+  {
+    id: 'backgroundBands',
+    beforeDraw: (chart, args, options) => {
+      if (!options.bands) return;
+      const { ctx, chartArea: { top, bottom, left, right }, scales: { y } } = chart;
+      ctx.save();
+      options.bands.forEach(band => {
+        const yMax = band.to === Infinity ? top : y.getPixelForValue(band.to);
+        const yMin = band.from === -Infinity ? bottom : y.getPixelForValue(band.from);
+        if (yMin !== undefined && yMax !== undefined) {
+          ctx.fillStyle = band.color;
+          ctx.fillRect(left, yMax, right - left, yMin - yMax);
+        }
+      });
+      ctx.restore();
+    }
+  }
 );
 
 const NHS_BLUE = '#005EB8';
 const NHS_DARK_BLUE = '#003087';
-const NHS_BRIGHT_BLUE = '#0072CE';
-const NHS_AQUA = '#00A9CE';
 const NHS_GREEN = '#009639';
 const NHS_RED = '#DA291C';
 const NHS_GREY = '#425563';
 const NHS_AMBER = '#ED8B00'; 
-const GP_BAND_BLUE = '#005EB820'; // Low opacity for background
+const GP_BAND_BLUE = '#005EB820'; 
 const GP_BAND_GREEN = '#00963920';
 const GP_BAND_AMBER = '#ED8B0020';
 const GP_BAND_RED = '#DA291C20';
-
-const apiKey = import.meta.env.VITE_GEMINI_KEY
-
-
-// Custom Plugin for Background Bands
-const backgroundBandsPlugin = {
-  id: 'backgroundBands',
-  beforeDraw: (chart, args, options) => {
-    if (!options.bands) return;
-    const { ctx, chartArea: { top, bottom, left, right }, scales: { y } } = chart;
-    
-    ctx.save();
-    options.bands.forEach(band => {
-      const yMax = band.to === Infinity ? top : y.getPixelForValue(band.to);
-      const yMin = band.from === -Infinity ? bottom : y.getPixelForValue(band.from);
-      
-      if (yMin !== undefined && yMax !== undefined) {
-        ctx.fillStyle = band.color;
-        ctx.fillRect(left, yMax, right - left, yMin - yMax);
-      }
-    });
-    ctx.restore();
-  }
-};
-
-// Register custom plugin
-ChartJS.register(backgroundBandsPlugin);
 
 const Card = ({ children, className = '' }) => (
   <div className={`bg-white/90 backdrop-blur-sm rounded-2xl shadow-sm border border-slate-200 p-6 transition-all hover:shadow-md ${className}`}>
@@ -77,7 +75,7 @@ const Card = ({ children, className = '' }) => (
   </div>
 );
 
-const MetricCard = ({ title, value, subtext, icon: Icon, color = 'text-slate-700', trend }) => (
+const MetricCard = ({ title, value, subtext, icon: Icon, color = 'text-slate-700' }) => (
   <Card className="flex flex-col justify-between h-full">
     <div className="flex justify-between items-start mb-4">
       <div>
@@ -120,7 +118,6 @@ export default function App() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [libsLoaded, setLibsLoaded] = useState(false);
   
   // Filter State
   const [selectedMonth, setSelectedMonth] = useState('All');
@@ -134,10 +131,7 @@ export default function App() {
 
   const parseCSV = (file) => {
     return new Promise((resolve, reject) => {
-      if (!Papa) {
-        reject(new Error("PapaParse not loaded"));
-        return;
-      }
+      // Use imported Papa directly (no window.Papa)
       Papa.parse(file, {
         header: true,
         skipEmptyLines: true,
@@ -150,9 +144,8 @@ export default function App() {
 
   const extractTextFromPDF = async (file) => {
     try {
-      if (!pdfjsLib) throw new Error("PDF.js not loaded");
-      
       const arrayBuffer = await file.arrayBuffer();
+      // Use imported pdfjsLib directly (no window.pdfjsLib)
       const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
       let fullText = '';
       
@@ -173,11 +166,6 @@ export default function App() {
   // --- Main Processing Logic ---
 
   const processFiles = async () => {
-    if (!libsLoaded) {
-      setError("Libraries still loading, please wait a moment...");
-      return;
-    }
-
     setIsProcessing(true);
     setError(null);
 
@@ -350,7 +338,6 @@ export default function App() {
          const capitationCalling = t.inboundAnswered ? ((t.inboundAnswered / population) * 100) : 0;
 
          // Ideal Forecast (GP ONLY)
-         // Ratio = GP Appts / Answered Calls
          const gpRatio = t.inboundAnswered > 0 ? (m.gpAppts / t.inboundAnswered) : 0;
          const gpMissedDemand = gpRatio * (t.missedFromQueueExRepeat || 0);
          const gpWaste = estimatedGPUnused + estimatedGPDNA;
@@ -380,7 +367,7 @@ export default function App() {
            capitationCallingPerDay: m.workingDays ? (capitationCalling / m.workingDays) : 0,
 
            // Ideal
-           extraSlotsPerDay: extraGPSlotsPerDay // Updated to use GP only slots
+           extraSlotsPerDay: extraGPSlotsPerDay 
          };
       });
 
@@ -407,7 +394,7 @@ export default function App() {
         const dataSummary = displayedData.map(d => ({
             month: d.month,
             gpAppts: d.gpAppts,
-            gpApptsPerDay: d.gpApptsPerDay.toFixed(2) + '%', // Included for the prompt logic
+            gpApptsPerDay: d.gpApptsPerDay.toFixed(2) + '%', 
             callbacksSuccess: d.callbacksSuccessful || 0,
             gpDNARate: d.gpDNAPct.toFixed(2) + '%',
             gpUnusedRate: d.gpUnusedPct.toFixed(2) + '%',
@@ -511,7 +498,6 @@ export default function App() {
     }
   };
 
-  // Options for Time Charts (m s)
   const timeOptions = {
       ...commonOptions,
       scales: {
@@ -526,7 +512,6 @@ export default function App() {
       }
   };
 
-  // Options specifically for percentage charts (adds % symbol)
   const percentageOptions = {
     ...commonOptions,
     scales: {
@@ -541,7 +526,6 @@ export default function App() {
     }
   };
 
-  // GP Band Options
   const gpBandOptions = {
     ...percentageOptions,
     plugins: {
@@ -557,7 +541,6 @@ export default function App() {
     }
   };
 
-  // Options for Stacked Bar Charts (100% Split)
   const stackedPercentageOptions = {
     ...percentageOptions,
     scales: {
@@ -584,8 +567,6 @@ export default function App() {
     }]
   });
 
-  // --- Render Helpers ---
-
   const FileInput = ({ label, accept, onChange, file }) => (
     <div className="mb-4">
       <label className="block text-sm font-medium text-slate-700 mb-1">{label}</label>
@@ -607,7 +588,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800 pb-20">
-      {/* Header */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -616,7 +596,6 @@ export default function App() {
           </div>
           {processedData && (
              <div className="flex items-center gap-4 text-sm">
-               {/* Date Range Dropdown */}
                <div className="relative group">
                   <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-lg text-slate-600 cursor-pointer">
                      <Calendar size={14} />
@@ -633,7 +612,6 @@ export default function App() {
                   </div>
                </div>
                
-                {/* AI Button */}
                <button 
                 onClick={generateAIInsights}
                 disabled={isAiLoading}
@@ -658,8 +636,6 @@ export default function App() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        
-        {/* --- Configuration & Upload Screen --- */}
         {!processedData && (
           <div className="max-w-2xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
              <div className="text-center mb-10">
@@ -739,19 +715,12 @@ export default function App() {
                    {error}
                  </div>
                )}
-               
-               {!libsLoaded && !error && (
-                  <div className="mb-4 p-4 bg-blue-50 text-blue-700 rounded-xl flex items-center gap-2 text-sm">
-                    <Activity className="animate-spin" size={16} />
-                    Loading PDF and CSV processors...
-                  </div>
-               )}
 
                <button 
                  onClick={processFiles}
-                 disabled={isProcessing || !files.appointments || !libsLoaded}
+                 disabled={isProcessing || !files.appointments}
                  className={`w-full py-3 rounded-xl font-bold text-white shadow-lg shadow-blue-500/20 transition-all
-                   ${isProcessing || !files.appointments || !libsLoaded ? 'bg-slate-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 hover:scale-[1.02] active:scale-[0.98]'}
+                   ${isProcessing || !files.appointments ? 'bg-slate-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 hover:scale-[1.02] active:scale-[0.98]'}
                  `}
                >
                  {isProcessing ? 'Analysing Data...' : 'Generate Dashboard'}
@@ -760,11 +729,8 @@ export default function App() {
           </div>
         )}
 
-        {/* --- Dashboard View --- */}
         {processedData && (
           <div className="animate-in fade-in duration-700">
-            
-            {/* AI Report Section */}
             {aiReport && (
                 <Card className="mb-8 bg-gradient-to-br from-indigo-50 to-white border-indigo-100 animate-in slide-in-from-top-4 duration-500">
                     <div className="flex items-center gap-3 mb-4">
@@ -789,7 +755,6 @@ export default function App() {
                  </div>
             )}
             
-            {/* Navigation Tabs */}
             <div className="flex justify-center mb-8">
               <div className="bg-white p-1 rounded-xl shadow-sm border border-slate-200 inline-flex">
                 {[
@@ -855,7 +820,6 @@ export default function App() {
 
             {activeTab === 'gp' && (
                 <div className="space-y-6">
-                    {/* Main GP Visual */}
                     <Card className="h-96 border-2 border-blue-100 shadow-md">
                         <h3 className="font-bold text-slate-800 mb-2 text-lg">Patients with GP Appointment (%)</h3>
                         <p className="text-sm text-slate-500 mb-4">Performance Bands: Red (&lt;0.85%), Amber (0.85-1.10%), Green (1.10-1.30%), Blue (&gt;1.30%)</p>
@@ -921,7 +885,6 @@ export default function App() {
                                 ))}
                             </div>
 
-                            {/* Main Telephony Charts */}
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                                 <Card className="h-80">
                                     <h3 className="font-bold text-slate-700 mb-4">Queue Percentage Split</h3>
@@ -951,7 +914,6 @@ export default function App() {
                                 </Card>
                             </div>
 
-                            {/* Detailed Time Charts */}
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                 <Card className="h-64">
                                     <h3 className="font-bold text-slate-700 mb-2 text-sm uppercase">Avg Queue Time (Answered)</h3>
