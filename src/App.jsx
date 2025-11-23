@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Line, Bar } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -14,17 +14,20 @@ import {
 } from 'chart.js';
 import { Upload, Activity, Calendar, Users, Phone, AlertCircle, CheckCircle, XCircle, ChevronDown, Info, Sparkles, Loader2 } from 'lucide-react';
 
-// --- UNIVERSAL IMPORTS ---
-// Using esm.sh allows these to work in this chat AND in your local Vite project
-// without complex bundler configuration for the worker files.
-import Papa from 'https://esm.sh/papaparse@5.4.1';
-import * as pdfjsLib from 'https://esm.sh/pdfjs-dist@3.11.174';
+// --- PRODUCTION IMPORTS ---
+// We now use the locally installed packages. 
+// This is much more stable for Vercel deployments.
+import Papa from 'papaparse';
+import * as pdfjsLib from 'pdfjs-dist';
 
-// Set worker source to the matching CDN version
-pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://esm.sh/pdfjs-dist@3.11.174/build/pdf.worker.min.mjs';
+// Import the worker specifically as a URL so Vite bundles it correctly
+import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
-// API Key - Safe check for Vite environment
-const apiKey = (import.meta && import.meta.env && import.meta.env.VITE_GEMINI_KEY) || "";
+// Set the worker source
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
+
+// API Key
+const apiKey = import.meta.env.VITE_GEMINI_KEY || "";
 
 // Initialize ChartJS
 ChartJS.register(
@@ -129,7 +132,6 @@ export default function App() {
 
   const parseCSV = (file) => {
     return new Promise((resolve, reject) => {
-      // Use imported Papa directly (no window.Papa)
       Papa.parse(file, {
         header: true,
         skipEmptyLines: true,
@@ -143,7 +145,7 @@ export default function App() {
   const extractTextFromPDF = async (file) => {
     try {
       const arrayBuffer = await file.arrayBuffer();
-      // Use imported pdfjsLib directly (no window.pdfjsLib)
+      // Initialize PDF document
       const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
       let fullText = '';
       
@@ -157,7 +159,7 @@ export default function App() {
       return fullText;
     } catch (e) {
       console.error("PDF Parse Error", e);
-      throw new Error(`Could not parse PDF: ${file.name}`);
+      throw new Error(`Could not parse PDF: ${file.name}. Please ensure it is a valid text-based PDF.`);
     }
   };
 
