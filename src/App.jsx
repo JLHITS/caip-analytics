@@ -13,7 +13,7 @@ import {
   Legend,
   Filler,
 } from 'chart.js';
-import { Upload, Activity, Calendar, Users, Phone, AlertCircle, CheckCircle, XCircle, ChevronDown, ChevronUp, Info, Sparkles, Loader2, PlayCircle, Search, User, Download, FileText, ArrowUpDown, ArrowUp, ArrowDown, TrendingUp, AlertTriangle } from 'lucide-react';
+import { Upload, Activity, Calendar, Users, Phone, AlertCircle, CheckCircle, XCircle, ChevronDown, ChevronUp, Info, Sparkles, Loader2, PlayCircle, Search, User, Download, FileText, ArrowUpDown, ArrowUp, ArrowDown, TrendingUp, AlertTriangle, Clock } from 'lucide-react';
 
 // --- PRODUCTION IMPORTS ---
 import Papa from 'papaparse';
@@ -44,6 +44,11 @@ GlobalWorkerOptions.workerSrc = pdfWorker;
 
 // API Key
 const apiKey = (import.meta && import.meta.env && import.meta.env.VITE_GEMINI_KEY) || "";
+
+// Automated Version Info from vite.config.js
+// These variables are injected at build time
+const APP_VERSION = `${__APP_VERSION__} (${__GIT_COMMIT__})`;
+const BUILD_DATE = __BUILD_DATE__;
 
 // Initialize ChartJS
 ChartJS.register(
@@ -390,7 +395,8 @@ export default function App() {
   const extractTextFromPDF = async (file) => {
     try {
       const arrayBuffer = await file.arrayBuffer();
-      const pdf = await getDocument(arrayBuffer).promise;
+      // Use object syntax for better browser compatibility (especially Firefox)
+      const pdf = await getDocument({ data: arrayBuffer }).promise;
       let fullText = '';
       
       if (pdf.numPages === 0) throw new Error("PDF has no pages.");
@@ -681,7 +687,6 @@ export default function App() {
              workedMonths.forEach(m => {
                  updateStaff(m, staffName, 'unused', splitCount);
                  if (slotName) {
-                     // NOTE: We use "Booked" (calculated from Total Slots) for the Slot tables
                      updateSlot(m, slotName, 'unused', splitCount, staffName);
                      updateSlot(m, slotName, 'appts', splitBooked, staffName);
 
@@ -1350,10 +1355,17 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2 sm:gap-4">
              <img src={logo} alt="CAIP Logo" className="h-10 w-10 rounded-lg object-cover" />
-             <div>
-               <h1 className="text-xl font-bold text-slate-900 leading-tight">CAIP Analytics</h1>
-               <p className="text-[10px] sm:text-xs text-slate-500 font-medium hidden sm:block">Free data analytics to help you improve capacity and access in primary care</p>
-             </div>
+<div>
+  <div className="flex items-center gap-2">
+    <h1 className="text-xl font-bold text-slate-900 leading-tight">CAIP Analytics</h1>
+    <span className="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full font-mono border border-indigo-100" title={`Built: ${BUILD_DATE}`}>
+      v{APP_VERSION} beta
+    </span>
+  </div>
+  <p className="text-[10px] sm:text-xs text-slate-500 font-medium hidden sm:block">
+    Free data analytics to help you improve capacity and access in primary care
+  </p>
+</div>
           </div>
           
           <div className="flex items-center gap-4">
@@ -1417,8 +1429,8 @@ export default function App() {
                     <Activity size={32} />
                  </div>
                </div>
-               <h2 className="text-3xl font-bold text-slate-900 mb-2">Let's analyse your demand</h2>
-               <p className="text-slate-500">Upload your SystmOne extracts and Surgery Connect reports.</p>
+               <h2 className="text-3xl font-bold text-slate-900 mb-2">Let's analyse your demand and capacity</h2>
+               <p className="text-slate-500">Upload your TPP SystmOne extracts (no patient data required) and X-on Surgery Connect management reports to get started.</p>
              </div>
 
              <Card className="mb-6">
@@ -1791,7 +1803,7 @@ export default function App() {
                                     { l: 'Callbacks Success', k: 'callbacksSuccessful', c: 'text-blue-500' },
                                     { l: 'Avg Wait', k: 'avgQueueTimeAnswered', c: 'text-slate-600', fmt: v => `${Math.floor(v/60)}m ${v%60}s` }
                                 ].map((m, i) => (
-                                    <Card key={i} className="p-4">
+                                    <Card key={i} className="p-4 border border-slate-200 shadow-none bg-slate-50">
                                         <p className="text-xs font-bold text-slate-400 uppercase">{m.l}</p>
                                         <p className={`text-xl font-bold ${m.c} mt-1`}>
                                             {m.fmt ? m.fmt(displayedData[displayedData.length-1][m.k]) : 
