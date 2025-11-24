@@ -13,7 +13,7 @@ import {
   Legend,
   Filler,
 } from 'chart.js';
-import { Upload, Activity, Calendar, Users, Phone, AlertCircle, CheckCircle, XCircle, ChevronDown, ChevronUp, Info, Sparkles, Loader2, PlayCircle, Search, User, Download, FileText, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Upload, Activity, Calendar, Users, Phone, AlertCircle, CheckCircle, XCircle, ChevronDown, ChevronUp, Info, Sparkles, Loader2, PlayCircle, Search, User, Download, FileText, ArrowUpDown, ArrowUp, ArrowDown, TrendingUp, AlertTriangle } from 'lucide-react';
 
 // --- PRODUCTION IMPORTS ---
 import Papa from 'papaparse';
@@ -88,6 +88,52 @@ const GP_BAND_GREEN = '#00963920';
 const GP_BAND_AMBER = '#ED8B0020';
 const GP_BAND_RED = '#DA291C20';
 
+// --- FORECASTING HELPER (Linear Regression) ---
+const calculateLinearForecast = (dataPoints, periodsToForecast = 2) => {
+    if (!dataPoints || dataPoints.length < 3) return [];
+
+    const n = dataPoints.length;
+    let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+
+    dataPoints.forEach((point, i) => {
+        sumX += i;
+        sumY += point;
+        sumXY += i * point;
+        sumXX += i * i;
+    });
+
+    const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+    const intercept = (sumY - slope * sumX) / n;
+
+    const forecast = [];
+    for (let i = 1; i <= periodsToForecast; i++) {
+        const nextIndex = n - 1 + i;
+        const predictedValue = slope * nextIndex + intercept;
+        forecast.push(Math.max(0, Math.round(predictedValue))); 
+    }
+    return forecast;
+};
+
+const getNextMonthNames = (lastMonthStr, count) => {
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const date = new Date(lastMonthStr);
+    if (isNaN(date.getTime())) return Array(count).fill('Future');
+    
+    let currentMonthIndex = date.getMonth();
+    let currentYear = date.getFullYear();
+    
+    const result = [];
+    for(let i = 0; i < count; i++) {
+        currentMonthIndex++;
+        if(currentMonthIndex > 11) {
+            currentMonthIndex = 0;
+            currentYear++;
+        }
+        result.push(`${months[currentMonthIndex]} ${currentYear}`);
+    }
+    return result;
+};
+
 // --- UI COMPONENTS ---
 
 const Card = ({ children, className = '' }) => (
@@ -135,7 +181,7 @@ const Accordion = ({ title, children, defaultOpen = false, icon: Icon }) => {
         {isOpen ? <ChevronUp size={20} className="text-slate-400" /> : <ChevronDown size={20} className="text-slate-400" />}
       </button>
       {isOpen && (
-        <div className="p-4 border-t border-slate-200 animate-in slide-in-from-top-2 duration-200">
+        <div className="p-4 border-t border-slate-200 animate-in slide-in-from-top-2 duration-200 bg-white">
           {children}
         </div>
       )}
@@ -299,6 +345,7 @@ export default function App() {
   const [rawStaffData, setRawStaffData] = useState([]); // Store granular staff data
   const [rawSlotData, setRawSlotData] = useState([]);   // Store granular slot data
   const [rawCombinedData, setRawCombinedData] = useState([]); // Store granular combined (staff+slot) data
+  const [forecastData, setForecastData] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -373,6 +420,7 @@ export default function App() {
     setRawStaffData([]);
     setRawSlotData([]);
     setRawCombinedData([]);
+    setForecastData(null);
 
     try {
       const fetchFile = async (path, name, type) => {
@@ -436,6 +484,7 @@ export default function App() {
     setRawStaffData([]);
     setRawSlotData([]);
     setRawCombinedData([]);
+    setForecastData(null);
 
     const filesToProcess = customFiles || files;
     const configToUse = customConfig || config; 
@@ -454,7 +503,7 @@ export default function App() {
 
       validateHeaders(apptData, ['Date', 'Day'], 'Appointments CSV');
       if (filesToProcess.dna) validateHeaders(dnaData, ['Staff', 'Appointment Count'], 'DNA CSV');
-      if (filesToProcess.unused) validateHeaders(unusedData, ['Staff', 'Unused Slots'], 'Unused CSV');
+      if (filesToProcess.unused) validateHeaders(unusedData, ['Staff', 'Unused Slots', 'Total Slots'], 'Unused CSV');
 
       let telephonyData = [];
       if (configToUse.analyseTelephony && filesToProcess.telephony && filesToProcess.telephony.length > 0) {
@@ -467,7 +516,7 @@ export default function App() {
       const months = {};
       const monthlyStaffMap = {}; 
       const monthlySlotMap = {}; 
-      const monthlyCombinedMap = {}; // New map for Staff + Slot
+      const monthlyCombinedMap = {}; 
 
       const getMonthKey = (dateStr) => {
         const d = new Date(dateStr);
@@ -481,7 +530,6 @@ export default function App() {
         return n.includes('Dr') || n.toLowerCase().includes('locum');
       };
 
-      // Helper to update monthly staff stats
       const updateStaff = (month, name, type, value) => {
         if (!name) return;
         const key = `${month}_${name}`;
@@ -491,7 +539,6 @@ export default function App() {
         monthlyStaffMap[key][type] += value;
       };
 
-      // Helper to update monthly slot stats
       const updateSlot = (month, slotName, type, value, associatedStaffName) => {
         if (!slotName) return;
         const key = `${month}_${slotName}`;
@@ -499,12 +546,12 @@ export default function App() {
             monthlySlotMap[key] = { month, name: slotName, hasGPActivity: false, appts: 0, dna: 0, unused: 0 };
         }
         monthlySlotMap[key][type] += value;
+        
         if (associatedStaffName && isGP(associatedStaffName)) {
             monthlySlotMap[key].hasGPActivity = true;
         }
       };
 
-      // Helper to update combined stats
       const updateCombined = (month, staffName, slotName, type, value) => {
         if (!staffName || !slotName) return;
         const key = `${month}_${staffName}_${slotName}`;
@@ -566,8 +613,12 @@ export default function App() {
             months[monthKey].staffAppts += count;
           }
 
-          // Staff Aggregation (Main Staff Table Source)
+          // Staff Aggregation
           updateStaff(monthKey, key, 'appts', count);
+          
+          if (row['Slot Type']) {
+              updateSlot(monthKey, row['Slot Type'], 'appts', count, key); 
+          }
         });
       });
 
@@ -613,8 +664,8 @@ export default function App() {
       // --- Process Unused ---
       unusedData.forEach(row => {
           const count = parseInt(row['Unused Slots'], 10) || 0;
-          const totalSlots = parseInt(row['Total Slots'], 10) || 0; // Use Total Slots for calculation
-          const booked = Math.max(0, totalSlots - count); // Calculate actual booked appointments
+          const totalSlots = parseInt(row['Total Slots'], 10) || 0;
+          const booked = Math.max(0, totalSlots - count);
 
           const staffName = row['Staff'];
           const slotName = row['Slot Type'];
@@ -631,7 +682,6 @@ export default function App() {
                  updateStaff(m, staffName, 'unused', splitCount);
                  if (slotName) {
                      // NOTE: We use "Booked" (calculated from Total Slots) for the Slot tables
-                     // instead of the count from AppointmentReport, as per user request.
                      updateSlot(m, slotName, 'unused', splitCount, staffName);
                      updateSlot(m, slotName, 'appts', splitBooked, staffName);
 
@@ -777,6 +827,25 @@ export default function App() {
         throw new Error("Processing resulted in invalid numbers. Please check if your input files contain valid numeric data.");
       }
 
+      // Forecasting
+      const apptArray = finalData.map(d => d.totalAppts);
+      const callArray = finalData.map(d => d.inboundReceived || 0);
+      
+      let futureAppts = [], futureCalls = [], futureLabels = [];
+      if (apptArray.length >= 3) {
+          futureAppts = calculateLinearForecast(apptArray, 2);
+          futureCalls = calculateLinearForecast(callArray, 2);
+          const lastMonth = finalData[finalData.length - 1]?.month;
+          futureLabels = getNextMonthNames(lastMonth, 2);
+      }
+
+      setForecastData(apptArray.length >= 3 ? {
+          labels: [...finalData.map(d => d.month), ...futureLabels],
+          appts: { actual: [...apptArray, null, null], projected: [...Array(apptArray.length - 1).fill(null), apptArray[apptArray.length-1], ...futureAppts] },
+          calls: { actual: [...callArray, null, null], projected: [...Array(callArray.length - 1).fill(null), callArray[callArray.length-1], ...futureCalls] },
+          hasData: true
+      } : { hasData: false, count: apptArray.length });
+
       setProcessedData(finalData);
       setRawStaffData(Object.values(monthlyStaffMap)); 
       setRawSlotData(Object.values(monthlySlotMap)); 
@@ -788,13 +857,12 @@ export default function App() {
       setRawStaffData([]);
       setRawSlotData([]);
       setRawCombinedData([]);
+      setForecastData(null);
       console.error("Processing Failed:", err);
     } finally {
       setIsProcessing(false);
     }
   };
-  
-  // --- Aggregated Data Helpers (Filtered) ---
   
   const getAggregatedData = (rawData) => {
     if (!rawData || rawData.length === 0) return [];
@@ -902,61 +970,61 @@ export default function App() {
   };
 
   const handleExportPDF = async () => {
-    setIsExporting(true);
-    try {
-        if (!aiReport) {
-            try {
-                const text = await fetchAIReport();
-                setAiReport(text);
-                await new Promise(resolve => setTimeout(resolve, 500));
-            } catch (e) {
-                console.error("Could not generate AI report for PDF", e);
-            }
-        }
+      setIsExporting(true);
+      try {
+          if (!aiReport) {
+              try {
+                  const text = await fetchAIReport();
+                  setAiReport(text);
+                  await new Promise(resolve => setTimeout(resolve, 500));
+              } catch (e) {
+                  console.error("Could not generate AI report for PDF", e);
+              }
+          }
 
-        const container = document.getElementById('pdf-report-container');
-        if (!container) throw new Error("Report container not found");
+          const container = document.getElementById('pdf-report-container');
+          if (!container) throw new Error("Report container not found");
 
-        const pdf = new jsPDF('p', 'mm', 'a4');
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = pdf.internal.pageSize.getHeight();
+          const pdf = new jsPDF('p', 'mm', 'a4');
+          const pdfWidth = pdf.internal.pageSize.getWidth();
+          const pdfHeight = pdf.internal.pageSize.getHeight();
 
-        const addSectionToPDF = async (elementId, addPageBreak = true) => {
-            const element = document.getElementById(elementId);
-            if (!element) return;
+          const addSectionToPDF = async (elementId, addPageBreak = true) => {
+              const element = document.getElementById(elementId);
+              if (!element) return;
 
-            const canvas = await html2canvas(element, {
-                scale: 2,
-                useCORS: true,
-                logging: false,
-                backgroundColor: '#ffffff'
-            });
+              const canvas = await html2canvas(element, {
+                  scale: 2,
+                  useCORS: true,
+                  logging: false,
+                  backgroundColor: '#ffffff'
+              });
 
-            const imgData = canvas.toDataURL('image/png');
-            const imgWidth = canvas.width;
-            const imgHeight = canvas.height;
-            const ratio = pdfWidth / imgWidth;
-            const scaledHeight = imgHeight * ratio;
+              const imgData = canvas.toDataURL('image/png');
+              const imgWidth = canvas.width;
+              const imgHeight = canvas.height;
+              const ratio = pdfWidth / imgWidth;
+              const scaledHeight = imgHeight * ratio;
 
-            if (addPageBreak) pdf.addPage();
-            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, scaledHeight);
-        };
+              if (addPageBreak) pdf.addPage();
+              pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, scaledHeight);
+          };
 
-        await addSectionToPDF('pdf-title-page', false);
-        await addSectionToPDF('pdf-overview-section');
-        await addSectionToPDF('pdf-gp-section');
-        if(config.analyseTelephony) await addSectionToPDF('pdf-telephony-section');
-        await addSectionToPDF('pdf-forecast-section');
+          await addSectionToPDF('pdf-title-page', false);
+          await addSectionToPDF('pdf-overview-section');
+          await addSectionToPDF('pdf-gp-section');
+          if(config.analyseTelephony) await addSectionToPDF('pdf-telephony-section');
+          await addSectionToPDF('pdf-forecast-section');
 
-        const filename = `CAIP Analysis - ${config.surgeryName || 'Surgery'}.pdf`;
-        pdf.save(filename);
+          const filename = `CAIP Analysis - ${config.surgeryName || 'Surgery'}.pdf`;
+          pdf.save(filename);
 
-    } catch (err) {
-        console.error("Export failed", err);
-        alert("Failed to export PDF. Please try again.");
-    } finally {
-        setIsExporting(false);
-    }
+      } catch (err) {
+          console.error("Export failed", err);
+          alert("Failed to export PDF. Please try again.");
+      } finally {
+          setIsExporting(false);
+      }
   };
 
   const displayedData = useMemo(() => {
@@ -1220,6 +1288,29 @@ export default function App() {
     }]
   });
 
+  const createForecastChartData = (labelActual, labelProjected, dataObj, color) => ({
+    labels: forecastData?.labels,
+    datasets: [
+      {
+        label: labelActual,
+        data: forecastData ? dataObj.actual : [],
+        borderColor: color,
+        backgroundColor: 'transparent',
+        tension: 0.3,
+        pointRadius: 4
+      },
+      {
+        label: labelProjected,
+        data: forecastData ? dataObj.projected : [],
+        borderColor: color,
+        borderDash: [5, 5], // Dotted line for forecast
+        backgroundColor: 'transparent',
+        tension: 0.3,
+        pointRadius: 4
+      }
+    ]
+  });
+
   const FileInput = ({ label, helpText, accept, onChange, file }) => (
     <div className="mb-4">
       <label className="block text-sm font-medium text-slate-700 mb-1">{label}</label>
@@ -1239,6 +1330,19 @@ export default function App() {
       </div>
     </div>
   );
+
+  // Define headers based on filter state
+  const isFiltered = selectedMonth !== 'All';
+  const unusedHeader = isFiltered ? 'Unused Slots (Est. Monthly)' : 'Unused Slots';
+  const dnaHeader = isFiltered ? 'DNAs (Est. Monthly)' : 'DNAs';
+  
+  // Helper for conditional warning in accordion content
+  const seasonalWarning = isFiltered ? (
+      <p className="text-xs text-amber-600 mb-3 italic flex items-center gap-1">
+        <Info size={12} />
+        * Monthly averages shown. Exact dates are not available in DNA/Unused CSVs.
+      </p>
+  ) : null;
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800 pb-20">
@@ -1435,9 +1539,7 @@ export default function App() {
                  </div>
             )}
             
-            {/* ACTION BUTTONS: Centered above tabs */}
             <div className="flex justify-center gap-4 mb-6" data-html2canvas-ignore="true">
-                 {/* 1. CAIP Analysis Button */}
                  <button 
                   onClick={generateAIInsights}
                   disabled={isAiLoading}
@@ -1454,7 +1556,6 @@ export default function App() {
                   </span>
                  </button>
 
-                 {/* 2. Export to PDF Button */}
                  <button 
                   onClick={handleExportPDF}
                   disabled={isExporting}
@@ -1471,7 +1572,7 @@ export default function App() {
                     {id: 'dashboard', label: 'Overview', icon: Activity},
                     {id: 'gp', label: 'GP Metrics', icon: Users},
                     {id: 'telephony', label: 'Telephony', icon: Phone},
-                    {id: 'forecast', label: 'Ideal Forecast', icon: Calendar}
+                    {id: 'forecast', label: 'Forecast', icon: Calendar}
                 ].map(tab => (
                     <button 
                         key={tab.id}
@@ -1485,7 +1586,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* --- VISIBLE CONTENT (Interactive) --- */}
             {activeTab === 'dashboard' && (
               <div className="space-y-6">
                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -1525,20 +1625,22 @@ export default function App() {
                  </div>
                  
                  <Accordion title="Staff Breakdown (All Staff)" icon={Users}>
+                    {seasonalWarning}
                     {aggregatedStaffData && (
                         <SortableTable 
                             data={aggregatedStaffData} 
                             columns={[
                                 { header: 'Name', accessor: 'name' },
                                 { header: 'Appointments', accessor: 'appts', render: (row) => Math.round(row.appts).toLocaleString() },
-                                { header: 'Unused Slots', accessor: 'unused', render: (row) => Math.round(row.unused).toLocaleString() },
-                                { header: 'DNAs', accessor: 'dna', render: (row) => Math.round(row.dna).toLocaleString() }
+                                { header: unusedHeader, accessor: 'unused', render: (row) => Math.round(row.unused).toLocaleString() },
+                                { header: dnaHeader, accessor: 'dna', render: (row) => Math.round(row.dna).toLocaleString() }
                             ]}
                         />
                     )}
                  </Accordion>
 
                  <Accordion title="Slot Type Breakdown (All Slots)" icon={Activity}>
+                    {seasonalWarning}
                     {aggregatedSlotData && (
                         <SortableTable 
                             data={aggregatedSlotData}
@@ -1546,14 +1648,15 @@ export default function App() {
                             columns={[
                                 { header: 'Slot Type', accessor: 'name' },
                                 { header: 'Appointments', accessor: 'appts', render: (row) => Math.round(row.appts).toLocaleString() },
-                                { header: 'Unused Slots', accessor: 'unused', render: (row) => Math.round(row.unused).toLocaleString() },
-                                { header: 'DNAs', accessor: 'dna', render: (row) => Math.round(row.dna).toLocaleString() }
+                                { header: unusedHeader, accessor: 'unused', render: (row) => Math.round(row.unused).toLocaleString() },
+                                { header: dnaHeader, accessor: 'dna', render: (row) => Math.round(row.dna).toLocaleString() }
                             ]}
                         />
                     )}
                  </Accordion>
 
                  <Accordion title="Staff & Slot Performance" icon={User}>
+                    {seasonalWarning}
                     {aggregatedCombinedData && (
                         <SortableTable 
                             data={aggregatedCombinedData}
@@ -1562,8 +1665,8 @@ export default function App() {
                                 { header: 'Name', accessor: 'name' },
                                 { header: 'Slot Type', accessor: 'slot', render: (row) => row.slot || '-' },
                                 { header: 'Appointments', accessor: 'appts', render: (row) => Math.round(row.appts).toLocaleString() },
-                                { header: 'Unused Slots', accessor: 'unused', render: (row) => Math.round(row.unused).toLocaleString() },
-                                { header: 'DNAs', accessor: 'dna', render: (row) => Math.round(row.dna).toLocaleString() }
+                                { header: unusedHeader, accessor: 'unused', render: (row) => Math.round(row.unused).toLocaleString() },
+                                { header: dnaHeader, accessor: 'dna', render: (row) => Math.round(row.dna).toLocaleString() }
                             ]}
                         />
                     )}
@@ -1623,20 +1726,22 @@ export default function App() {
                     </div>
 
                     <Accordion title="GP Performance Breakdown" icon={User}>
+                        {seasonalWarning}
                         {aggregatedStaffData && (
                             <SortableTable 
                                 data={aggregatedStaffData.filter(s => s.isGP)} 
                                 columns={[
                                     { header: 'GP Name', accessor: 'name' },
                                     { header: 'Appointments', accessor: 'appts', render: (row) => Math.round(row.appts).toLocaleString() },
-                                    { header: 'Unused Slots', accessor: 'unused', render: (row) => Math.round(row.unused).toLocaleString() },
-                                    { header: 'DNAs', accessor: 'dna', render: (row) => Math.round(row.dna).toLocaleString() }
+                                    { header: unusedHeader, accessor: 'unused', render: (row) => Math.round(row.unused).toLocaleString() },
+                                    { header: dnaHeader, accessor: 'dna', render: (row) => Math.round(row.dna).toLocaleString() }
                                 ]}
                             />
                         )}
                     </Accordion>
 
                     <Accordion title="GP Slot Type Breakdown" icon={Activity}>
+                        {seasonalWarning}
                         {aggregatedSlotData && (
                             <SortableTable 
                                 data={aggregatedSlotData.filter(s => s.hasGPActivity)}
@@ -1644,14 +1749,15 @@ export default function App() {
                                 columns={[
                                     { header: 'Slot Type', accessor: 'name' },
                                     { header: 'Appointments', accessor: 'appts', render: (row) => Math.round(row.appts).toLocaleString() },
-                                    { header: 'Unused Slots', accessor: 'unused', render: (row) => Math.round(row.unused).toLocaleString() },
-                                    { header: 'DNAs', accessor: 'dna', render: (row) => Math.round(row.dna).toLocaleString() }
+                                    { header: unusedHeader, accessor: 'unused', render: (row) => Math.round(row.unused).toLocaleString() },
+                                    { header: dnaHeader, accessor: 'dna', render: (row) => Math.round(row.dna).toLocaleString() }
                                 ]}
                             />
                         )}
                     </Accordion>
 
                     <Accordion title="GP Staff & Slot Performance" icon={User}>
+                        {seasonalWarning}
                         {aggregatedCombinedData && (
                             <SortableTable 
                                 data={aggregatedCombinedData.filter(s => s.isGP)}
@@ -1660,8 +1766,8 @@ export default function App() {
                                     { header: 'Name', accessor: 'name' },
                                     { header: 'Slot Type', accessor: 'slot', render: (row) => row.slot || '-' },
                                     { header: 'Appointments', accessor: 'appts', render: (row) => Math.round(row.appts).toLocaleString() },
-                                    { header: 'Unused Slots', accessor: 'unused', render: (row) => Math.round(row.unused).toLocaleString() },
-                                    { header: 'DNAs', accessor: 'dna', render: (row) => Math.round(row.dna).toLocaleString() }
+                                    { header: unusedHeader, accessor: 'unused', render: (row) => Math.round(row.unused).toLocaleString() },
+                                    { header: dnaHeader, accessor: 'dna', render: (row) => Math.round(row.dna).toLocaleString() }
                                 ]}
                             />
                         )}
@@ -1777,20 +1883,7 @@ export default function App() {
                                     data: displayedData.map(d => d.extraSlotsPerDay),
                                     backgroundColor: displayedData.map(d => d.extraSlotsPerDay > 0 ? '#EF4444' : '#10B981'),
                                 }]
-                            }} options={{
-                                ...commonOptions,
-                                plugins: {
-                                    ...commonOptions.plugins,
-                                    tooltip: {
-                                        callbacks: {
-                                            label: (ctx) => {
-                                                const v = ctx.raw;
-                                                return v > 0 ? `Shortfall: ${v.toFixed(1)} slots/day` : `Surplus: ${Math.abs(v).toFixed(1)} slots/day`;
-                                            }
-                                        }
-                                    }
-                                }
-                            }} />
+                            }} options={pdfChartOptions} />
                          </div>
                          <div className="mt-6 bg-slate-50 p-4 rounded-xl text-sm text-slate-600">
                              <p className="font-semibold mb-2 flex items-center gap-2"><Info size={16}/> How is this calculated?</p>
@@ -1802,13 +1895,21 @@ export default function App() {
                              </code>
                          </div>
                     </Card>
+                    {forecastData && forecastData.hasData && (
+                        <div>
+                            <h3 className="text-xl font-bold text-slate-700 mb-4 mt-8">Future Trends (Next 2 Months)</h3>
+                            <div className="grid grid-cols-2 gap-6">
+                                <div className="h-80 border border-slate-200 rounded-xl p-4"><Line data={createForecastChartData('Actual Appointments', 'Forecast Trend', forecastData.appts, NHS_BLUE)} options={pdfChartOptions} /></div>
+                                <div className="h-80 border border-slate-200 rounded-xl p-4"><Line data={createForecastChartData('Actual Calls', 'Forecast Trend', forecastData.calls, NHS_PURPLE)} options={pdfChartOptions} /></div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
 
             {/* --- HIDDEN PRINT CONTAINER --- */}
             <div id="pdf-report-container" style={{ position: 'fixed', top: 0, left: -10000, width: '1200px', background: '#fff', zIndex: -100 }}>
                 
-                {/* Title Page */}
                 <div id="pdf-title-page" className="flex flex-col items-center justify-center h-[800px] p-20 text-center bg-slate-50">
                     <img src={logo} className="w-32 h-32 mb-8 rounded-xl shadow-lg" />
                     <h1 className="text-6xl font-bold text-slate-900 mb-4">CAIP Analysis Report</h1>
@@ -1825,7 +1926,6 @@ export default function App() {
                     )}
                 </div>
 
-                {/* Overview Section */}
                 <div id="pdf-overview-section" className="p-10 space-y-8">
                     <h2 className="text-3xl font-bold text-slate-800 border-b border-slate-200 pb-4 mb-6">1. Practice Overview</h2>
                     <div className="grid grid-cols-3 gap-6">
@@ -1842,8 +1942,8 @@ export default function App() {
                             columns={[
                                 { header: 'Name', accessor: 'name' },
                                 { header: 'Appointments', accessor: 'appts', render: (row) => Math.round(row.appts).toLocaleString() },
-                                { header: 'Unused', accessor: 'unused', render: (row) => Math.round(row.unused).toLocaleString() },
-                                { header: 'DNAs', accessor: 'dna', render: (row) => Math.round(row.dna).toLocaleString() }
+                                { header: unusedHeader, accessor: 'unused', render: (row) => Math.round(row.unused).toLocaleString() },
+                                { header: dnaHeader, accessor: 'dna', render: (row) => Math.round(row.dna).toLocaleString() }
                             ]} 
                             isPrint={true} 
                         />
@@ -1856,8 +1956,8 @@ export default function App() {
                             columns={[
                                 { header: 'Slot Type', accessor: 'name' },
                                 { header: 'Appointments', accessor: 'appts', render: (row) => Math.round(row.appts).toLocaleString() },
-                                { header: 'Unused', accessor: 'unused', render: (row) => Math.round(row.unused).toLocaleString() },
-                                { header: 'DNAs', accessor: 'dna', render: (row) => Math.round(row.dna).toLocaleString() }
+                                { header: unusedHeader, accessor: 'unused', render: (row) => Math.round(row.unused).toLocaleString() },
+                                { header: dnaHeader, accessor: 'dna', render: (row) => Math.round(row.dna).toLocaleString() }
                             ]} 
                             isPrint={true} 
                         />
@@ -1871,15 +1971,14 @@ export default function App() {
                                 { header: 'Name', accessor: 'name' },
                                 { header: 'Slot Type', accessor: 'slot', render: (row) => row.slot || '-' },
                                 { header: 'Appointments', accessor: 'appts', render: (row) => Math.round(row.appts).toLocaleString() },
-                                { header: 'Unused', accessor: 'unused', render: (row) => Math.round(row.unused).toLocaleString() },
-                                { header: 'DNAs', accessor: 'dna', render: (row) => Math.round(row.dna).toLocaleString() }
+                                { header: unusedHeader, accessor: 'unused', render: (row) => Math.round(row.unused).toLocaleString() },
+                                { header: dnaHeader, accessor: 'dna', render: (row) => Math.round(row.dna).toLocaleString() }
                             ]} 
                             isPrint={true} 
                         />
                     </div>
                 </div>
 
-                {/* GP Section */}
                 <div id="pdf-gp-section" className="p-10 space-y-8">
                     <h2 className="text-3xl font-bold text-slate-800 border-b border-slate-200 pb-4 mb-6">2. GP Metrics</h2>
                     <div className="h-96 border border-slate-200 rounded-xl p-4"><Line data={createChartData('GP Appts %', 'gpApptsPerDay', NHS_DARK_BLUE, false)} options={pdfGpBandOptions} /></div>
@@ -1895,8 +1994,8 @@ export default function App() {
                             columns={[
                                 { header: 'GP Name', accessor: 'name' },
                                 { header: 'Appointments', accessor: 'appts', render: (row) => Math.round(row.appts).toLocaleString() },
-                                { header: 'Unused', accessor: 'unused', render: (row) => Math.round(row.unused).toLocaleString() },
-                                { header: 'DNAs', accessor: 'dna', render: (row) => Math.round(row.dna).toLocaleString() }
+                                { header: unusedHeader, accessor: 'unused', render: (row) => Math.round(row.unused).toLocaleString() },
+                                { header: dnaHeader, accessor: 'dna', render: (row) => Math.round(row.dna).toLocaleString() }
                             ]} 
                             isPrint={true} 
                         />
@@ -1909,8 +2008,8 @@ export default function App() {
                             columns={[
                                 { header: 'Slot Type', accessor: 'name' },
                                 { header: 'Appointments', accessor: 'appts', render: (row) => Math.round(row.appts).toLocaleString() },
-                                { header: 'Unused', accessor: 'unused', render: (row) => Math.round(row.unused).toLocaleString() },
-                                { header: 'DNAs', accessor: 'dna', render: (row) => Math.round(row.dna).toLocaleString() }
+                                { header: unusedHeader, accessor: 'unused', render: (row) => Math.round(row.unused).toLocaleString() },
+                                { header: dnaHeader, accessor: 'dna', render: (row) => Math.round(row.dna).toLocaleString() }
                             ]} 
                             isPrint={true} 
                         />
@@ -1924,19 +2023,17 @@ export default function App() {
                                 { header: 'Name', accessor: 'name' },
                                 { header: 'Slot Type', accessor: 'slot', render: (row) => row.slot || '-' },
                                 { header: 'Appointments', accessor: 'appts', render: (row) => Math.round(row.appts).toLocaleString() },
-                                { header: 'Unused', accessor: 'unused', render: (row) => Math.round(row.unused).toLocaleString() },
-                                { header: 'DNAs', accessor: 'dna', render: (row) => Math.round(row.dna).toLocaleString() }
+                                { header: unusedHeader, accessor: 'unused', render: (row) => Math.round(row.unused).toLocaleString() },
+                                { header: dnaHeader, accessor: 'dna', render: (row) => Math.round(row.dna).toLocaleString() }
                             ]} 
                             isPrint={true} 
                         />
                     </div>
                 </div>
 
-                {/* Telephony Section (Conditional) */}
                 {config.analyseTelephony && (
                     <div id="pdf-telephony-section" className="p-10 space-y-8">
                         <h2 className="text-3xl font-bold text-slate-800 border-b border-slate-200 pb-4 mb-6">3. Telephony Performance</h2>
-                        {/* Metric Cards */}
                         <div className="grid grid-cols-5 gap-4 mb-6">
                             {[
                                 { l: 'Inbound Calls', k: 'inboundReceived', c: 'text-blue-600' },
@@ -1963,7 +2060,6 @@ export default function App() {
                     </div>
                 )}
 
-                {/* Forecast Section */}
                 <div id="pdf-forecast-section" className="p-10 space-y-8">
                     <h2 className="text-3xl font-bold text-slate-800 border-b border-slate-200 pb-4 mb-6">4. Demand Forecast (GP Only)</h2>
                     <div className="bg-blue-50 p-6 rounded-xl border border-blue-100 text-blue-800 mb-6">
@@ -1972,6 +2068,15 @@ export default function App() {
                     <div className="h-96 border border-slate-200 rounded-xl p-4">
                         <Bar data={{labels:displayedData.map(d=>d.month),datasets:[{label:'Shortfall (Slots/Day)',data:displayedData.map(d=>d.extraSlotsPerDay),backgroundColor:displayedData.map(d=>d.extraSlotsPerDay>0?'#EF4444':'#10B981')}]}} options={pdfChartOptions} />
                     </div>
+                    {forecastData && forecastData.hasData && (
+                        <div>
+                            <h3 className="text-xl font-bold text-slate-700 mb-4 mt-8">Future Trends (Next 2 Months)</h3>
+                            <div className="grid grid-cols-2 gap-6">
+                                <div className="h-80 border border-slate-200 rounded-xl p-4"><Line data={createForecastChartData('Actual Appointments', 'Forecast Trend', forecastData.appts, NHS_BLUE)} options={pdfChartOptions} /></div>
+                                <div className="h-80 border border-slate-200 rounded-xl p-4"><Line data={createForecastChartData('Actual Calls', 'Forecast Trend', forecastData.calls, NHS_PURPLE)} options={pdfChartOptions} /></div>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
             </div>
