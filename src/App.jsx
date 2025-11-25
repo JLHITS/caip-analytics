@@ -47,7 +47,7 @@ GlobalWorkerOptions.workerSrc = pdfWorker;
 const apiKey = (import.meta && import.meta.env && import.meta.env.VITE_GEMINI_KEY) || "";
 
 // Version Info
-const APP_VERSION = "0.8.0-beta";
+const APP_VERSION = "0.8.1-beta";
 
 // Initialize ChartJS
 ChartJS.register(
@@ -337,7 +337,9 @@ export default function App() {
   const [config, setConfig] = useState({
     surgeryName: '',
     population: 10000,
-    analyseTelephony: true,
+    analyseTelephony: true, // Renaming logically below to useTelephony for internal clarity if needed, but keeping key for compat
+    useTelephony: true,
+    useOnline: true,
   });
 
   const [files, setFiles] = useState({
@@ -454,7 +456,8 @@ export default function App() {
       const exampleConfig = {
         surgeryName: 'Example Surgery',
         population: 5600,
-        analyseTelephony: true
+        useTelephony: true,
+        useOnline: true
       };
 
       setConfig(exampleConfig);
@@ -511,15 +514,16 @@ export default function App() {
       const apptData = await parseCSV(filesToProcess.appointments);
       const dnaData = filesToProcess.dna ? await parseCSV(filesToProcess.dna) : [];
       const unusedData = filesToProcess.unused ? await parseCSV(filesToProcess.unused) : [];
-      const onlineData = filesToProcess.onlineRequests ? await parseCSV(filesToProcess.onlineRequests) : [];
+      // Process online only if enabled and file exists
+      const onlineData = (configToUse.useOnline && filesToProcess.onlineRequests) ? await parseCSV(filesToProcess.onlineRequests) : [];
 
       validateHeaders(apptData, ['Date', 'Day'], 'Appointments CSV');
       if (filesToProcess.dna) validateHeaders(dnaData, ['Staff', 'Appointment Count'], 'DNA CSV');
       if (filesToProcess.unused) validateHeaders(unusedData, ['Staff', 'Unused Slots', 'Total Slots'], 'Unused CSV');
-      if (filesToProcess.onlineRequests) validateHeaders(onlineData, ['Submission started', 'Type', 'Outcome'], 'Online Requests CSV', ['Patient Name', 'Name', 'Patient', 'NHS Number']);
+      if (configToUse.useOnline && filesToProcess.onlineRequests) validateHeaders(onlineData, ['Submission started', 'Type', 'Outcome'], 'Online Requests CSV', ['Patient Name', 'Name', 'Patient', 'NHS Number']);
 
       let telephonyData = [];
-      if (configToUse.analyseTelephony && filesToProcess.telephony && filesToProcess.telephony.length > 0) {
+      if (configToUse.useTelephony && filesToProcess.telephony && filesToProcess.telephony.length > 0) {
         for (const file of filesToProcess.telephony) {
           const text = await extractTextFromPDF(file);
           telephonyData.push({ filename: file.name, text });
@@ -531,7 +535,6 @@ export default function App() {
       const monthlySlotMap = {}; 
       const monthlyCombinedMap = {}; 
       
-      // Online breakdown containers
       const onlineStatsData = {
           typeBreakdown: { Clinical: 0, Admin: 0 },
           accessMethod: {},
@@ -732,117 +735,109 @@ export default function App() {
           }
       });
 
-      // 4. Process Online Requests (Updated Logic)
-      onlineData.forEach(row => {
-        const dateStr = row['Submission started'] || row['Submitted'];
-        const completeStr = row['Submission completed'];
-        const outcomeStr = row['Outcome recorded'];
-        const date = parseDateTime(dateStr);
-        
-        if (!date) return;
-        
-        const monthKey = date.toLocaleString('default', { month: 'short', year: 'numeric' });
-        
-        // Add to general stats if it's a valid month (even if we don't have appts for it, but we usually sync with appt months)
-        // If we want strict syncing, check if months[monthKey] exists. 
-        if (months[monthKey]) {
-            months[monthKey].onlineTotal += 1;
+      // 4. Process Online Requests
+      if (configToUse.useOnline) {
+          onlineData.forEach(row => {
+            const dateStr = row['Submission started'] || row['Submitted'];
+            const completeStr = row['Submission completed'];
+            const outcomeStr = row['Outcome recorded'];
+            const date = parseDateTime(dateStr);
             
-            const type = row['Type'];
-            const outcome = (row['Outcome'] || '').trim();
-            const outcomeLower = outcome.toLowerCase();
-            const access = row['Access method'];
-            const sex = row['Sex'];
-            const age = parseInt(row['Age'], 10);
-
-            // Clinical Triage Logic
-            if (type === 'Clinical' && !outcomeLower.includes('appointment offered') && !outcomeLower.includes('appointment booked')) {
-                months[monthKey].onlineClinicalNoAppt += 1;
-            }
-
-            // --- Advanced Stats Aggregation ---
+            if (!date) return;
             
-            // 1. Offered/Booked vs Resolved
-            if (outcomeLower.includes('appointment offered') || outcomeLower.includes('appointment booked')) {
-                onlineStatsData.totalOfferedOrBooked++;
-            } else {
-                onlineStatsData.totalResolved++;
-            }
+            const monthKey = date.toLocaleString('default', { month: 'short', year: 'numeric' });
+            
+            if (months[monthKey]) {
+                months[monthKey].onlineTotal += 1;
+                
+                const type = row['Type'];
+                const outcome = (row['Outcome'] || '').trim();
+                const outcomeLower = outcome.toLowerCase();
+                const access = row['Access method'];
+                const sex = row['Sex'];
+                const age = parseInt(row['Age'], 10);
 
-            // 2. Type Split
-            if (type) {
-                onlineStatsData.typeBreakdown[type] = (onlineStatsData.typeBreakdown[type] || 0) + 1;
-            }
+                if (type === 'Clinical' && !outcomeLower.includes('appointment offered') && !outcomeLower.includes('appointment booked')) {
+                    months[monthKey].onlineClinicalNoAppt += 1;
+                }
 
-            // 3. Access Method
-            if (access) {
-                onlineStatsData.accessMethod[access] = (onlineStatsData.accessMethod[access] || 0) + 1;
-            }
+                if (outcomeLower.includes('appointment offered') || outcomeLower.includes('appointment booked')) {
+                    onlineStatsData.totalOfferedOrBooked++;
+                } else {
+                    onlineStatsData.totalResolved++;
+                }
 
-            // 4. Sex Split
-            if (sex) {
-                onlineStatsData.sexSplit[sex] = (onlineStatsData.sexSplit[sex] || 0) + 1;
-            }
+                if (type) {
+                    onlineStatsData.typeBreakdown[type] = (onlineStatsData.typeBreakdown[type] || 0) + 1;
+                }
 
-            // 5. Outcome Breakdown
-            if (outcome) {
-                onlineStatsData.outcomes[outcome] = (onlineStatsData.outcomes[outcome] || 0) + 1;
-            }
+                if (access) {
+                    onlineStatsData.accessMethod[access] = (onlineStatsData.accessMethod[access] || 0) + 1;
+                }
 
-            // 6. Age
-            if (!isNaN(age)) {
-                onlineStatsData.totalAge += age;
-                onlineStatsData.ageCount++;
-            }
+                if (sex) {
+                    onlineStatsData.sexSplit[sex] = (onlineStatsData.sexSplit[sex] || 0) + 1;
+                }
 
-            // 7. Time to Outcome (Split)
-            if (completeStr && outcomeStr) {
-                const d1 = parseDateTime(completeStr);
-                const d2 = parseDateTime(outcomeStr);
-                if (d1 && d2) {
-                    const diffMs = d2 - d1;
-                    const diffHrs = diffMs / (1000 * 60 * 60);
-                    if (diffHrs >= 0 && diffHrs < 1000) { // Sanity check
-                        if (type === 'Clinical') {
-                            onlineStatsData.clinicalDurationTotal += diffHrs;
-                            onlineStatsData.clinicalDurationCount++;
-                        } else {
-                            onlineStatsData.adminDurationTotal += diffHrs;
-                            onlineStatsData.adminDurationCount++;
+                if (outcome) {
+                    onlineStatsData.outcomes[outcome] = (onlineStatsData.outcomes[outcome] || 0) + 1;
+                }
+
+                if (!isNaN(age)) {
+                    onlineStatsData.totalAge += age;
+                    onlineStatsData.ageCount++;
+                }
+
+                if (completeStr && outcomeStr) {
+                    const d1 = parseDateTime(completeStr);
+                    const d2 = parseDateTime(outcomeStr);
+                    if (d1 && d2) {
+                        const diffMs = d2 - d1;
+                        const diffHrs = diffMs / (1000 * 60 * 60);
+                        if (diffHrs >= 0 && diffHrs < 1000) {
+                            if (type === 'Clinical') {
+                                onlineStatsData.clinicalDurationTotal += diffHrs;
+                                onlineStatsData.clinicalDurationCount++;
+                            } else {
+                                onlineStatsData.adminDurationTotal += diffHrs;
+                                onlineStatsData.adminDurationCount++;
+                            }
                         }
                     }
                 }
             }
-        }
-      });
+          });
+      }
 
       // 5. Process Telephony
-      telephonyData.forEach(item => {
-        const text = item.text;
-        const monthMatch = text.match(/(January|February|March|April|May|June|July|August|September|October|November|December)\s20\d{2}/i);
-        if (monthMatch) {
-             const pdfDate = new Date(monthMatch[0]);
-             const monthKey = pdfDate.toLocaleString('default', { month: 'short', year: 'numeric' });
-             if (months[monthKey]) {
-                 const extract = (r) => { const m = text.match(r); return m && m[1] ? parseFloat(m[1].replace(/,/g,'')) : 0; };
-                 const extractTime = (r) => { const m = text.match(r); if(m) { let min=0,sec=0; if(m[1]) min=parseInt(m[1]); if(m[2]) sec=parseInt(m[2]); const fm=m[0]; const mm=fm.match(/(\d+)m/); const sm=fm.match(/(\d+)s/); if(mm) min=parseInt(mm[1]); if(sm) sec=parseInt(sm[1]); return (min*60)+sec; } return 0; };
-                 const missedUniqueMatch = text.match(/Missed From Queue\s+Excluding Repeat Callers\s+[\d,]+\s+\(([\d.]+)%\)/i);
-                 months[monthKey].telephony = {
-                   inboundReceived: extract(/Inbound Received\s+([\d,]+)/i),
-                   inboundAnswered: extract(/Inbound Answered\s+([\d,]+)/i),
-                   missedFromQueue: extract(/Missed From Queue\s+([\d,]+)/i),
-                   missedFromQueueExRepeat: extract(/Missed From Queue\s+Excluding Repeat Callers\s+([\d,]+)/i),
-                   missedFromQueueExRepeatPct: missedUniqueMatch && missedUniqueMatch[1] ? parseFloat(missedUniqueMatch[1]) : 0, 
-                   answeredFromQueue: extract(/Answered From Queue\s+[\d,]+\s+\(([\d.]+)%\)/i), 
-                   abandonedCalls: extract(/Abandoned Calls\s+[\d,]+\s+\(([\d.]+)%\)/i), 
-                   callbacksSuccessful: extract(/Callbacks Successful\s+([\d,]+)/i),
-                   avgQueueTimeAnswered: extractTime(/Average Queue Time\s+Answered\s+(\d+m\s\d+s|\d+s)/i),
-                   avgQueueTimeMissed: extractTime(/Average Queue Time\s+Missed\s+(\d+m\s\d+s|\d+s)/i),
-                   avgInboundTalkTime: extractTime(/Average Inbound Talk\s+Time\s+(\d+m\s\d+s|\d+s)/i),
-                 };
-             }
-        }
-      });
+      if (configToUse.useTelephony) {
+          telephonyData.forEach(item => {
+            const text = item.text;
+            const monthMatch = text.match(/(January|February|March|April|May|June|July|August|September|October|November|December)\s20\d{2}/i);
+            if (monthMatch) {
+                 const pdfDate = new Date(monthMatch[0]);
+                 const monthKey = pdfDate.toLocaleString('default', { month: 'short', year: 'numeric' });
+                 if (months[monthKey]) {
+                     const extract = (r) => { const m = text.match(r); return m && m[1] ? parseFloat(m[1].replace(/,/g,'')) : 0; };
+                     const extractTime = (r) => { const m = text.match(r); if(m) { let min=0,sec=0; if(m[1]) min=parseInt(m[1]); if(m[2]) sec=parseInt(m[2]); const fm=m[0]; const mm=fm.match(/(\d+)m/); const sm=fm.match(/(\d+)s/); if(mm) min=parseInt(mm[1]); if(sm) sec=parseInt(sm[1]); return (min*60)+sec; } return 0; };
+                     const missedUniqueMatch = text.match(/Missed From Queue\s+Excluding Repeat Callers\s+[\d,]+\s+\(([\d.]+)%\)/i);
+                     months[monthKey].telephony = {
+                       inboundReceived: extract(/Inbound Received\s+([\d,]+)/i),
+                       inboundAnswered: extract(/Inbound Answered\s+([\d,]+)/i),
+                       missedFromQueue: extract(/Missed From Queue\s+([\d,]+)/i),
+                       missedFromQueueExRepeat: extract(/Missed From Queue\s+Excluding Repeat Callers\s+([\d,]+)/i),
+                       missedFromQueueExRepeatPct: missedUniqueMatch && missedUniqueMatch[1] ? parseFloat(missedUniqueMatch[1]) : 0, 
+                       answeredFromQueue: extract(/Answered From Queue\s+[\d,]+\s+\(([\d.]+)%\)/i), 
+                       abandonedCalls: extract(/Abandoned Calls\s+[\d,]+\s+\(([\d.]+)%\)/i), 
+                       callbacksSuccessful: extract(/Callbacks Successful\s+([\d,]+)/i),
+                       avgQueueTimeAnswered: extractTime(/Average Queue Time\s+Answered\s+(\d+m\s\d+s|\d+s)/i),
+                       avgQueueTimeMissed: extractTime(/Average Queue Time\s+Missed\s+(\d+m\s\d+s|\d+s)/i),
+                       avgInboundTalkTime: extractTime(/Average Inbound Talk\s+Time\s+(\d+m\s\d+s|\d+s)/i),
+                     };
+                 }
+            }
+          });
+      }
 
       const sortedMonths = Object.values(months).sort((a, b) => new Date(a.month) - new Date(b.month));
       const totalApptsAll = Object.values(months).reduce((s,m)=>s+m.totalAppts,0);
@@ -920,7 +915,7 @@ export default function App() {
       setRawStaffData(Object.values(monthlyStaffMap)); 
       setRawSlotData(Object.values(monthlySlotMap)); 
       setRawCombinedData(Object.values(monthlyCombinedMap));
-      setOnlineStats(onlineStatsData);
+      setOnlineStats(configToUse.useOnline ? onlineStatsData : null);
 
     } catch (err) {
       setError(err.message);
@@ -1041,8 +1036,8 @@ export default function App() {
           await addSectionToPDF('pdf-title-page', false);
           await addSectionToPDF('pdf-overview-section');
           await addSectionToPDF('pdf-gp-section');
-          if(files.onlineRequests) await addSectionToPDF('pdf-online-section');
-          if(config.analyseTelephony) await addSectionToPDF('pdf-telephony-section');
+          if(config.useOnline && files.onlineRequests) await addSectionToPDF('pdf-online-section');
+          if(config.useTelephony) await addSectionToPDF('pdf-telephony-section');
           await addSectionToPDF('pdf-forecast-section');
           const filename = `CAIP Analysis - ${config.surgeryName || 'Surgery'}.pdf`;
           pdf.save(filename);
@@ -1138,8 +1133,8 @@ export default function App() {
     ]
   });
 
-  const FileInput = ({ label, helpText, accept, onChange, file, badge }) => (
-    <div className="mb-4">
+  const FileInput = ({ label, helpText, accept, onChange, file, badge, disabled }) => (
+    <div className={`mb-4 transition-opacity ${disabled ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
       <div className="flex justify-between items-baseline mb-1">
         <label className="block text-sm font-medium text-slate-700">{label}</label>
         {badge && <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full border border-slate-200">{badge}</span>}
@@ -1148,7 +1143,7 @@ export default function App() {
       <div className="flex items-center gap-3">
         <label className="flex-1 cursor-pointer group">
           <div className={`flex items-center justify-center px-4 py-3 border-2 border-dashed rounded-xl transition-all ${file ? 'border-green-400 bg-green-50' : 'border-slate-300 hover:border-blue-400 hover:bg-blue-50'}`}>
-            <input type="file" className="hidden" accept={accept} onChange={onChange} multiple={accept === "application/pdf"} />
+            <input type="file" className="hidden" accept={accept} onChange={onChange} multiple={accept === "application/pdf"} disabled={disabled} />
             <div className="flex items-center gap-2 text-slate-500 group-hover:text-blue-600">
                {file ? <CheckCircle size={18} className="text-green-600" /> : <Upload size={18} />}
                <span className="text-sm truncate max-w-[200px]">
@@ -1267,15 +1262,21 @@ export default function App() {
                     />
                   </div>
                </div>
-               <div className="mt-4 flex items-center gap-2">
-                 <input 
-                   type="checkbox" 
-                   id="telephony" 
-                   className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
-                   checked={config.analyseTelephony}
-                   onChange={e => setConfig({...config, analyseTelephony: e.target.checked})}
-                 />
-                 <label htmlFor="telephony" className="text-sm text-slate-700">Analyse Telephony Data (Requires PDF uploads)</label>
+               <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                 <div className="flex flex-col">
+                     <div className="flex items-center gap-2">
+                        <input type="checkbox" id="telephony" className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500" checked={config.useTelephony} onChange={e => setConfig({...config, useTelephony: e.target.checked})} />
+                        <label htmlFor="telephony" className="text-sm text-slate-700 font-medium">Analyse Telephony Data</label>
+                     </div>
+                     {!config.useTelephony && <p className="text-xs text-amber-600 mt-1 ml-6">Dashboard will be incomplete without call data.</p>}
+                 </div>
+                 <div className="flex flex-col">
+                     <div className="flex items-center gap-2">
+                        <input type="checkbox" id="online" className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500" checked={config.useOnline} onChange={e => setConfig({...config, useOnline: e.target.checked})} />
+                        <label htmlFor="online" className="text-sm text-slate-700 font-medium">Analyse Online Requests</label>
+                     </div>
+                     {!config.useOnline && <p className="text-xs text-amber-600 mt-1 ml-6">Digital capacity metrics will not be shown.</p>}
+                 </div>
                </div>
              </Card>
 
@@ -1308,18 +1309,18 @@ export default function App() {
                  accept=".csv" 
                  file={files.onlineRequests} 
                  onChange={(e) => setFiles({...files, onlineRequests: e.target.files[0]})} 
-                 badge="Accurx Coming Soon" 
+                 badge="Accurx Coming Soon"
+                 disabled={!config.useOnline}
                />
                
-               {config.analyseTelephony && (
-                   <FileInput 
-                     label="Telephony Reports (PDF) *" 
-                     helpText="(Simply upload your X-on Surgery Connect Monthly Management Reports - only summary data is used)"
-                     accept="application/pdf" 
-                     file={files.telephony.length > 0 ? files.telephony : null}
-                     onChange={(e) => setFiles({...files, telephony: Array.from(e.target.files)})}
-                   />
-               )}
+               <FileInput 
+                 label="Telephony Reports (PDF) *" 
+                 helpText="(Simply upload your X-on Surgery Connect Monthly Management Reports - only summary data is used)"
+                 accept="application/pdf" 
+                 file={files.telephony.length > 0 ? files.telephony : null}
+                 onChange={(e) => setFiles({...files, telephony: Array.from(e.target.files)})}
+                 disabled={!config.useTelephony}
+               />
 
                {error && (
                  <div className="mb-4 p-4 bg-red-50 text-red-700 rounded-xl flex items-start gap-3 text-sm border border-red-100">
@@ -1405,8 +1406,8 @@ export default function App() {
                 {[
                     {id: 'dashboard', label: 'Overview', icon: Activity},
                     {id: 'gp', label: 'GP Metrics', icon: Users},
-                    {id: 'online', label: 'Online', icon: Monitor},
-                    {id: 'telephony', label: 'Telephony', icon: Phone},
+                    ...(config.useOnline && onlineStats ? [{id: 'online', label: 'Online', icon: Monitor}] : []), // Conditional Tab
+                    ...(config.useTelephony ? [{id: 'telephony', label: 'Telephony', icon: Phone}] : []), // Conditional Tab
                     {id: 'forecast', label: 'Forecast', icon: Calendar}
                 ].map(tab => (
                     <button 
@@ -1701,7 +1702,7 @@ export default function App() {
 
             {activeTab === 'telephony' && (
                 <div className="space-y-6">
-                    {!config.analyseTelephony ? (
+                    {!config.useTelephony ? ( // Fixed condition logic
                         <div className="text-center py-20 text-slate-400">
                             <p>Telephony analysis is disabled.</p>
                         </div>
@@ -1956,7 +1957,7 @@ export default function App() {
                     </div>
                 </div>
 
-                {files.onlineRequests && onlineStats && (
+                {config.useOnline && onlineStats && (
                     <div id="pdf-online-section" className="p-10 space-y-8">
                         <h2 className="text-3xl font-bold text-slate-800 border-b border-slate-200 pb-4 mb-6">3. Online Requests Analysis</h2>
                          <div className="grid grid-cols-5 gap-4 mb-6">
@@ -1983,7 +1984,7 @@ export default function App() {
                     </div>
                 )}
 
-                {config.analyseTelephony && (
+                {config.useTelephony && (
                     <div id="pdf-telephony-section" className="p-10 space-y-8">
                         <h2 className="text-3xl font-bold text-slate-800 border-b border-slate-200 pb-4 mb-6">4. Telephony Performance</h2>
                         <div className="grid grid-cols-5 gap-4 mb-6">
