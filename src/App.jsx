@@ -23,8 +23,6 @@ import {
 
 // --- PRODUCTION IMPORTS ---
 import Papa from 'papaparse';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
 
 // PDF.js v5+ Import Strategy for Vite
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
@@ -1107,45 +1105,21 @@ export default function App() {
     }
   };
 
-  const handleExportPDF = async () => {
-    setIsExporting(true);
-    try {
-      if (!aiReport) {
-        try {
-          const text = await fetchAIReport();
-          setAiReport(text);
-          await new Promise(resolve => setTimeout(resolve, 500));
-        } catch (e) { console.error("AI fail", e); }
+  const handlePrint = async () => {
+    if (!aiReport) {
+      setIsAiLoading(true);
+      try {
+        const text = await fetchAIReport();
+        setAiReport(text);
+        // Small delay to allow React to render the AI report into the DOM before printing
+        await new Promise(resolve => setTimeout(resolve, 500));
+      } catch (e) {
+        console.error("AI fail", e);
+      } finally {
+        setIsAiLoading(false);
       }
-      const container = document.getElementById('pdf-report-container');
-      if (!container) throw new Error("Report container not found");
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-
-      const addSectionToPDF = async (elementId, addPageBreak = true) => {
-        const element = document.getElementById(elementId);
-        if (!element) return;
-        const canvas = await html2canvas(element, { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff' });
-        const imgData = canvas.toDataURL('image/png');
-        const imgHeight = canvas.height * (pdfWidth / canvas.width);
-        if (addPageBreak) pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, imgHeight);
-      };
-
-      await addSectionToPDF('pdf-title-page', false);
-      await addSectionToPDF('pdf-overview-section');
-      await addSectionToPDF('pdf-gp-section');
-      if (config.useOnline && files.onlineRequests) await addSectionToPDF('pdf-online-section');
-      if (config.useTelephony) await addSectionToPDF('pdf-telephony-section');
-      await addSectionToPDF('pdf-forecast-section');
-      const filename = `CAIP Analysis - ${config.surgeryName || 'Surgery'}.pdf`;
-      pdf.save(filename);
-    } catch (err) {
-      console.error("Export failed", err);
-      alert("Failed to export PDF.");
-    } finally {
-      setIsExporting(false);
     }
+    window.print();
   };
 
   const displayedData = useMemo(() => {
@@ -1315,7 +1289,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800 pb-20">
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm/50">
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm/50 print:hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2 sm:gap-4">
             <img src={logo} alt="CAIP Logo" className="h-10 w-10 rounded-lg object-cover" />
@@ -1385,7 +1359,7 @@ export default function App() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 print:hidden">
         {!processedData && (
           <div className="max-w-2xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="text-center mb-10">
@@ -1561,14 +1535,13 @@ export default function App() {
                 </span>
               </button>
 
-              {/* 2. Export to PDF Button */}
+              {/* 2. Print Report Button */}
               <button
-                onClick={handleExportPDF}
-                disabled={isExporting}
+                onClick={handlePrint}
                 className="flex items-center gap-2 px-6 py-3 bg-white text-slate-600 border border-slate-200 rounded-full hover:bg-slate-50 hover:border-slate-300 hover:text-slate-800 transition-all shadow-sm hover:shadow-md disabled:opacity-70"
               >
-                {isExporting ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
-                <span className="font-semibold">Export to PDF</span>
+                <Download size={18} />
+                <span className="font-semibold">Print Report</span>
               </button>
             </div>
 
@@ -2004,9 +1977,9 @@ export default function App() {
             )}
 
             {/* --- HIDDEN PRINT CONTAINER --- */}
-            <div id="pdf-report-container" style={{ position: 'fixed', top: 0, left: -10000, width: '1200px', background: '#fff', zIndex: -100 }}>
+            <div id="pdf-report-container" className="hidden print:block bg-white w-full">
 
-              <div id="pdf-title-page" className="flex flex-col items-center justify-center h-[800px] p-20 text-center bg-slate-50">
+              <div id="pdf-title-page" className="flex flex-col items-center justify-center min-h-screen p-20 text-center bg-slate-50 break-after-page">
                 <img src={logo} className="w-32 h-32 mb-8 rounded-xl shadow-lg" />
                 <h1 className="text-6xl font-bold text-slate-900 mb-4">CAIP Analysis Report</h1>
                 <h2 className="text-4xl text-blue-600 font-medium mb-12">{config.surgeryName || 'Surgery Report'}</h2>
@@ -2022,7 +1995,7 @@ export default function App() {
                 )}
               </div>
 
-              <div id="pdf-overview-section" className="p-10 space-y-8">
+              <div id="pdf-overview-section" className="p-10 space-y-8 break-after-page">
                 <h2 className="text-3xl font-bold text-slate-800 border-b border-slate-200 pb-4 mb-6">1. Practice Overview</h2>
                 <div className="grid grid-cols-3 gap-6">
                   <MetricCard title="Total Appointments" value={displayedData.reduce((a, b) => a + b.totalAppts, 0).toLocaleString()} icon={Calendar} color="text-blue-600" />
@@ -2075,13 +2048,18 @@ export default function App() {
                 </div>
               </div>
 
-              <div id="pdf-gp-section" className="p-10 space-y-8">
+              <div id="pdf-gp-section" className="p-10 space-y-8 break-after-page">
                 <h2 className="text-3xl font-bold text-slate-800 border-b border-slate-200 pb-4 mb-6">2. GP Metrics</h2>
                 <div className="h-96 border border-slate-200 rounded-xl p-4"><h3 className="font-bold text-slate-800 mb-2 text-lg">Total Clinical Capacity (Appts + Digital)</h3><Line data={createChartData('Total Capacity %', 'gpTriageCapacityPerDayPct', NHS_AQUA, true)} options={pdfGpBandOptions} /></div>
                 <div className="h-96 border border-slate-200 rounded-xl p-4 mt-6"><h3 className="font-bold text-slate-800 mb-2 text-lg">Patients with GP Appointment (%)</h3><Line data={createChartData('GP Appts %', 'gpApptsPerDay', NHS_DARK_BLUE, false)} options={pdfGpBandOptions} /></div>
                 <div className="grid grid-cols-2 gap-6">
                   <div className="h-80 border border-slate-200 rounded-xl p-4"><Line data={createChartData('Utilisation %', 'gpUtilization', NHS_GREEN)} options={pdfUtilizationOptions} /></div>
                   <div className="h-80 border border-slate-200 rounded-xl p-4"><Line data={createChartData('GP Conversion Ratio', 'gpConversionRatio', NHS_PURPLE)} options={pdfRatioOptions} /></div>
+                </div>
+                <div className="grid grid-cols-3 gap-6 mt-6">
+                  <div className="h-64 border border-slate-200 rounded-xl p-4"><h3 className="font-bold text-slate-700 mb-2 text-sm uppercase">GP Unused Slots</h3><div className="h-40"><Line data={createChartData('GP Unused %', 'gpUnusedPct', NHS_GREEN)} options={pdfPercentageOptions} /></div></div>
+                  <div className="h-64 border border-slate-200 rounded-xl p-4"><h3 className="font-bold text-slate-700 mb-2 text-sm uppercase">GP DNA Rate</h3><div className="h-40"><Line data={createChartData('GP DNA %', 'gpDNAPct', NHS_RED)} options={pdfPercentageOptions} /></div></div>
+                  <div className="h-64 border border-slate-200 rounded-xl p-4"><h3 className="font-bold text-slate-700 mb-2 text-sm uppercase">GP Appointments</h3><div className="h-40"><Bar data={{ labels: displayedData.map(d => d.month), datasets: [{ label: 'GP Appointments', data: displayedData.map(d => d.gpAppts), backgroundColor: NHS_BLUE }] }} options={pdfChartOptions} /></div></div>
                 </div>
 
                 <div className="mt-8">
@@ -2129,7 +2107,7 @@ export default function App() {
               </div>
 
               {config.useOnline && onlineStats && (
-                <div id="pdf-online-section" className="p-10 space-y-8">
+                <div id="pdf-online-section" className="p-10 space-y-8 break-after-page">
                   <h2 className="text-3xl font-bold text-slate-800 border-b border-slate-200 pb-4 mb-6">3. Online Requests Analysis</h2>
                   <div className="grid grid-cols-5 gap-4 mb-6">
                     <Card className="p-4 flex flex-col justify-between"><p className="text-xs font-bold text-slate-400 uppercase">Offered/Booked</p><h3 className="text-2xl font-bold text-blue-600">{onlineStats.totalOfferedOrBooked.toLocaleString()}</h3></Card>
@@ -2156,7 +2134,7 @@ export default function App() {
               )}
 
               {config.useTelephony && (
-                <div id="pdf-telephony-section" className="p-10 space-y-8">
+                <div id="pdf-telephony-section" className="p-10 space-y-8 break-after-page">
                   <h2 className="text-3xl font-bold text-slate-800 border-b border-slate-200 pb-4 mb-6">4. Telephony Performance</h2>
                   <div className="grid grid-cols-5 gap-4 mb-6">
                     {[
@@ -2181,10 +2159,15 @@ export default function App() {
                     <div className="border border-slate-200 rounded-xl p-4"><Line data={createChartData('Abandoned %', 'abandonedCalls', NHS_AMBER)} options={pdfPercentageOptions} /></div>
                     <div className="border border-slate-200 rounded-xl p-4"><Line data={createChartData('Avg Queue Time', 'avgQueueTimeAnswered', NHS_BLUE)} options={pdfTimeOptions} /></div>
                   </div>
+                  <div className="grid grid-cols-3 gap-6 h-80 mt-6">
+                    <div className="border border-slate-200 rounded-xl p-4"><h3 className="font-bold text-slate-700 mb-2 text-sm">Missed (Unique) %</h3><Line data={createChartData('Missed Unique %', 'missedFromQueueExRepeatPct', NHS_RED)} options={pdfPercentageOptions} /></div>
+                    <div className="border border-slate-200 rounded-xl p-4"><h3 className="font-bold text-slate-700 mb-2 text-sm">Avg Queue Time (Missed)</h3><Line data={createChartData('Time', 'avgQueueTimeMissed', NHS_RED)} options={pdfTimeOptions} /></div>
+                    <div className="border border-slate-200 rounded-xl p-4"><h3 className="font-bold text-slate-700 mb-2 text-sm">Avg Inbound Talk Time</h3><Line data={createChartData('Time', 'avgInboundTalkTime', NHS_GREY)} options={pdfTimeOptions} /></div>
+                  </div>
                 </div>
               )}
 
-              <div id="pdf-forecast-section" className="p-10 space-y-8">
+              <div id="pdf-forecast-section" className="p-10 space-y-8 break-after-page">
                 <h2 className="text-3xl font-bold text-slate-800 border-b border-slate-200 pb-4 mb-6">5. Demand Forecast (GP Only)</h2>
                 <div className="bg-blue-50 p-6 rounded-xl border border-blue-100 text-blue-800 mb-6">
                   <p className="text-lg">This chart estimates the number of extra GP appointments per day required to meet hidden demand from missed calls.</p>
