@@ -13,7 +13,7 @@ import {
   Legend,
   Filler,
 } from 'chart.js';
-import { Upload, Activity, Calendar, Users, Phone, AlertCircle, CheckCircle, XCircle, ChevronDown, ChevronUp, Info, Sparkles, Loader2, PlayCircle, Search, User, Download, FileText, ArrowUpDown, ArrowUp, ArrowDown, TrendingUp, AlertTriangle, Clock } from 'lucide-react';
+import { Upload, Activity, Calendar, Users, Phone, AlertCircle, CheckCircle, XCircle, ChevronDown, ChevronUp, Info, Sparkles, Loader2, PlayCircle, Search, User, Download, FileText, ArrowUpDown, ArrowUp, ArrowDown, TrendingUp, AlertTriangle, Clock, Monitor, MousePointer, Laptop } from 'lucide-react';
 
 // --- PRODUCTION IMPORTS ---
 import Papa from 'papaparse';
@@ -35,6 +35,7 @@ import nottsWestLogo from './assets/nottswest.png';
 import sampleAppt from './assets/sampledata/AppointmentReport.csv?url';
 import sampleDNA from './assets/sampledata/DNA.csv?url';
 import sampleUnused from './assets/sampledata/Unused.csv?url';
+import sampleOnline from './assets/sampledata/OnlineRequests.csv?url';
 import sampleAug from './assets/sampledata/aug.pdf?url';
 import sampleSep from './assets/sampledata/sep.pdf?url';
 import sampleOct from './assets/sampledata/oct.pdf?url';
@@ -45,10 +46,8 @@ GlobalWorkerOptions.workerSrc = pdfWorker;
 // API Key
 const apiKey = (import.meta && import.meta.env && import.meta.env.VITE_GEMINI_KEY) || "";
 
-// Automated Version Info from vite.config.js
-// These variables are injected at build time
-const APP_VERSION = `${__APP_VERSION__} (${__GIT_COMMIT__})`;
-const BUILD_DATE = __BUILD_DATE__;
+// Version Info
+const APP_VERSION = "0.8.0-beta";
 
 // Initialize ChartJS
 ChartJS.register(
@@ -88,6 +87,8 @@ const NHS_RED = '#DA291C';
 const NHS_GREY = '#425563';
 const NHS_AMBER = '#ED8B00';
 const NHS_PURPLE = '#330072';
+const NHS_AQUA = '#00A9CE';
+const NHS_PINK = '#AE2573';
 const GP_BAND_BLUE = '#005EB820'; 
 const GP_BAND_GREEN = '#00963920';
 const GP_BAND_AMBER = '#ED8B0020';
@@ -343,28 +344,26 @@ export default function App() {
     appointments: null,
     dna: null,
     unused: null,
+    onlineRequests: null,
     telephony: [],
   });
 
   const [processedData, setProcessedData] = useState(null);
-  const [rawStaffData, setRawStaffData] = useState([]); // Store granular staff data
-  const [rawSlotData, setRawSlotData] = useState([]);   // Store granular slot data
-  const [rawCombinedData, setRawCombinedData] = useState([]); // Store granular combined (staff+slot) data
+  const [rawStaffData, setRawStaffData] = useState([]); 
+  const [rawSlotData, setRawSlotData] = useState([]);   
+  const [rawCombinedData, setRawCombinedData] = useState([]); 
+  const [onlineStats, setOnlineStats] = useState(null); // Store advanced online metrics
   const [forecastData, setForecastData] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isExporting, setIsExporting] = useState(false);
   
-  // Filter State
   const [selectedMonth, setSelectedMonth] = useState('All');
-
-  // AI State
   const [aiReport, setAiReport] = useState(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiError, setAiError] = useState(null);
 
-  // --- Effects: Title & Favicon ---
   useEffect(() => {
     document.title = "CAIP Analytics";
     const link = document.querySelector("link[rel~='icon']");
@@ -378,7 +377,7 @@ export default function App() {
     }
   }, []);
 
-  // --- Parsers ---
+  // --- PARSERS ---
 
   const parseCSV = (file) => {
     return new Promise((resolve, reject) => {
@@ -395,7 +394,6 @@ export default function App() {
   const extractTextFromPDF = async (file) => {
     try {
       const arrayBuffer = await file.arrayBuffer();
-      // Use object syntax for better browser compatibility (especially Firefox)
       const pdf = await getDocument({ data: arrayBuffer }).promise;
       let fullText = '';
       
@@ -418,7 +416,7 @@ export default function App() {
     }
   };
 
-  // --- Sample Data Loader ---
+  // --- DATA LOADERS ---
   const loadExampleData = async () => {
     setIsProcessing(true);
     setError(null);
@@ -427,6 +425,7 @@ export default function App() {
     setRawSlotData([]);
     setRawCombinedData([]);
     setForecastData(null);
+    setOnlineStats(null);
 
     try {
       const fetchFile = async (path, name, type) => {
@@ -438,6 +437,7 @@ export default function App() {
       const apptFile = await fetchFile(sampleAppt, 'AppointmentReport.csv', 'text/csv');
       const dnaFile = await fetchFile(sampleDNA, 'DNA.csv', 'text/csv');
       const unusedFile = await fetchFile(sampleUnused, 'Unused.csv', 'text/csv');
+      const onlineFile = await fetchFile(sampleOnline, 'OnlineRequests.csv', 'text/csv');
       
       const pdf1 = await fetchFile(sampleAug, 'aug.pdf', 'application/pdf');
       const pdf2 = await fetchFile(sampleSep, 'sep.pdf', 'application/pdf');
@@ -447,6 +447,7 @@ export default function App() {
         appointments: apptFile,
         dna: dnaFile,
         unused: unusedFile,
+        onlineRequests: onlineFile,
         telephony: [pdf1, pdf2, pdf3]
       };
 
@@ -468,21 +469,24 @@ export default function App() {
     }
   };
 
-  // --- Validation Helpers ---
-  const validateHeaders = (data, requiredColumns, fileName) => {
+  const validateHeaders = (data, requiredColumns, fileName, forbiddenColumns = []) => {
     if (!data || data.length === 0) {
         throw new Error(`The file "${fileName}" appears to be empty.`);
     }
     const headers = Object.keys(data[0]);
-    const missing = requiredColumns.filter(col => !headers.includes(col));
     
+    const missing = requiredColumns.filter(col => !headers.includes(col));
     if (missing.length > 0) {
-        throw new Error(`The file "${fileName}" is missing required columns: ${missing.join(', ')}. Please check you uploaded the correct report.`);
+        throw new Error(`The file "${fileName}" is missing required columns: ${missing.join(', ')}.`);
+    }
+
+    const foundForbidden = forbiddenColumns.filter(col => headers.some(h => h.toLowerCase().includes(col.toLowerCase())));
+    if (foundForbidden.length > 0) {
+        throw new Error(`PRIVACY ERROR: The file "${fileName}" contains disallowed columns: ${foundForbidden.join(', ')}. Please remove patient identifiable data.`);
     }
   };
 
   // --- Main Processing Logic ---
-
   const processFiles = async (customFiles = null, customConfig = null) => {
     setIsProcessing(true);
     setError(null);
@@ -491,6 +495,7 @@ export default function App() {
     setRawSlotData([]);
     setRawCombinedData([]);
     setForecastData(null);
+    setOnlineStats(null);
 
     const filesToProcess = customFiles || files;
     const configToUse = customConfig || config; 
@@ -506,10 +511,12 @@ export default function App() {
       const apptData = await parseCSV(filesToProcess.appointments);
       const dnaData = filesToProcess.dna ? await parseCSV(filesToProcess.dna) : [];
       const unusedData = filesToProcess.unused ? await parseCSV(filesToProcess.unused) : [];
+      const onlineData = filesToProcess.onlineRequests ? await parseCSV(filesToProcess.onlineRequests) : [];
 
       validateHeaders(apptData, ['Date', 'Day'], 'Appointments CSV');
       if (filesToProcess.dna) validateHeaders(dnaData, ['Staff', 'Appointment Count'], 'DNA CSV');
       if (filesToProcess.unused) validateHeaders(unusedData, ['Staff', 'Unused Slots', 'Total Slots'], 'Unused CSV');
+      if (filesToProcess.onlineRequests) validateHeaders(onlineData, ['Submission started', 'Type', 'Outcome'], 'Online Requests CSV', ['Patient Name', 'Name', 'Patient', 'NHS Number']);
 
       let telephonyData = [];
       if (configToUse.analyseTelephony && filesToProcess.telephony && filesToProcess.telephony.length > 0) {
@@ -523,11 +530,39 @@ export default function App() {
       const monthlyStaffMap = {}; 
       const monthlySlotMap = {}; 
       const monthlyCombinedMap = {}; 
+      
+      // Online breakdown containers
+      const onlineStatsData = {
+          typeBreakdown: { Clinical: 0, Admin: 0 },
+          accessMethod: {},
+          sexSplit: {},
+          outcomes: {},
+          totalOfferedOrBooked: 0,
+          totalResolved: 0,
+          totalAge: 0,
+          ageCount: 0,
+          clinicalDurationTotal: 0,
+          clinicalDurationCount: 0,
+          adminDurationTotal: 0,
+          adminDurationCount: 0
+      };
 
       const getMonthKey = (dateStr) => {
         const d = new Date(dateStr);
         if (isNaN(d.getTime())) return null;
         return d.toLocaleString('default', { month: 'short', year: 'numeric' });
+      };
+      
+      const parseDateTime = (str) => {
+         if(!str) return null;
+         let d = new Date(str);
+         if (!isNaN(d.getTime())) return d;
+         const parts = str.split(' ');
+         const dateParts = parts[0].split('/');
+         if (dateParts.length === 3) {
+             return new Date(`${dateParts[2]}-${dateParts[1]}-${dateParts[0]}T${parts[1] || '00:00'}`);
+         }
+         return null;
       };
 
       const isGP = (name) => {
@@ -552,7 +587,6 @@ export default function App() {
             monthlySlotMap[key] = { month, name: slotName, hasGPActivity: false, appts: 0, dna: 0, unused: 0 };
         }
         monthlySlotMap[key][type] += value;
-        
         if (associatedStaffName && isGP(associatedStaffName)) {
             monthlySlotMap[key].hasGPActivity = true;
         }
@@ -575,7 +609,7 @@ export default function App() {
         monthlyCombinedMap[key][type] += value;
       };
 
-      // --- Process Appointments ---
+      // 1. Process Appointments
       apptData.forEach(row => {
         const date = row['Date'];
         if (!date) return;
@@ -589,6 +623,8 @@ export default function App() {
             totalAppts: 0,
             gpAppts: 0,
             staffAppts: 0,
+            onlineTotal: 0,
+            onlineClinicalNoAppt: 0,
             days: new Set(),
             dates: []
           };
@@ -604,14 +640,11 @@ export default function App() {
 
         Object.keys(row).forEach(key => {
           if (key === 'Date' || key === 'Day') return;
-          
           let val = row[key];
           if (typeof val === 'string') val = val.trim();
           const count = parseInt(val, 10);
-          
           if (isNaN(count)) return;
           
-          // Monthly Aggregation
           months[monthKey].totalAppts += count;
           if (isGP(key)) {
             months[monthKey].gpAppts += count;
@@ -619,9 +652,7 @@ export default function App() {
             months[monthKey].staffAppts += count;
           }
 
-          // Staff Aggregation
           updateStaff(monthKey, key, 'appts', count);
-          
           if (row['Slot Type']) {
               updateSlot(monthKey, row['Slot Type'], 'appts', count, key); 
           }
@@ -636,15 +667,13 @@ export default function App() {
          return Object.values(monthlyStaffMap).filter(r => r.name === name).map(r => r.month);
       };
 
-      // --- Process DNA ---
+      // 2. Process DNA
       dnaData.forEach(row => {
           const count = parseInt(row['Appointment Count'], 10) || 0;
           const staffName = row['Staff'];
           const slotName = row['Slot Type'];
-          
           globalDNACount += count;
           if (isGP(staffName)) globalGPDNACount += count;
-          
           const workedMonths = getMonthsForStaff(staffName);
           if (workedMonths.length > 0) {
              const splitCount = count / workedMonths.length;
@@ -667,29 +696,24 @@ export default function App() {
           }
       });
 
-      // --- Process Unused ---
+      // 3. Process Unused
       unusedData.forEach(row => {
           const count = parseInt(row['Unused Slots'], 10) || 0;
           const totalSlots = parseInt(row['Total Slots'], 10) || 0;
           const booked = Math.max(0, totalSlots - count);
-
           const staffName = row['Staff'];
           const slotName = row['Slot Type'];
-
           globalUnusedCount += count;
           if (isGP(staffName)) globalGPUnusedCount += count;
-
           const workedMonths = getMonthsForStaff(staffName);
           if (workedMonths.length > 0) {
              const splitCount = count / workedMonths.length;
              const splitBooked = booked / workedMonths.length;
-
              workedMonths.forEach(m => {
                  updateStaff(m, staffName, 'unused', splitCount);
                  if (slotName) {
                      updateSlot(m, slotName, 'unused', splitCount, staffName);
                      updateSlot(m, slotName, 'appts', splitBooked, staffName);
-
                      updateCombined(m, staffName, slotName, 'unused', splitCount);
                      updateCombined(m, staffName, slotName, 'appts', splitBooked);
                  }
@@ -701,7 +725,6 @@ export default function App() {
                  if (slotName) {
                      updateSlot(firstMonth, slotName, 'unused', count, staffName);
                      updateSlot(firstMonth, slotName, 'appts', booked, staffName);
-
                      updateCombined(firstMonth, staffName, slotName, 'unused', count);
                      updateCombined(firstMonth, staffName, slotName, 'appts', booked);
                  }
@@ -709,133 +732,175 @@ export default function App() {
           }
       });
 
-      // --- Process Telephony ---
-      telephonyData.forEach(item => {
-        const text = item.text;
-        const monthMatch = text.match(/(January|February|March|April|May|June|July|August|September|October|November|December)\s20\d{2}/i);
-        if (!monthMatch) return;
+      // 4. Process Online Requests (Updated Logic)
+      onlineData.forEach(row => {
+        const dateStr = row['Submission started'] || row['Submitted'];
+        const completeStr = row['Submission completed'];
+        const outcomeStr = row['Outcome recorded'];
+        const date = parseDateTime(dateStr);
         
-        const pdfDate = new Date(monthMatch[0]);
-        const monthKey = pdfDate.toLocaleString('default', { month: 'short', year: 'numeric' });
-
+        if (!date) return;
+        
+        const monthKey = date.toLocaleString('default', { month: 'short', year: 'numeric' });
+        
+        // Add to general stats if it's a valid month (even if we don't have appts for it, but we usually sync with appt months)
+        // If we want strict syncing, check if months[monthKey] exists. 
         if (months[monthKey]) {
-           const extract = (regex) => {
-             const match = text.match(regex);
-             if (match && match[1]) return parseFloat(match[1].replace(/,/g, ''));
-             return 0;
-           };
+            months[monthKey].onlineTotal += 1;
+            
+            const type = row['Type'];
+            const outcome = (row['Outcome'] || '').trim();
+            const outcomeLower = outcome.toLowerCase();
+            const access = row['Access method'];
+            const sex = row['Sex'];
+            const age = parseInt(row['Age'], 10);
 
-           const extractTime = (regex) => {
-                const match = text.match(regex);
-                if (match) {
-                    let minutes = 0;
-                    let seconds = 0;
-                    if(match[1]) minutes = parseInt(match[1]); 
-                    if(match[2]) seconds = parseInt(match[2]);
-                    const fullStr = match[0];
-                    const minMatch = fullStr.match(/(\d+)m/);
-                    const secMatch = fullStr.match(/(\d+)s/);
-                    if (minMatch) minutes = parseInt(minMatch[1]);
-                    if (secMatch) seconds = parseInt(secMatch[1]);
-                    return (minutes * 60) + seconds;
+            // Clinical Triage Logic
+            if (type === 'Clinical' && !outcomeLower.includes('appointment offered') && !outcomeLower.includes('appointment booked')) {
+                months[monthKey].onlineClinicalNoAppt += 1;
+            }
+
+            // --- Advanced Stats Aggregation ---
+            
+            // 1. Offered/Booked vs Resolved
+            if (outcomeLower.includes('appointment offered') || outcomeLower.includes('appointment booked')) {
+                onlineStatsData.totalOfferedOrBooked++;
+            } else {
+                onlineStatsData.totalResolved++;
+            }
+
+            // 2. Type Split
+            if (type) {
+                onlineStatsData.typeBreakdown[type] = (onlineStatsData.typeBreakdown[type] || 0) + 1;
+            }
+
+            // 3. Access Method
+            if (access) {
+                onlineStatsData.accessMethod[access] = (onlineStatsData.accessMethod[access] || 0) + 1;
+            }
+
+            // 4. Sex Split
+            if (sex) {
+                onlineStatsData.sexSplit[sex] = (onlineStatsData.sexSplit[sex] || 0) + 1;
+            }
+
+            // 5. Outcome Breakdown
+            if (outcome) {
+                onlineStatsData.outcomes[outcome] = (onlineStatsData.outcomes[outcome] || 0) + 1;
+            }
+
+            // 6. Age
+            if (!isNaN(age)) {
+                onlineStatsData.totalAge += age;
+                onlineStatsData.ageCount++;
+            }
+
+            // 7. Time to Outcome (Split)
+            if (completeStr && outcomeStr) {
+                const d1 = parseDateTime(completeStr);
+                const d2 = parseDateTime(outcomeStr);
+                if (d1 && d2) {
+                    const diffMs = d2 - d1;
+                    const diffHrs = diffMs / (1000 * 60 * 60);
+                    if (diffHrs >= 0 && diffHrs < 1000) { // Sanity check
+                        if (type === 'Clinical') {
+                            onlineStatsData.clinicalDurationTotal += diffHrs;
+                            onlineStatsData.clinicalDurationCount++;
+                        } else {
+                            onlineStatsData.adminDurationTotal += diffHrs;
+                            onlineStatsData.adminDurationCount++;
+                        }
+                    }
                 }
-                return 0;
-           }
-           
-           const missedUniqueMatch = text.match(/Missed From Queue\s+Excluding Repeat Callers\s+[\d,]+\s+\(([\d.]+)%\)/i);
-           const missedUniquePct = missedUniqueMatch && missedUniqueMatch[1] ? parseFloat(missedUniqueMatch[1]) : 0;
-
-           months[monthKey].telephony = {
-             inboundReceived: extract(/Inbound Received\s+([\d,]+)/i),
-             inboundAnswered: extract(/Inbound Answered\s+([\d,]+)/i),
-             missedFromQueue: extract(/Missed From Queue\s+([\d,]+)/i),
-             missedFromQueueExRepeat: extract(/Missed From Queue\s+Excluding Repeat Callers\s+([\d,]+)/i),
-             missedFromQueueExRepeatPct: missedUniquePct, 
-             answeredFromQueue: extract(/Answered From Queue\s+[\d,]+\s+\(([\d.]+)%\)/i), 
-             abandonedCalls: extract(/Abandoned Calls\s+[\d,]+\s+\(([\d.]+)%\)/i), 
-             callbacksSuccessful: extract(/Callbacks Successful\s+([\d,]+)/i),
-             avgQueueTimeAnswered: extractTime(/Average Queue Time\s+Answered\s+(\d+m\s\d+s|\d+s)/i),
-             avgQueueTimeMissed: extractTime(/Average Queue Time\s+Missed\s+(\d+m\s\d+s|\d+s)/i),
-             avgInboundTalkTime: extractTime(/Average Inbound Talk\s+Time\s+(\d+m\s\d+s|\d+s)/i),
-           };
+            }
         }
       });
 
-      const totalApptsAllMonths = Object.values(months).reduce((sum, m) => sum + m.totalAppts, 0);
-      const totalGPApptsAllMonths = Object.values(months).reduce((sum, m) => sum + m.gpAppts, 0);
+      // 5. Process Telephony
+      telephonyData.forEach(item => {
+        const text = item.text;
+        const monthMatch = text.match(/(January|February|March|April|May|June|July|August|September|October|November|December)\s20\d{2}/i);
+        if (monthMatch) {
+             const pdfDate = new Date(monthMatch[0]);
+             const monthKey = pdfDate.toLocaleString('default', { month: 'short', year: 'numeric' });
+             if (months[monthKey]) {
+                 const extract = (r) => { const m = text.match(r); return m && m[1] ? parseFloat(m[1].replace(/,/g,'')) : 0; };
+                 const extractTime = (r) => { const m = text.match(r); if(m) { let min=0,sec=0; if(m[1]) min=parseInt(m[1]); if(m[2]) sec=parseInt(m[2]); const fm=m[0]; const mm=fm.match(/(\d+)m/); const sm=fm.match(/(\d+)s/); if(mm) min=parseInt(mm[1]); if(sm) sec=parseInt(sm[1]); return (min*60)+sec; } return 0; };
+                 const missedUniqueMatch = text.match(/Missed From Queue\s+Excluding Repeat Callers\s+[\d,]+\s+\(([\d.]+)%\)/i);
+                 months[monthKey].telephony = {
+                   inboundReceived: extract(/Inbound Received\s+([\d,]+)/i),
+                   inboundAnswered: extract(/Inbound Answered\s+([\d,]+)/i),
+                   missedFromQueue: extract(/Missed From Queue\s+([\d,]+)/i),
+                   missedFromQueueExRepeat: extract(/Missed From Queue\s+Excluding Repeat Callers\s+([\d,]+)/i),
+                   missedFromQueueExRepeatPct: missedUniqueMatch && missedUniqueMatch[1] ? parseFloat(missedUniqueMatch[1]) : 0, 
+                   answeredFromQueue: extract(/Answered From Queue\s+[\d,]+\s+\(([\d.]+)%\)/i), 
+                   abandonedCalls: extract(/Abandoned Calls\s+[\d,]+\s+\(([\d.]+)%\)/i), 
+                   callbacksSuccessful: extract(/Callbacks Successful\s+([\d,]+)/i),
+                   avgQueueTimeAnswered: extractTime(/Average Queue Time\s+Answered\s+(\d+m\s\d+s|\d+s)/i),
+                   avgQueueTimeMissed: extractTime(/Average Queue Time\s+Missed\s+(\d+m\s\d+s|\d+s)/i),
+                   avgInboundTalkTime: extractTime(/Average Inbound Talk\s+Time\s+(\d+m\s\d+s|\d+s)/i),
+                 };
+             }
+        }
+      });
 
       const sortedMonths = Object.values(months).sort((a, b) => new Date(a.month) - new Date(b.month));
+      const totalApptsAll = Object.values(months).reduce((s,m)=>s+m.totalAppts,0);
+      const totalGPApptsAll = Object.values(months).reduce((s,m)=>s+m.gpAppts,0);
 
       const finalData = sortedMonths.map(m => {
-         const weight = totalApptsAllMonths > 0 ? m.totalAppts / totalApptsAllMonths : 0;
-         const gpWeight = totalGPApptsAllMonths > 0 ? m.gpAppts / totalGPApptsAllMonths : 0;
-
-         const estimatedDNA = Math.round(globalDNACount * weight);
-         const estimatedGPDNA = Math.round(globalGPDNACount * gpWeight);
-         const estimatedUnused = Math.round(globalUnusedCount * weight);
-         const estimatedGPUnused = Math.round(globalGPUnusedCount * gpWeight);
+         const weight = totalApptsAll > 0 ? m.totalAppts / totalApptsAll : 0;
+         const gpWeight = totalGPApptsAll > 0 ? m.gpAppts / totalGPApptsAll : 0;
+         const estDNA = Math.round(globalDNACount * weight);
+         const estGPDNA = Math.round(globalGPDNACount * gpWeight);
+         const estUnused = Math.round(globalUnusedCount * weight);
+         const estGPUnused = Math.round(globalGPUnusedCount * gpWeight);
          
          const t = m.telephony || {};
          const population = parseFloat(configToUse.population) || 1;
          const capitationCalling = t.inboundAnswered ? ((t.inboundAnswered / population) * 100) : 0;
 
-         const conversionRatio = t.inboundAnswered > 0 ? (m.totalAppts / t.inboundAnswered) : 0;
-         const gpConversionRatio = t.inboundAnswered > 0 ? (m.gpAppts / t.inboundAnswered) : 0;
-         
-         const totalCapacity = m.totalAppts + estimatedUnused;
-         const utilization = totalCapacity > 0 ? (m.totalAppts / totalCapacity) * 100 : 0;
-
-         const gpCapacity = m.gpAppts + estimatedGPUnused;
-         const gpUtilization = gpCapacity > 0 ? (m.gpAppts / gpCapacity) * 100 : 0;
-
          const gpRatio = t.inboundAnswered > 0 ? (m.gpAppts / t.inboundAnswered) : 0;
          const gpMissedDemand = gpRatio * (t.missedFromQueueExRepeat || 0);
-         const gpWaste = estimatedGPUnused + estimatedGPDNA;
-         
-         const extraGPSlotsNeeded = gpMissedDemand - gpWaste;
-         const extraGPSlotsPerDay = m.workingDays > 0 ? (extraGPSlotsNeeded / m.workingDays) : 0;
+         const gpWaste = estGPUnused + estGPDNA;
+         const extraSlots = m.workingDays > 0 ? ((gpMissedDemand - gpWaste) / m.workingDays) : 0;
+
+         // Online Metrics
+         const onlineRequestsPer1000 = ((m.onlineTotal / population) * 1000) / 4; 
+         const totalTriageCapacity = m.gpAppts + m.onlineClinicalNoAppt;
+         const gpTriageCapacityPerDayPct = m.workingDays ? ((totalTriageCapacity / population * 100) / m.workingDays) : 0;
 
          return {
            month: m.month,
            workingDays: m.workingDays,
-           
            totalAppts: m.totalAppts,
            gpAppts: m.gpAppts,
+           conversionRatio: t.inboundAnswered ? (m.totalAppts/t.inboundAnswered) : 0,
+           gpConversionRatio: t.inboundAnswered ? (m.gpAppts/t.inboundAnswered) : 0,
+           utilization: (m.totalAppts+estUnused)>0 ? (m.totalAppts/(m.totalAppts+estUnused)*100) : 0,
+           gpUtilization: (m.gpAppts+estGPUnused)>0 ? (m.gpAppts/(m.gpAppts+estGPUnused)*100) : 0,
+           gpApptsPerDay: m.workingDays ? (m.gpAppts/population*100)/m.workingDays : 0,
+           gpUnusedPct: (m.gpAppts+estGPUnused)>0 ? (estGPUnused/(m.gpAppts+estGPUnused)*100) : 0,
+           gpDNAPct: m.gpAppts>0 ? (estGPDNA/m.gpAppts*100) : 0,
+           allApptsPerDay: m.workingDays ? (m.totalAppts/population*100)/m.workingDays : 0,
+           allUnusedPct: (m.totalAppts+estUnused)>0 ? (estUnused/(m.totalAppts+estUnused)*100) : 0,
+           allDNAPct: m.totalAppts>0 ? (estDNA/m.totalAppts*100) : 0,
            
-           conversionRatio,
-           gpConversionRatio,
-           utilization,
-           gpUtilization,
-
-           gpApptsPerDay: m.workingDays ? (m.gpAppts / population * 100) / m.workingDays : 0,
-           gpUnusedPct: (m.gpAppts + estimatedGPUnused) > 0 ? (estimatedGPUnused / (m.gpAppts + estimatedGPUnused)) * 100 : 0,
-           gpDNAPct: m.gpAppts > 0 ? (estimatedGPDNA / m.gpAppts) * 100 : 0,
-
-           allApptsPerDay: m.workingDays ? (m.totalAppts / population * 100) / m.workingDays : 0,
-           allUnusedPct: (m.totalAppts + estimatedUnused) > 0 ? (estimatedUnused / (m.totalAppts + estimatedUnused)) * 100 : 0,
-           allDNAPct: m.totalAppts > 0 ? (estimatedDNA / m.totalAppts) * 100 : 0,
-
+           // Online
+           onlineTotal: m.onlineTotal,
+           onlineClinicalNoAppt: m.onlineClinicalNoAppt,
+           onlineRequestsPer1000,
+           gpTriageCapacityPerDayPct,
+           
            ...t,
-           capitationCallingPerDay: m.workingDays ? (capitationCalling / m.workingDays) : 0,
-
-           extraSlotsPerDay: extraGPSlotsPerDay 
+           capitationCallingPerDay: m.workingDays ? (capitationCalling/m.workingDays) : 0,
+           extraSlotsPerDay: extraSlots 
          };
       });
-
-      const hasNaN = finalData.some(d => 
-        isNaN(d.gpApptsPerDay) || 
-        isNaN(d.allApptsPerDay) || 
-        !isFinite(d.gpApptsPerDay)
-      );
-
-      if (hasNaN || finalData.length === 0) {
-        throw new Error("Processing resulted in invalid numbers. Please check if your input files contain valid numeric data.");
-      }
 
       // Forecasting
       const apptArray = finalData.map(d => d.totalAppts);
       const callArray = finalData.map(d => d.inboundReceived || 0);
-      
       let futureAppts = [], futureCalls = [], futureLabels = [];
       if (apptArray.length >= 3) {
           futureAppts = calculateLinearForecast(apptArray, 2);
@@ -855,6 +920,7 @@ export default function App() {
       setRawStaffData(Object.values(monthlyStaffMap)); 
       setRawSlotData(Object.values(monthlySlotMap)); 
       setRawCombinedData(Object.values(monthlyCombinedMap));
+      setOnlineStats(onlineStatsData);
 
     } catch (err) {
       setError(err.message);
@@ -869,33 +935,19 @@ export default function App() {
     }
   };
   
+  // --- Aggregated Data Helpers (Filtered) ---
   const getAggregatedData = (rawData) => {
     if (!rawData || rawData.length === 0) return [];
-    
-    const filtered = selectedMonth === 'All' 
-        ? rawData 
-        : rawData.filter(d => d.month === selectedMonth);
-
+    const filtered = selectedMonth === 'All' ? rawData : rawData.filter(d => d.month === selectedMonth);
     const grouped = filtered.reduce((acc, curr) => {
         const key = curr.name + (curr.slot ? `_${curr.slot}` : '');
         if (!acc[key]) {
-            acc[key] = { 
-                name: curr.name, 
-                slot: curr.slot || null,
-                isGP: curr.isGP,
-                hasGPActivity: curr.hasGPActivity || false,
-                appts: 0, 
-                dna: 0, 
-                unused: 0 
-            };
+            acc[key] = { name: curr.name, slot: curr.slot || null, isGP: curr.isGP, hasGPActivity: curr.hasGPActivity||false, appts: 0, dna: 0, unused: 0 };
         }
-        acc[key].appts += curr.appts;
-        acc[key].dna += curr.dna;
-        acc[key].unused += curr.unused;
-        if (curr.hasGPActivity) acc[key].hasGPActivity = true; 
+        acc[key].appts += curr.appts; acc[key].dna += curr.dna; acc[key].unused += curr.unused;
+        if(curr.hasGPActivity) acc[key].hasGPActivity = true;
         return acc;
     }, {});
-
     return Object.values(grouped).sort((a,b) => b.appts - a.appts);
   };
 
@@ -903,53 +955,46 @@ export default function App() {
   const aggregatedSlotData = useMemo(() => getAggregatedData(rawSlotData), [rawSlotData, selectedMonth]);
   const aggregatedCombinedData = useMemo(() => getAggregatedData(rawCombinedData), [rawCombinedData, selectedMonth]);
 
+  // --- AI Handler ---
   const fetchAIReport = async () => {
     const dataSummary = displayedData.map(d => ({
         month: d.month,
         gpAppts: d.gpAppts,
+        onlineRequests: d.onlineTotal,
+        gpTriageCapacity: d.gpTriageCapacityPerDayPct.toFixed(2) + '%',
         utilization: d.utilization.toFixed(1) + '%',
-        gpApptsPerDay: d.gpApptsPerDay.toFixed(2) + '%', 
         bookingConversion: d.conversionRatio.toFixed(2),
-        gpDNARate: d.gpDNAPct.toFixed(2) + '%',
         inboundCalls: d.inboundReceived,
-        forecastExtraSlotsNeeded: d.extraSlotsPerDay.toFixed(1)
     }));
 
     const prompt = `
         You are an expert NHS Practice Manager and Data Analyst using CAIP Analytics.
-        Analyze the following monthly performance data for this NHS GP Practice (${selectedMonth === 'All' ? 'Trend Analysis' : selectedMonth}).
+        Analyze the following monthly performance data.
         
         Data: ${JSON.stringify(dataSummary)}
 
         Please provide a concise report in exactly these two sections using bullet points:
 
         ### ✅ Positives
-        * Highlight metrics that are performing well (e.g., high utilization, low DNA rates, good access ratios).
+        * Highlight metrics that are performing well.
 
         ### 🚀 Room for Improvement & Actions
-        * Identify specific issues and provide a direct, actionable solution for each.
-        * Logic to apply:
-            * If **Booking Conversion** (Appts / Answered Calls) is low (<0.5), suggest: "A high volume of calls are not resulting in appointments. Review signposting/navigation scripts or check if patients are calling for non-clinical reasons."
-            * If **Utilization** is low (<95%), suggest: "You have wasted clinical capacity. Review embargo placement or release slots sooner."
-            * If **GP Appts % per Day** is low (<1.1%), suggest: "GP Appointment availability is low relative to population. Consider increasing clinical sessions or reviewing rota capacity."
-            * If **DNA Rate** is high (>4%), suggest: "DNA rate is above target. Review SMS reminder configuration."
+        * Identify specific issues.
+        * Logic:
+            * If **Online Requests** are high but **GP Triage Capacity** is low, suggest: "High digital demand is not being fully captured in clinical workload data."
+            * If **Booking Conversion** is low, suggest: "High call volume not converting to appts. Review signposting."
+            * If **Utilization** is low (<95%), suggest: "Wasted capacity. Review embargoes."
 
-        Keep the tone professional, constructive, and specific to NHS Primary Care. Use British English. Format with Markdown.
+        Keep the tone professional, constructive, and specific to NHS Primary Care. Use British English.
     `;
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }]
-        })
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
     });
 
-    if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.error?.message || 'Failed to generate insights');
-    }
-    
+    if (!response.ok) throw new Error('Failed to generate insights');
     const result = await response.json();
     return result.candidates?.[0]?.content?.parts?.[0]?.text;
   };
@@ -958,16 +1003,10 @@ export default function App() {
     if (!displayedData || displayedData.length === 0) return;
     setIsAiLoading(true);
     setAiError(null);
-    
     try {
         const text = await fetchAIReport();
-        if (text) {
-            setAiReport(text);
-        } else {
-            throw new Error('No insight generated');
-        }
+        if (text) setAiReport(text); else throw new Error('No insight generated');
     } catch (e) {
-        console.error("AI Error:", e);
         setAiError(`AI Error: ${e.message}`);
     } finally {
         setIsAiLoading(false);
@@ -982,305 +1021,88 @@ export default function App() {
                   const text = await fetchAIReport();
                   setAiReport(text);
                   await new Promise(resolve => setTimeout(resolve, 500));
-              } catch (e) {
-                  console.error("Could not generate AI report for PDF", e);
-              }
+              } catch (e) { console.error("AI fail", e); }
           }
-
           const container = document.getElementById('pdf-report-container');
           if (!container) throw new Error("Report container not found");
-
           const pdf = new jsPDF('p', 'mm', 'a4');
           const pdfWidth = pdf.internal.pageSize.getWidth();
-          const pdfHeight = pdf.internal.pageSize.getHeight();
-
+          
           const addSectionToPDF = async (elementId, addPageBreak = true) => {
               const element = document.getElementById(elementId);
               if (!element) return;
-
-              const canvas = await html2canvas(element, {
-                  scale: 2,
-                  useCORS: true,
-                  logging: false,
-                  backgroundColor: '#ffffff'
-              });
-
+              const canvas = await html2canvas(element, { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff' });
               const imgData = canvas.toDataURL('image/png');
-              const imgWidth = canvas.width;
-              const imgHeight = canvas.height;
-              const ratio = pdfWidth / imgWidth;
-              const scaledHeight = imgHeight * ratio;
-
+              const imgHeight = canvas.height * (pdfWidth / canvas.width);
               if (addPageBreak) pdf.addPage();
-              pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, scaledHeight);
+              pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, imgHeight);
           };
 
           await addSectionToPDF('pdf-title-page', false);
           await addSectionToPDF('pdf-overview-section');
           await addSectionToPDF('pdf-gp-section');
+          if(files.onlineRequests) await addSectionToPDF('pdf-online-section');
           if(config.analyseTelephony) await addSectionToPDF('pdf-telephony-section');
           await addSectionToPDF('pdf-forecast-section');
-
           const filename = `CAIP Analysis - ${config.surgeryName || 'Surgery'}.pdf`;
           pdf.save(filename);
-
       } catch (err) {
           console.error("Export failed", err);
-          alert("Failed to export PDF. Please try again.");
+          alert("Failed to export PDF.");
       } finally {
           setIsExporting(false);
       }
   };
 
   const displayedData = useMemo(() => {
-    if (!processedData) return null;
-    if (selectedMonth === 'All') return processedData;
-    return processedData.filter(d => d.month === selectedMonth);
+      if (!processedData) return null;
+      if (selectedMonth === 'All') return processedData;
+      return processedData.filter(d => d.month === selectedMonth);
   }, [processedData, selectedMonth]);
 
   const availableMonths = useMemo(() => {
-    if (!processedData) return [];
-    return ['All', ...processedData.map(d => d.month)];
+      if (!processedData) return [];
+      return ['All', ...processedData.map(d => d.month)];
   }, [processedData]);
 
-  const commonOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    layout: {
-      padding: 20 
-    },
-    plugins: {
-      legend: { position: 'bottom' },
-      tooltip: {
-        backgroundColor: 'rgba(255, 255, 255, 0.9)',
-        titleColor: '#1e293b',
-        bodyColor: '#475569',
-        borderColor: '#e2e8f0',
-        borderWidth: 1,
-        padding: 12,
-        boxPadding: 6,
-      }
-    },
-    scales: {
-      y: {
-        beginAtZero: true,
-        grid: { color: '#f1f5f9' },
-        ticks: { color: '#64748b' }
-      },
-      x: {
-        grid: { display: false },
-        ticks: { color: '#64748b' }
-      }
-    },
-    elements: {
-        line: { tension: 0.4 },
-        point: { radius: 4, hoverRadius: 6 }
-    }
-  };
-
-  const timeOptions = {
-      ...commonOptions,
-      scales: {
-          ...commonOptions.scales,
-          y: {
-              ...commonOptions.scales.y,
-              ticks: {
-                  color: '#64748b',
-                  callback: (v) => `${Math.floor(v/60)}m ${v%60}s`
-              }
-          }
-      }
-  };
-
-  const percentageOptions = {
-    ...commonOptions,
-    scales: {
-      ...commonOptions.scales,
-      y: {
-        ...commonOptions.scales.y,
-        min: 0, 
-        ticks: {
-          color: '#64748b',
-          callback: (value) => `${Number(value).toFixed(2)}%`
-        }
-      }
-    }
-  };
+  const commonOptions = { responsive: true, maintainAspectRatio: false, layout: { padding: 20 }, plugins: { legend: { position: 'bottom' }, tooltip: { backgroundColor: 'rgba(255, 255, 255, 0.9)', titleColor: '#1e293b', bodyColor: '#475569', borderColor: '#e2e8f0', borderWidth: 1, padding: 12, boxPadding: 6 } }, scales: { y: { beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { color: '#64748b' } }, x: { grid: { display: false }, ticks: { color: '#64748b' } } }, elements: { line: { tension: 0.4 }, point: { radius: 4, hoverRadius: 6 } } };
+  const pdfChartOptions = { ...commonOptions, animation: false };
   
-  const ratioOptions = {
-    ...commonOptions,
-    scales: {
-      ...commonOptions.scales,
-      y: {
-        ...commonOptions.scales.y,
-        min: 0,
-        ticks: {
-          color: '#64748b',
-          callback: (value) => Number(value).toFixed(2)
-        }
-      }
-    },
-    plugins: {
-        ...commonOptions.plugins,
-        tooltip: {
-            ...commonOptions.plugins.tooltip,
-            callbacks: {
-                label: (ctx) => `${ctx.dataset.label}: ${Number(ctx.raw).toFixed(2)}`
-            }
-        }
-    }
-  };
+  const percentageOptions = { ...commonOptions, scales: { ...commonOptions.scales, y: { ...commonOptions.scales.y, min: 0, ticks: { color: '#64748b', callback: (v) => `${Number(v).toFixed(2)}%` } } } };
+  const pdfPercentageOptions = { ...percentageOptions, animation: false };
 
-  const utilizationOptions = {
-    ...percentageOptions,
-    scales: {
-        ...percentageOptions.scales,
-        y: {
-            ...percentageOptions.scales.y,
-            min: 0,
-            max: 100
-        }
-    }
-  };
+  const onlineRequestBandOptions = { ...commonOptions, scales: { ...commonOptions.scales, y: { ...commonOptions.scales.y, min: 0 } }, plugins: { ...commonOptions.plugins, backgroundBands: { bands: [{ from: 0, to: 5.0, color: GP_BAND_RED }, { from: 5.0, to: 100, color: GP_BAND_GREEN }] } } };
+  const pdfOnlineRequestBandOptions = { ...onlineRequestBandOptions, animation: false };
 
-  const gpBandOptions = {
-    ...percentageOptions,
-    scales: {
-        ...percentageOptions.scales,
-        y: {
-            ...percentageOptions.scales.y,
-            min: 0,
-            suggestedMax: 1.6 
-        }
-    },
-    plugins: {
-        ...percentageOptions.plugins,
-        backgroundBands: {
-            bands: [
-                { from: 0, to: 0.85, color: GP_BAND_RED },
-                { from: 0.85, to: 1.10, color: GP_BAND_AMBER },
-                { from: 1.10, to: 1.30, color: GP_BAND_GREEN },
-                { from: 1.30, to: 5.00, color: GP_BAND_BLUE }, 
-            ]
-        }
-    }
-  };
+  const gpBandOptions = { ...percentageOptions, scales: { ...percentageOptions.scales, y: { ...percentageOptions.scales.y, min: 0, suggestedMax: 1.6 } }, plugins: { ...percentageOptions.plugins, backgroundBands: { bands: [{ from: 0, to: 0.85, color: GP_BAND_RED }, { from: 0.85, to: 1.10, color: GP_BAND_AMBER }, { from: 1.10, to: 1.30, color: GP_BAND_GREEN }, { from: 1.30, to: 5.00, color: GP_BAND_BLUE }] } } };
+  const pdfGpBandOptions = { ...gpBandOptions, animation: false };
+  
+  const stackedPercentageOptions = { ...percentageOptions, scales: { x: { ...commonOptions.scales.x, stacked: true }, y: { ...percentageOptions.scales.y, stacked: true, max: 100 } } };
+  const pdfStackedPercentageOptions = { ...stackedPercentageOptions, animation: false };
+  const ratioOptions = { ...commonOptions, scales: { ...commonOptions.scales, y: { ...commonOptions.scales.y, min: 0, ticks: { color: '#64748b', callback: (v) => Number(v).toFixed(2) } } } };
+  const pdfRatioOptions = { ...ratioOptions, animation: false };
+  const utilizationOptions = { ...percentageOptions, scales: { ...percentageOptions.scales, y: { ...percentageOptions.scales.y, min: 0, max: 100 } } };
+  const pdfUtilizationOptions = { ...utilizationOptions, animation: false };
+  const timeOptions = { ...commonOptions, scales: { ...commonOptions.scales, y: { ...commonOptions.scales.y, ticks: { color: '#64748b', callback: (v) => `${Math.floor(v/60)}m ${v%60}s` } } } };
+  const pdfTimeOptions = { ...timeOptions, animation: false };
 
-  const pdfChartOptions = {
-    ...commonOptions,
-    animation: false,
-    responsive: true,
-    maintainAspectRatio: false,
-  };
+  // Helper for Donut/Pie charts
+  const createDonutData = (dataMap, colors) => {
+      const labels = Object.keys(dataMap);
+      const values = Object.values(dataMap);
+      const total = values.reduce((acc, val) => acc + val, 0);
+      const percentages = values.map(value => ((value / total) * 100).toFixed(1) + "%");
 
-  const pdfTimeOptions = {
-      ...pdfChartOptions,
-      scales: {
-          ...pdfChartOptions.scales,
-          y: {
-              ...pdfChartOptions.scales.y,
-              ticks: {
-                  color: '#64748b',
-                  callback: (v) => `${Math.floor(v/60)}m ${v%60}s`
-              }
-          }
-      }
+      return {
+          labels: labels.map((l, i) => `${l} (${percentages[i]})`),
+          datasets: [{
+              data: values,
+              backgroundColor: colors,
+              borderWidth: 0
+          }]
+      };
   };
-
-  const pdfPercentageOptions = {
-    ...pdfChartOptions,
-    scales: {
-      ...pdfChartOptions.scales,
-      y: {
-        ...pdfChartOptions.scales.y,
-        min: 0, 
-        ticks: {
-          color: '#64748b',
-          callback: (value) => `${Number(value).toFixed(2)}%`
-        }
-      }
-    }
-  };
-
-  const pdfStackedPercentageOptions = {
-    ...pdfPercentageOptions,
-    scales: {
-        x: { 
-          ...commonOptions.scales.x,
-          stacked: true 
-        },
-        y: { 
-          ...pdfPercentageOptions.scales.y,
-          stacked: true,
-          max: 100 
-        }
-      }
-  };
-
-  const pdfRatioOptions = {
-    ...pdfChartOptions,
-    scales: {
-      ...pdfChartOptions.scales,
-      y: {
-        ...pdfChartOptions.scales.y,
-        min: 0,
-        ticks: {
-          color: '#64748b',
-          callback: (value) => Number(value).toFixed(2)
-        }
-      }
-    }
-  };
-
-  const pdfUtilizationOptions = {
-    ...pdfPercentageOptions,
-    scales: {
-        ...pdfPercentageOptions.scales,
-        y: {
-            ...pdfPercentageOptions.scales.y,
-            min: 0,
-            max: 100
-        }
-    }
-  };
-
-  const pdfGpBandOptions = {
-    ...pdfPercentageOptions,
-    scales: {
-        ...pdfPercentageOptions.scales,
-        y: {
-            ...pdfPercentageOptions.scales.y,
-            min: 0,
-            suggestedMax: 1.6 
-        }
-    },
-    plugins: {
-        ...pdfPercentageOptions.plugins,
-        backgroundBands: {
-            bands: [
-                { from: 0, to: 0.85, color: GP_BAND_RED },
-                { from: 0.85, to: 1.10, color: GP_BAND_AMBER },
-                { from: 1.10, to: 1.30, color: GP_BAND_GREEN },
-                { from: 1.30, to: 5.00, color: GP_BAND_BLUE }, 
-            ]
-        }
-    }
-  };
-
-  const stackedPercentageOptions = {
-    ...percentageOptions,
-    scales: {
-        x: { 
-          ...commonOptions.scales.x,
-          stacked: true 
-        },
-        y: { 
-          ...percentageOptions.scales.y,
-          stacked: true,
-          max: 100 
-        }
-      }
-  };
+  const donutOptions = { maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 } } } } };
 
   const createChartData = (label, dataKey, color, fill = true) => ({
     labels: displayedData?.map(d => d.month),
@@ -1316,9 +1138,12 @@ export default function App() {
     ]
   });
 
-  const FileInput = ({ label, helpText, accept, onChange, file }) => (
+  const FileInput = ({ label, helpText, accept, onChange, file, badge }) => (
     <div className="mb-4">
-      <label className="block text-sm font-medium text-slate-700 mb-1">{label}</label>
+      <div className="flex justify-between items-baseline mb-1">
+        <label className="block text-sm font-medium text-slate-700">{label}</label>
+        {badge && <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full border border-slate-200">{badge}</span>}
+      </div>
       {helpText && <p className="text-xs text-slate-500 mb-2">{helpText}</p>}
       <div className="flex items-center gap-3">
         <label className="flex-1 cursor-pointer group">
@@ -1340,14 +1165,7 @@ export default function App() {
   const isFiltered = selectedMonth !== 'All';
   const unusedHeader = isFiltered ? 'Unused Slots (Est. Monthly)' : 'Unused Slots';
   const dnaHeader = isFiltered ? 'DNAs (Est. Monthly)' : 'DNAs';
-  
-  // Helper for conditional warning in accordion content
-  const seasonalWarning = isFiltered ? (
-      <p className="text-xs text-amber-600 mb-3 italic flex items-center gap-1">
-        <Info size={12} />
-        * Monthly averages shown. Exact dates are not available in DNA/Unused CSVs.
-      </p>
-  ) : null;
+  const seasonalWarning = isFiltered ? <p className="text-xs text-amber-600 mb-3 italic flex items-center gap-1"><Info size={12} />* Monthly averages shown. Exact dates are not available in DNA/Unused CSVs.</p> : null;
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800 pb-20">
@@ -1355,27 +1173,20 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2 sm:gap-4">
              <img src={logo} alt="CAIP Logo" className="h-10 w-10 rounded-lg object-cover" />
-<div>
-  <div className="flex items-center gap-2">
-    <h1 className="text-xl font-bold text-slate-900 leading-tight">CAIP Analytics</h1>
-    <span className="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full font-mono border border-indigo-100" title={`Built: ${BUILD_DATE}`}>
-      v{APP_VERSION} beta
-    </span>
-  </div>
-  <p className="text-[10px] sm:text-xs text-slate-500 font-medium hidden sm:block">
-    Free data analytics to help you improve capacity and access in primary care
-  </p>
-</div>
+             <div>
+               <h1 className="text-xl font-bold text-slate-900 leading-tight">CAIP Analytics <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full align-middle ml-2">{APP_VERSION}</span></h1>
+               <p className="text-[10px] sm:text-xs text-slate-500 font-medium hidden sm:block">Free data analytics to help you improve capacity and access in primary care</p>
+             </div>
           </div>
           
           <div className="flex items-center gap-4">
              <div className="hidden lg:flex items-center gap-3 bg-white dark:bg-slate-700 px-4 py-2 rounded-full border border-slate-200 dark:border-slate-600 shadow-sm">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Made in</span>
                 <a href="https://www.rushcliffehealth.org" target="_blank" rel="noopener noreferrer">
-                  <img src={rushcliffeLogo} alt="Rushcliffe PCN" className="h-8 w-auto grayscale hover:grayscale-0 transition-all duration-300 opacity-80 hover:opacity-100" />
+                  <img src={rushcliffeLogo} alt="Rushcliffe PCN" className="h-8 w-auto grayscale hover:grayscale-0 transition-all opacity-80 hover:opacity-100" />
                 </a>
                 <a href="https://www.nottinghamwestpcn.co.uk" target="_blank" rel="noopener noreferrer">
-                  <img src={nottsWestLogo} alt="Nottingham West PCN" className="h-8 w-auto grayscale hover:grayscale-0 transition-all duration-300 opacity-80 hover:opacity-100" />
+                  <img src={nottsWestLogo} alt="Nottingham West PCN" className="h-8 w-auto grayscale hover:grayscale-0 transition-all opacity-80 hover:opacity-100" />
                 </a>
              </div>
 
@@ -1409,7 +1220,7 @@ export default function App() {
                  </div>
 
                  <button 
-                   onClick={() => { setProcessedData(null); setSelectedMonth('All'); setAiReport(null); setConfig({...config, surgeryName: '', population: 10000}); setFiles({appointments:null, dna:null, unused:null, telephony:[]}); }} 
+                   onClick={() => { setProcessedData(null); setSelectedMonth('All'); setAiReport(null); setConfig({...config, surgeryName: '', population: 10000}); setFiles({appointments:null, dna:null, unused:null, onlineRequests: null, telephony:[]}); }} 
                    className="text-slate-500 hover:text-red-600 transition-colors text-xs font-medium"
                  >
                    Reset
@@ -1491,6 +1302,14 @@ export default function App() {
                  file={files.unused}
                  onChange={(e) => setFiles({...files, unused: e.target.files[0]})}
                />
+               <FileInput 
+                 label="Online Requests (CSV) - SystmConnect" 
+                 helpText="Misc Reports -> SystmConnect Report (Remove Patient Name column)"
+                 accept=".csv" 
+                 file={files.onlineRequests} 
+                 onChange={(e) => setFiles({...files, onlineRequests: e.target.files[0]})} 
+                 badge="Accurx Coming Soon" 
+               />
                
                {config.analyseTelephony && (
                    <FileInput 
@@ -1551,7 +1370,9 @@ export default function App() {
                  </div>
             )}
             
+            {/* ACTION BUTTONS: Centered above tabs */}
             <div className="flex justify-center gap-4 mb-6" data-html2canvas-ignore="true">
+                 {/* 1. CAIP Analysis Button */}
                  <button 
                   onClick={generateAIInsights}
                   disabled={isAiLoading}
@@ -1568,6 +1389,7 @@ export default function App() {
                   </span>
                  </button>
 
+                 {/* 2. Export to PDF Button */}
                  <button 
                   onClick={handleExportPDF}
                   disabled={isExporting}
@@ -1583,6 +1405,7 @@ export default function App() {
                 {[
                     {id: 'dashboard', label: 'Overview', icon: Activity},
                     {id: 'gp', label: 'GP Metrics', icon: Users},
+                    {id: 'online', label: 'Online', icon: Monitor},
                     {id: 'telephony', label: 'Telephony', icon: Phone},
                     {id: 'forecast', label: 'Forecast', icon: Calendar}
                 ].map(tab => (
@@ -1598,6 +1421,7 @@ export default function App() {
               </div>
             </div>
 
+            {/* --- VISIBLE CONTENT (Interactive) --- */}
             {activeTab === 'dashboard' && (
               <div className="space-y-6">
                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -1609,18 +1433,18 @@ export default function App() {
                      color="text-blue-600"
                    />
                    <MetricCard 
+                     title="Total Online Requests" 
+                     value={displayedData.reduce((a,b) => a + (b.onlineTotal || 0), 0).toLocaleString()} 
+                     subtext="All request types" 
+                     icon={Monitor} 
+                     color="text-teal-600" 
+                   />
+                   <MetricCard 
                      title="Avg Inbound Calls" 
                      value={Math.round(displayedData.reduce((a,b) => a + (b.inboundReceived||0), 0) / (selectedMonth === 'All' ? displayedData.length : 1)).toLocaleString()} 
                      subtext="Per month"
                      icon={Phone}
                      color="text-indigo-600"
-                   />
-                   <MetricCard 
-                     title="Avg DNA Rate" 
-                     value={`${(displayedData.reduce((a,b) => a + b.allDNAPct, 0) / (selectedMonth === 'All' ? displayedData.length : 1)).toFixed(2)}%`} 
-                     subtext="All staff types"
-                     icon={XCircle}
-                     color="text-red-500"
                    />
                  </div>
 
@@ -1629,10 +1453,10 @@ export default function App() {
                         <h3 className="font-bold text-slate-700 mb-4">Appointment Trends</h3>
                         <Line data={createChartData('Total Appointments', 'totalAppts', NHS_BLUE)} options={commonOptions} />
                     </Card>
-                    <Card className="h-80 lg:col-span-1">
-                        <h3 className="font-bold text-slate-700 mb-4">Booking Conversion Ratio</h3>
-                        <p className="text-xs text-slate-400 mb-2">Appointments booked per answered call</p>
-                        <Line data={createChartData('Conversion Ratio', 'conversionRatio', NHS_PURPLE)} options={ratioOptions} />
+                    <Card className="h-80">
+                        <h3 className="font-bold text-slate-700 mb-2">Online Request Rate</h3>
+                        <p className="text-xs text-slate-400 mb-4">Requests per 1000 patients per week</p>
+                        <Line data={createChartData('Requests/1000/wk', 'onlineRequestsPer1000', NHS_AQUA)} options={onlineRequestBandOptions} />
                     </Card>
                  </div>
                  
@@ -1688,6 +1512,14 @@ export default function App() {
 
             {activeTab === 'gp' && (
                 <div className="space-y-6">
+                    <Card className="h-96 border-2 border-teal-100 shadow-md bg-gradient-to-br from-white to-teal-50/30">
+                        <h3 className="font-bold text-slate-800 mb-2 text-lg flex items-center gap-2"><Activity className="text-teal-600" size={24}/> Total Clinical Capacity (GP Appointments + Digital Resolves)</h3>
+                        <p className="text-sm text-slate-500 mb-4">Includes both face-to-face/telephone appointments AND clinical online requests resolved without booking an appointment.</p>
+                        <div className="h-72">
+                            <Line data={createChartData('Total Capacity % (Appts + Digital)', 'gpTriageCapacityPerDayPct', NHS_AQUA, true)} options={gpBandOptions} />
+                        </div>
+                    </Card>
+
                     <Card className="h-96 border-2 border-blue-100 shadow-md">
                         <h3 className="font-bold text-slate-800 mb-2 text-lg">Patients with GP Appointment per Day (%)</h3>
                         <p className="text-sm text-slate-500 mb-4">Performance Bands: Red (&lt;0.85%), Amber (0.85-1.10%), Green (1.10-1.30%), Blue (&gt;1.30%)</p>
@@ -1784,6 +1616,86 @@ export default function App() {
                             />
                         )}
                     </Accordion>
+                </div>
+            )}
+
+            {/* NEW ONLINE TAB */}
+            {activeTab === 'online' && onlineStats && (
+                <div className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                        <Card className="p-4 flex flex-col justify-between">
+                            <p className="text-xs font-bold text-slate-400 uppercase">Offered/Booked Appt</p>
+                            <h3 className="text-2xl font-bold text-blue-600">{onlineStats.totalOfferedOrBooked.toLocaleString()}</h3>
+                        </Card>
+                        <Card className="p-4 flex flex-col justify-between">
+                            <p className="text-xs font-bold text-slate-400 uppercase">Digital Resolve</p>
+                            <h3 className="text-2xl font-bold text-green-600">{onlineStats.totalResolved.toLocaleString()}</h3>
+                        </Card>
+                        <Card className="p-4 flex flex-col justify-between">
+                            <p className="text-xs font-bold text-slate-400 uppercase">Avg Requests/Month</p>
+                            <h3 className="text-2xl font-bold text-indigo-600">{Math.round(displayedData.reduce((a,b)=>a+(b.onlineTotal||0),0) / (selectedMonth==='All'?displayedData.length:1)).toLocaleString()}</h3>
+                        </Card>
+                        <Card className="p-4 flex flex-col justify-between">
+                            <p className="text-xs font-bold text-slate-400 uppercase">Avg Patient Age</p>
+                            <h3 className="text-2xl font-bold text-amber-600">{onlineStats.ageCount ? Math.round(onlineStats.totalAge / onlineStats.ageCount) : 0} yrs</h3>
+                        </Card>
+                        <Card className="p-4 flex flex-col justify-between">
+                            <p className="text-xs font-bold text-slate-400 uppercase">Avg Time (Clin vs Admin)</p>
+                            <div className="flex flex-col gap-1">
+                                <div className="flex justify-between text-xs"><span>Clinical:</span> <span className="font-bold text-purple-600">{onlineStats.clinicalDurationCount ? (onlineStats.clinicalDurationTotal / onlineStats.clinicalDurationCount).toFixed(1) : 0}h</span></div>
+                                <div className="flex justify-between text-xs"><span>Admin:</span> <span className="font-bold text-slate-600">{onlineStats.adminDurationCount ? (onlineStats.adminDurationTotal / onlineStats.adminDurationCount).toFixed(1) : 0}h</span></div>
+                            </div>
+                        </Card>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <Card className="h-64">
+                            <h3 className="font-bold text-slate-700 mb-4">Request Type</h3>
+                            <div className="h-48 relative">
+                                <Doughnut data={createDonutData(onlineStats.typeBreakdown, [NHS_BLUE, NHS_AMBER])} options={donutOptions} />
+                            </div>
+                        </Card>
+                        <Card className="h-64">
+                            <h3 className="font-bold text-slate-700 mb-4">Access Method</h3>
+                            <div className="h-48 relative">
+                                <Doughnut data={createDonutData(onlineStats.accessMethod, [NHS_GREEN, NHS_PURPLE, NHS_AQUA])} options={donutOptions} />
+                            </div>
+                        </Card>
+                        <Card className="h-64">
+                            <h3 className="font-bold text-slate-700 mb-4">Patient Sex</h3>
+                            <div className="h-48 relative">
+                                <Doughnut data={createDonutData(onlineStats.sexSplit, [NHS_BLUE, NHS_PINK])} options={donutOptions} />
+                            </div>
+                        </Card>
+                    </div>
+
+                    <Card className="h-96">
+                        <h3 className="font-bold text-slate-800 mb-4">Outcome Breakdown</h3>
+                        <Bar 
+                            data={{
+                                labels: Object.keys(onlineStats.outcomes),
+                                datasets: [{
+                                    label: 'Count',
+                                    data: Object.values(onlineStats.outcomes),
+                                    backgroundColor: NHS_AQUA,
+                                    borderRadius: 4
+                                }]
+                            }} 
+                            options={{
+                                ...commonOptions,
+                                indexAxis: 'y', // Horizontal Bar Chart
+                                scales: { x: { beginAtZero: true } }
+                            }} 
+                        />
+                    </Card>
+                </div>
+            )}
+            
+            {activeTab === 'online' && !onlineStats && (
+                <div className="text-center py-20 text-slate-400 bg-white rounded-xl border border-dashed border-slate-300">
+                    <Monitor size={48} className="mx-auto mb-4 opacity-50"/>
+                    <p>No Online Request data uploaded.</p>
+                    <p className="text-sm mt-2">Upload a SystmConnect extract to see these metrics.</p>
                 </div>
             )}
 
@@ -1993,7 +1905,8 @@ export default function App() {
 
                 <div id="pdf-gp-section" className="p-10 space-y-8">
                     <h2 className="text-3xl font-bold text-slate-800 border-b border-slate-200 pb-4 mb-6">2. GP Metrics</h2>
-                    <div className="h-96 border border-slate-200 rounded-xl p-4"><Line data={createChartData('GP Appts %', 'gpApptsPerDay', NHS_DARK_BLUE, false)} options={pdfGpBandOptions} /></div>
+                    <div className="h-96 border border-slate-200 rounded-xl p-4"><h3 className="font-bold text-slate-800 mb-2 text-lg">Total Clinical Capacity (Appts + Digital)</h3><Line data={createChartData('Total Capacity %', 'gpTriageCapacityPerDayPct', NHS_AQUA, true)} options={pdfGpBandOptions} /></div>
+                    <div className="h-96 border border-slate-200 rounded-xl p-4 mt-6"><h3 className="font-bold text-slate-800 mb-2 text-lg">Patients with GP Appointment (%)</h3><Line data={createChartData('GP Appts %', 'gpApptsPerDay', NHS_DARK_BLUE, false)} options={pdfGpBandOptions} /></div>
                     <div className="grid grid-cols-2 gap-6">
                         <div className="h-80 border border-slate-200 rounded-xl p-4"><Line data={createChartData('Utilisation %', 'gpUtilization', NHS_GREEN)} options={pdfUtilizationOptions} /></div>
                         <div className="h-80 border border-slate-200 rounded-xl p-4"><Line data={createChartData('GP Conversion Ratio', 'gpConversionRatio', NHS_PURPLE)} options={pdfRatioOptions} /></div>
@@ -2043,9 +1956,36 @@ export default function App() {
                     </div>
                 </div>
 
+                {files.onlineRequests && onlineStats && (
+                    <div id="pdf-online-section" className="p-10 space-y-8">
+                        <h2 className="text-3xl font-bold text-slate-800 border-b border-slate-200 pb-4 mb-6">3. Online Requests Analysis</h2>
+                         <div className="grid grid-cols-5 gap-4 mb-6">
+                            <Card className="p-4 flex flex-col justify-between"><p className="text-xs font-bold text-slate-400 uppercase">Offered/Booked</p><h3 className="text-2xl font-bold text-blue-600">{onlineStats.totalOfferedOrBooked.toLocaleString()}</h3></Card>
+                            <Card className="p-4 flex flex-col justify-between"><p className="text-xs font-bold text-slate-400 uppercase">Digital Resolve</p><h3 className="text-2xl font-bold text-green-600">{onlineStats.totalResolved.toLocaleString()}</h3></Card>
+                            <Card className="p-4 flex flex-col justify-between"><p className="text-xs font-bold text-slate-400 uppercase">Avg Requests/Mo</p><h3 className="text-2xl font-bold text-indigo-600">{Math.round(displayedData.reduce((a,b)=>a+(b.onlineTotal||0),0)/(selectedMonth==='All'?displayedData.length:1)).toLocaleString()}</h3></Card>
+                            <Card className="p-4 flex flex-col justify-between"><p className="text-xs font-bold text-slate-400 uppercase">Avg Patient Age</p><h3 className="text-2xl font-bold text-amber-600">{onlineStats.ageCount?Math.round(onlineStats.totalAge/onlineStats.ageCount):0} yrs</h3></Card>
+                            <Card className="p-4 flex flex-col justify-between"><p className="text-xs font-bold text-slate-400 uppercase">Avg Time (Clin vs Admin)</p>
+                            <div className="flex flex-col gap-1">
+                                <div className="flex justify-between text-xs"><span>Clinical:</span> <span className="font-bold text-purple-600">{onlineStats.clinicalDurationCount ? (onlineStats.clinicalDurationTotal / onlineStats.clinicalDurationCount).toFixed(1) : 0}h</span></div>
+                                <div className="flex justify-between text-xs"><span>Admin:</span> <span className="font-bold text-slate-600">{onlineStats.adminDurationCount ? (onlineStats.adminDurationTotal / onlineStats.adminDurationCount).toFixed(1) : 0}h</span></div>
+                            </div>
+                            </Card>
+                        </div>
+                        <div className="grid grid-cols-3 gap-6 h-80">
+                            <div className="border border-slate-200 rounded-xl p-4"><h3 className="font-bold text-slate-700 mb-2 text-center">Request Type</h3><Doughnut data={createDonutData(onlineStats.typeBreakdown, [NHS_BLUE, NHS_AMBER])} options={donutOptions} /></div>
+                            <div className="border border-slate-200 rounded-xl p-4"><h3 className="font-bold text-slate-700 mb-2 text-center">Access Method</h3><Doughnut data={createDonutData(onlineStats.accessMethod, [NHS_GREEN, NHS_PURPLE, NHS_AQUA])} options={donutOptions} /></div>
+                            <div className="border border-slate-200 rounded-xl p-4"><h3 className="font-bold text-slate-700 mb-2 text-center">Patient Sex</h3><Doughnut data={createDonutData(onlineStats.sexSplit, [NHS_BLUE, NHS_PINK])} options={donutOptions} /></div>
+                        </div>
+                        <div className="h-96 border border-slate-200 rounded-xl p-4 mt-8">
+                             <h3 className="font-bold text-slate-800 mb-4">Outcome Breakdown</h3>
+                             <Bar data={{labels:Object.keys(onlineStats.outcomes),datasets:[{label:'Count',data:Object.values(onlineStats.outcomes),backgroundColor:NHS_AQUA,borderRadius:4}]}} options={{...pdfChartOptions,indexAxis:'y',scales:{x:{beginAtZero:true}}}} />
+                        </div>
+                    </div>
+                )}
+
                 {config.analyseTelephony && (
                     <div id="pdf-telephony-section" className="p-10 space-y-8">
-                        <h2 className="text-3xl font-bold text-slate-800 border-b border-slate-200 pb-4 mb-6">3. Telephony Performance</h2>
+                        <h2 className="text-3xl font-bold text-slate-800 border-b border-slate-200 pb-4 mb-6">4. Telephony Performance</h2>
                         <div className="grid grid-cols-5 gap-4 mb-6">
                             {[
                                 { l: 'Inbound Calls', k: 'inboundReceived', c: 'text-blue-600' },
@@ -2073,7 +2013,7 @@ export default function App() {
                 )}
 
                 <div id="pdf-forecast-section" className="p-10 space-y-8">
-                    <h2 className="text-3xl font-bold text-slate-800 border-b border-slate-200 pb-4 mb-6">4. Demand Forecast (GP Only)</h2>
+                    <h2 className="text-3xl font-bold text-slate-800 border-b border-slate-200 pb-4 mb-6">5. Demand Forecast (GP Only)</h2>
                     <div className="bg-blue-50 p-6 rounded-xl border border-blue-100 text-blue-800 mb-6">
                         <p className="text-lg">This chart estimates the number of extra GP appointments per day required to meet hidden demand from missed calls.</p>
                     </div>
