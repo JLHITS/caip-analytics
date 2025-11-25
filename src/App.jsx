@@ -378,7 +378,8 @@ export default function App() {
   const [rawStaffData, setRawStaffData] = useState([]);
   const [rawSlotData, setRawSlotData] = useState([]);
   const [rawCombinedData, setRawCombinedData] = useState([]);
-  const [onlineStats, setOnlineStats] = useState(null); // Store advanced online metrics
+  const [rawOnlineData, setRawOnlineData] = useState([]); // Store raw online data for dynamic filtering
+  // const [onlineStats, setOnlineStats] = useState(null); // REMOVED: Now derived
   const [forecastData, setForecastData] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState(null);
@@ -451,8 +452,8 @@ export default function App() {
     setRawStaffData([]);
     setRawSlotData([]);
     setRawCombinedData([]);
+    setRawOnlineData([]);
     setForecastData(null);
-    setOnlineStats(null);
 
     try {
       const fetchFile = async (path, name, type) => {
@@ -523,7 +524,7 @@ export default function App() {
     setRawSlotData([]);
     setRawCombinedData([]);
     setForecastData(null);
-    setOnlineStats(null);
+    setRawOnlineData([]);
 
     const filesToProcess = customFiles || files;
     const configToUse = customConfig || config;
@@ -560,20 +561,8 @@ export default function App() {
       const monthlySlotMap = {};
       const monthlyCombinedMap = {};
 
-      const onlineStatsData = {
-        typeBreakdown: { Clinical: 0, Admin: 0 },
-        accessMethod: {},
-        sexSplit: {},
-        outcomes: {},
-        totalOfferedOrBooked: 0,
-        totalResolved: 0,
-        totalAge: 0,
-        ageCount: 0,
-        clinicalDurationTotal: 0,
-        clinicalDurationCount: 0,
-        adminDurationTotal: 0,
-        adminDurationCount: 0
-      };
+      // REMOVED: onlineStatsData object - now calculating dynamically
+      const processedOnlineRows = [];
 
       const getMonthKey = (dateStr) => {
         const d = new Date(dateStr);
@@ -786,50 +775,19 @@ export default function App() {
               months[monthKey].onlineClinicalNoAppt += 1;
             }
 
-            if (outcomeLower.includes('appointment offered') || outcomeLower.includes('appointment booked')) {
-              onlineStatsData.totalOfferedOrBooked++;
-            } else {
-              onlineStatsData.totalResolved++;
-            }
-
-            if (type) {
-              onlineStatsData.typeBreakdown[type] = (onlineStatsData.typeBreakdown[type] || 0) + 1;
-            }
-
-            if (access) {
-              onlineStatsData.accessMethod[access] = (onlineStatsData.accessMethod[access] || 0) + 1;
-            }
-
-            if (sex) {
-              onlineStatsData.sexSplit[sex] = (onlineStatsData.sexSplit[sex] || 0) + 1;
-            }
-
-            if (outcome) {
-              onlineStatsData.outcomes[outcome] = (onlineStatsData.outcomes[outcome] || 0) + 1;
-            }
-
-            if (!isNaN(age)) {
-              onlineStatsData.totalAge += age;
-              onlineStatsData.ageCount++;
-            }
-
-            if (completeStr && outcomeStr) {
-              const d1 = parseDateTime(completeStr);
-              const d2 = parseDateTime(outcomeStr);
-              if (d1 && d2) {
-                const diffMs = d2 - d1;
-                const diffHrs = diffMs / (1000 * 60 * 60);
-                if (diffHrs >= 0 && diffHrs < 1000) {
-                  if (type === 'Clinical') {
-                    onlineStatsData.clinicalDurationTotal += diffHrs;
-                    onlineStatsData.clinicalDurationCount++;
-                  } else {
-                    onlineStatsData.adminDurationTotal += diffHrs;
-                    onlineStatsData.adminDurationCount++;
-                  }
-                }
-              }
-            }
+            // Store raw row with monthKey for dynamic filtering
+            processedOnlineRows.push({
+              month: monthKey,
+              type,
+              outcome,
+              outcomeLower,
+              access,
+              sex,
+              age: !isNaN(age) ? age : null,
+              date,
+              completeStr,
+              outcomeStr
+            });
           }
         });
       }
@@ -940,7 +898,8 @@ export default function App() {
       setRawStaffData(Object.values(monthlyStaffMap));
       setRawSlotData(Object.values(monthlySlotMap));
       setRawCombinedData(Object.values(monthlyCombinedMap));
-      setOnlineStats(configToUse.useOnline ? onlineStatsData : null);
+      setRawOnlineData(processedOnlineRows);
+      // setOnlineStats(configToUse.useOnline ? onlineStatsData : null); // REMOVED
 
     } catch (err) {
       setError(err.message);
@@ -974,6 +933,82 @@ export default function App() {
   const aggregatedStaffData = useMemo(() => getAggregatedData(rawStaffData), [rawStaffData, selectedMonth]);
   const aggregatedSlotData = useMemo(() => getAggregatedData(rawSlotData), [rawSlotData, selectedMonth]);
   const aggregatedCombinedData = useMemo(() => getAggregatedData(rawCombinedData), [rawCombinedData, selectedMonth]);
+
+  // --- Dynamic Online Stats ---
+  const onlineStats = useMemo(() => {
+    if (!config.useOnline || !rawOnlineData || rawOnlineData.length === 0) return null;
+
+    const filtered = selectedMonth === 'All' ? rawOnlineData : rawOnlineData.filter(d => d.month === selectedMonth);
+
+    if (filtered.length === 0) return null;
+
+    const stats = {
+      typeBreakdown: { Clinical: 0, Admin: 0 },
+      accessMethod: {},
+      sexSplit: {},
+      outcomes: {},
+      totalOfferedOrBooked: 0,
+      totalResolved: 0,
+      totalAge: 0,
+      ageCount: 0,
+      clinicalDurationTotal: 0,
+      clinicalDurationCount: 0,
+      adminDurationTotal: 0,
+      adminDurationCount: 0
+    };
+
+    const parseDateTime = (str) => {
+      if (!str) return null;
+      let d = new Date(str);
+      if (!isNaN(d.getTime())) return d;
+      const parts = str.split(' ');
+      const dateParts = parts[0].split('/');
+      if (dateParts.length === 3) {
+        return new Date(`${dateParts[2]}-${dateParts[1]}-${dateParts[0]}T${parts[1] || '00:00'}`);
+      }
+      return null;
+    };
+
+    filtered.forEach(row => {
+      const { type, outcome, outcomeLower, access, sex, age, completeStr, outcomeStr } = row;
+
+      if (outcomeLower.includes('appointment offered') || outcomeLower.includes('appointment booked')) {
+        stats.totalOfferedOrBooked++;
+      } else {
+        stats.totalResolved++;
+      }
+
+      if (type) stats.typeBreakdown[type] = (stats.typeBreakdown[type] || 0) + 1;
+      if (access) stats.accessMethod[access] = (stats.accessMethod[access] || 0) + 1;
+      if (sex) stats.sexSplit[sex] = (stats.sexSplit[sex] || 0) + 1;
+      if (outcome) stats.outcomes[outcome] = (stats.outcomes[outcome] || 0) + 1;
+
+      if (age !== null) {
+        stats.totalAge += age;
+        stats.ageCount++;
+      }
+
+      if (completeStr && outcomeStr) {
+        const d1 = parseDateTime(completeStr);
+        const d2 = parseDateTime(outcomeStr);
+        if (d1 && d2) {
+          const diffMs = d2 - d1;
+          const diffHrs = diffMs / (1000 * 60 * 60);
+          if (diffHrs >= 0 && diffHrs < 1000) {
+            if (type === 'Clinical') {
+              stats.clinicalDurationTotal += diffHrs;
+              stats.clinicalDurationCount++;
+            } else {
+              stats.adminDurationTotal += diffHrs;
+              stats.adminDurationCount++;
+            }
+          }
+        }
+      }
+    });
+
+    return stats;
+  }, [rawOnlineData, selectedMonth, config.useOnline]);
 
   // --- AI Handler ---
   const fetchAIReport = async () => {
