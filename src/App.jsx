@@ -13,7 +13,13 @@ import {
   Legend,
   Filler,
 } from 'chart.js';
-import { Upload, Activity, Calendar, Users, Phone, AlertCircle, CheckCircle, XCircle, ChevronDown, ChevronUp, Info, Sparkles, Loader2, PlayCircle, Search, User, Download, FileText, ArrowUpDown, ArrowUp, ArrowDown, TrendingUp, AlertTriangle, Clock, Monitor, MousePointer, Laptop } from 'lucide-react';
+import {
+  Upload, FileText, Activity, Users, Clock, Phone, Calendar,
+  BarChart3, PieChart, ArrowRight, CheckCircle, AlertCircle,
+  Menu, X, ChevronDown, HelpCircle, Info, Sparkles, XCircle,
+  Download, Loader2, PlayCircle, AlertTriangle, Trash2, Plus, Monitor, User, Search,
+  ArrowUpDown, ArrowUp, ArrowDown
+} from 'lucide-react';
 
 // --- PRODUCTION IMPORTS ---
 import Papa from 'papaparse';
@@ -48,7 +54,7 @@ GlobalWorkerOptions.workerSrc = pdfWorker;
 const apiKey = (import.meta && import.meta.env && import.meta.env.VITE_GEMINI_KEY) || "";
 
 // Version Info
-const APP_VERSION = "0.8.1-beta";
+const APP_VERSION = "0.8.2-beta";
 
 // Initialize ChartJS
 ChartJS.register(
@@ -1226,28 +1232,80 @@ export default function App() {
     ]
   });
 
-  const FileInput = ({ label, helpText, accept, onChange, file, badge, disabled }) => (
-    <div className={`mb-4 transition-opacity ${disabled ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
-      <div className="flex justify-between items-baseline mb-1">
-        <label className="block text-sm font-medium text-slate-700">{label}</label>
-        {badge && <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full border border-slate-200">{badge}</span>}
-      </div>
-      {helpText && <p className="text-xs text-slate-500 mb-2">{helpText}</p>}
-      <div className="flex items-center gap-3">
-        <label className="flex-1 cursor-pointer group">
-          <div className={`flex items-center justify-center px-4 py-3 border-2 border-dashed rounded-xl transition-all ${file ? 'border-green-400 bg-green-50' : 'border-slate-300 hover:border-blue-400 hover:bg-blue-50'}`}>
-            <input type="file" className="hidden" accept={accept} onChange={onChange} multiple={accept === "application/pdf"} disabled={disabled} />
-            <div className="flex items-center gap-2 text-slate-500 group-hover:text-blue-600">
-              {file ? <CheckCircle size={18} className="text-green-600" /> : <Upload size={18} />}
-              <span className="text-sm truncate max-w-[200px]">
-                {file ? (Array.isArray(file) ? `${file.length} files` : file.name) : 'Upload file'}
-              </span>
+  const FileInput = ({ label, helpText, accept, onChange, file, badge, disabled, onRemove, isMulti }) => {
+    const hasFile = isMulti ? (file && file.length > 0) : !!file;
+
+    return (
+      <div className={`mb-6 transition-opacity ${disabled ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
+        <div className="flex justify-between items-baseline mb-2">
+          <label className="block text-sm font-bold text-slate-700">{label}</label>
+          {badge && <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full border border-blue-200 font-semibold">{badge}</span>}
+        </div>
+        {helpText && <p className="text-xs text-slate-500 mb-3">{helpText}</p>}
+
+        <div className="space-y-3">
+          {/* Existing Files Display */}
+          {hasFile && (
+            <div className="space-y-2">
+              {isMulti ? (
+                file.map((f, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-3 bg-white border border-slate-200 rounded-lg shadow-sm group hover:border-blue-300 transition-all">
+                    <div className="flex items-center gap-3 overflow-hidden">
+                      <div className="p-2 bg-green-50 text-green-600 rounded-lg">
+                        <FileText size={18} />
+                      </div>
+                      <span className="text-sm font-medium text-slate-700 truncate">{f.name}</span>
+                    </div>
+                    <button
+                      onClick={() => onRemove(idx)}
+                      className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Remove file"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                ))
+              ) : (
+                <div className="flex items-center justify-between p-3 bg-white border border-green-200 rounded-lg shadow-sm ring-1 ring-green-500/20">
+                  <div className="flex items-center gap-3 overflow-hidden">
+                    <div className="p-2 bg-green-50 text-green-600 rounded-lg">
+                      <CheckCircle size={18} />
+                    </div>
+                    <span className="text-sm font-medium text-slate-700 truncate">{file.name}</span>
+                  </div>
+                  <button
+                    onClick={onRemove}
+                    className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                    title="Remove file"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              )}
             </div>
-          </div>
-        </label>
+          )}
+
+          {/* Upload Area - Always show for multi, or if no file for single */}
+          {(isMulti || !hasFile) && (
+            <label className="block cursor-pointer group">
+              <div className={`flex flex-col items-center justify-center px-4 py-6 border-2 border-dashed rounded-xl transition-all ${isMulti && hasFile ? 'border-slate-300 bg-slate-50 hover:bg-white' : 'border-slate-300 hover:border-blue-400 hover:bg-blue-50'}`}>
+                <input type="file" className="hidden" accept={accept} onChange={onChange} multiple={isMulti} disabled={disabled} />
+                <div className="flex flex-col items-center gap-2 text-slate-500 group-hover:text-blue-600 transition-colors">
+                  {isMulti && hasFile ? <Plus size={24} /> : <Upload size={24} />}
+                  <span className="text-sm font-medium">
+                    {isMulti && hasFile ? 'Add another file' : 'Click to upload or drag and drop'}
+                  </span>
+                  <span className="text-xs text-slate-400">
+                    {isMulti ? 'Supports multiple files' : 'Single file upload'}
+                  </span>
+                </div>
+              </div>
+            </label>
+          )}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   // Define headers based on filter state
   const isFiltered = selectedMonth !== 'All';
@@ -1389,6 +1447,7 @@ export default function App() {
                 accept=".csv"
                 file={files.appointments}
                 onChange={(e) => setFiles({ ...files, appointments: e.target.files[0] })}
+                onRemove={() => setFiles({ ...files, appointments: null })}
               />
               <FileInput
                 label="DNA Extract (CSV) *"
@@ -1396,6 +1455,7 @@ export default function App() {
                 accept=".csv"
                 file={files.dna}
                 onChange={(e) => setFiles({ ...files, dna: e.target.files[0] })}
+                onRemove={() => setFiles({ ...files, dna: null })}
               />
               <FileInput
                 label="Unused Extract (CSV) *"
@@ -1403,6 +1463,7 @@ export default function App() {
                 accept=".csv"
                 file={files.unused}
                 onChange={(e) => setFiles({ ...files, unused: e.target.files[0] })}
+                onRemove={() => setFiles({ ...files, unused: null })}
               />
               <FileInput
                 label="Online Requests (CSV) - SystmConnect"
@@ -1410,6 +1471,7 @@ export default function App() {
                 accept=".csv"
                 file={files.onlineRequests}
                 onChange={(e) => setFiles({ ...files, onlineRequests: e.target.files[0] })}
+                onRemove={() => setFiles({ ...files, onlineRequests: null })}
                 badge="Accurx Coming Soon"
                 disabled={!config.useOnline}
               />
@@ -1418,8 +1480,16 @@ export default function App() {
                 label="Telephony Reports (PDF) *"
                 helpText="(Simply upload your X-on Surgery Connect Monthly Management Reports - only summary data is used)"
                 accept="application/pdf"
-                file={files.telephony.length > 0 ? files.telephony : null}
-                onChange={(e) => setFiles({ ...files, telephony: Array.from(e.target.files) })}
+                file={files.telephony}
+                isMulti={true}
+                onChange={(e) => {
+                  if (e.target.files && e.target.files.length > 0) {
+                    setFiles(prev => ({ ...prev, telephony: [...prev.telephony, ...Array.from(e.target.files)] }));
+                  }
+                }}
+                onRemove={(index) => {
+                  setFiles(prev => ({ ...prev, telephony: prev.telephony.filter((_, i) => i !== index) }));
+                }}
                 disabled={!config.useTelephony}
               />
 
