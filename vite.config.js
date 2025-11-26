@@ -11,7 +11,7 @@ const version = packageJson.version;
 let gitCommit = '';
 try {
   gitCommit = execSync('git rev-parse --short HEAD').toString().trim();
-} catch (e) {
+} catch {
   gitCommit = 'dev';
 }
 
