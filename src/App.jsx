@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import {
@@ -53,7 +53,7 @@ GlobalWorkerOptions.workerSrc = pdfWorker;
 const apiKey = (import.meta && import.meta.env && import.meta.env.VITE_GEMINI_KEY) || "";
 
 // Version Info
-const APP_VERSION = "0.8.6-beta";
+const APP_VERSION = "0.8.8-beta";
 
 // Initialize ChartJS
 ChartJS.register(
@@ -305,7 +305,7 @@ const SimpleMarkdown = ({ text }) => {
     const parts = line.split(/(\*\*.*?\*\*|\*.*?\*)/g);
     return parts.map((part, i) => {
       if ((part.startsWith('**') && part.endsWith('**')) || (part.startsWith('*') && part.endsWith('*'))) {
-        const clean = part.replace(/^[\*]+|[\*]+$/g, '');
+        const clean = part.replace(/^[*]+|[*]+$/g, '');
         return <strong key={i} className="font-bold text-indigo-900">{clean}</strong>;
       }
       return part;
@@ -327,7 +327,7 @@ const SimpleMarkdown = ({ text }) => {
           return (
             <div key={index} className="flex items-start gap-2 ml-2">
               <span className="text-indigo-500 mt-1.5">•</span>
-              <p className="flex-1">{parseBold(trimmed.replace(/^[\*\-]\s*/, ''))}</p>
+              <p className="flex-1">{parseBold(trimmed.replace(/^[*-]\s*/, ''))}</p>
             </div>
           );
         }
@@ -421,7 +421,6 @@ export default function App() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [isExporting, setIsExporting] = useState(false);
 
   const [selectedMonth, setSelectedMonth] = useState('All');
   const [aiReport, setAiReport] = useState(null);
@@ -953,7 +952,7 @@ export default function App() {
   };
 
   // --- Aggregated Data Helpers (Filtered) ---
-  const getAggregatedData = (rawData) => {
+  const getAggregatedData = useCallback((rawData) => {
     if (!rawData || rawData.length === 0) return [];
     const filtered = selectedMonth === 'All' ? rawData : rawData.filter(d => d.month === selectedMonth);
     const grouped = filtered.reduce((acc, curr) => {
@@ -966,11 +965,11 @@ export default function App() {
       return acc;
     }, {});
     return Object.values(grouped).sort((a, b) => b.appts - a.appts);
-  };
+  }, [selectedMonth]);
 
-  const aggregatedStaffData = useMemo(() => getAggregatedData(rawStaffData), [rawStaffData, selectedMonth]);
-  const aggregatedSlotData = useMemo(() => getAggregatedData(rawSlotData), [rawSlotData, selectedMonth]);
-  const aggregatedCombinedData = useMemo(() => getAggregatedData(rawCombinedData), [rawCombinedData, selectedMonth]);
+  const aggregatedStaffData = useMemo(() => getAggregatedData(rawStaffData), [getAggregatedData, rawStaffData]);
+  const aggregatedSlotData = useMemo(() => getAggregatedData(rawSlotData), [getAggregatedData, rawSlotData]);
+  const aggregatedCombinedData = useMemo(() => getAggregatedData(rawCombinedData), [getAggregatedData, rawCombinedData]);
 
   // --- Dynamic Online Stats ---
   const onlineStats = useMemo(() => {
@@ -1050,53 +1049,226 @@ export default function App() {
 
   // --- AI Handler ---
   const fetchAIReport = async () => {
+    const metricDefinitions = [
+      {
+        key: 'workingDays',
+        title: 'Working days',
+        description: 'Clinical working days available in the month',
+        format: 'number'
+      },
+      {
+        key: 'totalAppts',
+        title: 'All appointments delivered',
+        description: 'Total appointments completed across the practice',
+        format: 'number'
+      },
+      {
+        key: 'gpAppts',
+        title: 'GP appointments delivered',
+        description: 'Number of GP-led appointments completed',
+        format: 'number'
+      },
+      {
+        key: 'gpApptsPerDay',
+        title: 'GP appointments per working day',
+        description: 'Average GP appointments delivered per working day',
+        format: 'decimal1'
+      },
+      {
+        key: 'allApptsPerDay',
+        title: 'All appointments per working day',
+        description: 'Average total appointments delivered per working day',
+        format: 'decimal1'
+      },
+      {
+        key: 'utilization',
+        title: 'Utilisation (all clinicians)',
+        description: 'Percentage of all appointment slots used',
+        format: 'percent1'
+      },
+      {
+        key: 'gpUtilization',
+        title: 'GP utilisation',
+        description: 'Percentage of GP appointment slots used',
+        format: 'percent1'
+      },
+      {
+        key: 'gpUnusedPct',
+        title: 'Unused GP capacity',
+        description: 'Percentage of GP slots left unused after embargoes and DNA',
+        format: 'percent1'
+      },
+      {
+        key: 'gpDNAPct',
+        title: 'GP DNA rate',
+        description: 'Did-not-attend rate for GP appointments',
+        format: 'percent1'
+      },
+      {
+        key: 'allUnusedPct',
+        title: 'Unused capacity (all clinicians)',
+        description: 'Percentage of all clinician slots left unused',
+        format: 'percent1'
+      },
+      {
+        key: 'allDNAPct',
+        title: 'DNA rate (all clinicians)',
+        description: 'Did-not-attend rate for all clinicians',
+        format: 'percent1'
+      },
+      {
+        key: 'onlineTotal',
+        title: 'Online requests received',
+        description: 'Total online consultation requests submitted',
+        format: 'number'
+      },
+      {
+        key: 'onlineClinicalNoAppt',
+        title: 'Online clinical requests without appointment',
+        description: 'Clinical online requests resolved without booking an appointment',
+        format: 'number'
+      },
+      {
+        key: 'onlineRequestsPer1000',
+        title: 'Online requests per 1,000 patients',
+        description: 'Rate of online requests normalised by practice size',
+        format: 'decimal1'
+      },
+      {
+        key: 'gpTriageCapacityPerDayPct',
+        title: 'Patients with a GP appointment or resolved online request per day (%)',
+        description: 'Percentage of registered patients per working day who either had a GP appointment or had their online request resolved without an appointment',
+        format: 'percent2'
+      },
+      {
+        key: 'inboundReceived',
+        title: 'Inbound calls received',
+        description: 'Total inbound calls presented to the phone system',
+        format: 'number'
+      },
+      {
+        key: 'inboundAnswered',
+        title: 'Inbound calls answered',
+        description: 'Number of inbound calls answered by the team',
+        format: 'number'
+      },
+      {
+        key: 'missedFromQueue',
+        title: 'Calls missed from queue',
+        description: 'Total calls abandoned from the queue',
+        format: 'number'
+      },
+      {
+        key: 'missedFromQueueExRepeat',
+        title: 'Missed calls excluding repeats',
+        description: 'Unique callers who abandoned the queue (excludes repeat callers)',
+        format: 'number'
+      },
+      {
+        key: 'missedFromQueueExRepeatPct',
+        title: 'Missed call rate (unique)',
+        description: 'Percentage of unique callers who abandoned the queue',
+        format: 'percent1'
+      },
+      {
+        key: 'answeredFromQueue',
+        title: 'Calls answered from queue',
+        description: 'Calls successfully answered after waiting in queue',
+        format: 'number'
+      },
+      {
+        key: 'abandonedCalls',
+        title: 'Callback abandoned',
+        description: 'Callbacks that were not connected after being requested',
+        format: 'number'
+      },
+      {
+        key: 'callbacksSuccessful',
+        title: 'Callbacks successful',
+        description: 'Callbacks that successfully connected to a patient',
+        format: 'number'
+      },
+      {
+        key: 'avgQueueTimeAnswered',
+        title: 'Average queue time (answered)',
+        description: 'Average seconds callers waited before being answered',
+        format: 'seconds'
+      },
+      {
+        key: 'avgQueueTimeMissed',
+        title: 'Average queue time (missed)',
+        description: 'Average seconds callers waited before abandoning',
+        format: 'seconds'
+      },
+      {
+        key: 'avgInboundTalkTime',
+        title: 'Average inbound talk time',
+        description: 'Average call handling time for inbound calls (seconds)',
+        format: 'seconds'
+      },
+      {
+        key: 'capitationCallingPerDay',
+        title: 'Daily call volume per 1,000 patients',
+        description: 'Average daily inbound calls per 1,000 registered patients',
+        format: 'percent1'
+      },
+      {
+        key: 'conversionRatio',
+        title: 'Booking conversion (all)',
+        description: 'Ratio of calls that resulted in any appointment booking',
+        format: 'decimal2'
+      },
+      {
+        key: 'gpConversionRatio',
+        title: 'Booking conversion (GP)',
+        description: 'Ratio of calls that resulted in a GP appointment booking',
+        format: 'decimal2'
+      },
+      {
+        key: 'extraSlotsPerDay',
+        title: 'Extra slots released per day',
+        description: 'Average number of extra slots added daily to meet demand',
+        format: 'decimal1'
+      }
+    ];
+
+    const formatMetricValue = (value, format) => {
+      if (value === undefined || value === null || Number.isNaN(value)) return null;
+
+      switch (format) {
+        case 'percent1':
+          return `${Number(value).toFixed(1)}%`;
+        case 'percent2':
+          return `${Number(value).toFixed(2)}%`;
+        case 'decimal2':
+          return Number(value).toFixed(2);
+        case 'decimal1':
+          return Number(value).toFixed(1);
+        case 'seconds':
+          return `${Number(value).toFixed(0)} seconds`;
+        default:
+          return Number(value);
+      }
+    };
+
     const dataSummary = displayedData.map(d => ({
       month: d.month,
-      workingDays: d.workingDays,
-      totalAppts: d.totalAppts,
-      gpAppts: d.gpAppts,
-      gpApptsPerDay: d.gpApptsPerDay?.toFixed(1),
-      allApptsPerDay: d.allApptsPerDay?.toFixed(1),
-
-      // Utilization & DNA
-      utilization: d.utilization?.toFixed(1) + '%',
-      gpUtilization: d.gpUtilization?.toFixed(1) + '%',
-      gpUnusedPct: d.gpUnusedPct?.toFixed(1) + '%',
-      gpDNAPct: d.gpDNAPct?.toFixed(1) + '%',
-      allUnusedPct: d.allUnusedPct?.toFixed(1) + '%',
-      allDNAPct: d.allDNAPct?.toFixed(1) + '%',
-
-      // Online
-      onlineTotal: d.onlineTotal,
-      onlineClinicalNoAppt: d.onlineClinicalNoAppt,
-      onlineRequestsPer1000: d.onlineRequestsPer1000?.toFixed(1),
-      gpTriageCapacity: d.gpTriageCapacityPerDayPct?.toFixed(2) + '%',
-
-      // Telephony
-      inboundReceived: d.inboundReceived,
-      inboundAnswered: d.inboundAnswered,
-      missedFromQueue: d.missedFromQueue,
-      missedFromQueueExRepeat: d.missedFromQueueExRepeat,
-      missedFromQueueExRepeatPct: d.missedFromQueueExRepeatPct?.toFixed(1) + '%',
-      answeredFromQueue: d.answeredFromQueue,
-      abandonedCalls: d.abandonedCalls,
-      callbacksSuccessful: d.callbacksSuccessful,
-      avgQueueTimeAnswered: d.avgQueueTimeAnswered, // in seconds
-      avgQueueTimeMissed: d.avgQueueTimeMissed, // in seconds
-      avgInboundTalkTime: d.avgInboundTalkTime, // in seconds
-      capitationCallingPerDay: d.capitationCallingPerDay?.toFixed(1) + '%',
-
-      // Ratios & Capacity
-      bookingConversion: d.conversionRatio?.toFixed(2),
-      gpBookingConversion: d.gpConversionRatio?.toFixed(2),
-      extraSlotsPerDay: d.extraSlotsPerDay?.toFixed(1)
+      metrics: metricDefinitions
+        .map(metric => ({
+          title: metric.title,
+          description: metric.description,
+          value: formatMetricValue(d[metric.key], metric.format)
+        }))
+        .filter(metric => metric.value !== null)
     }));
 
     const prompt = `
         You are an expert NHS Practice Manager and Data Analyst using CAIP Analytics.
         Analyse the following monthly performance data.
-        
-        Data: ${JSON.stringify(dataSummary)}
+
+        Each metric includes a title and description to avoid ambiguity. Base all interpretations on these fields, not the raw field names.
+
+        Data (month by month): ${JSON.stringify(dataSummary, null, 2)}
 
         Please provide a concise report in exactly these two sections using bullet points:
 
@@ -1106,10 +1278,10 @@ export default function App() {
         ### 🚀 Room for Improvement & Actions
         * Identify specific issues.
         * Logic:
-            * If **Online Requests** are high but **GP Triage Capacity** is low, suggest: "High digital demand is not being fully captured in clinical workload data."
+            * If **Online Requests** are high but **Patients with a GP appointment or resolved online request per day (%)** is low, suggest: "High digital demand is not being fully captured in clinical workload data."
             * If **Booking Conversion** is low, suggest: "High call volume not converting to appts. Review signposting."
             * If **Utilization** is low (<95%), suggest: "Wasted capacity. Review embargoes."
-		* Also disur own logic for improvement on some of the metrics based on best practice and research on improving access in GP surgeries in the NHS UK.
+            * Apply additional best-practice logic from NHS UK access improvement guidance when proposing actions.
 
         Keep the tone professional, constructive, and specific to NHS Primary Care. Use British English.
     `;
@@ -1175,7 +1347,6 @@ export default function App() {
   const pdfPercentageOptions = { ...percentageOptions, animation: false };
 
   const onlineRequestBandOptions = { ...commonOptions, scales: { ...commonOptions.scales, y: { ...commonOptions.scales.y, min: 0 } }, plugins: { ...commonOptions.plugins, backgroundBands: { bands: [{ from: 0, to: 5.0, color: GP_BAND_RED }, { from: 5.0, to: 100, color: GP_BAND_GREEN }] } } };
-  const pdfOnlineRequestBandOptions = { ...onlineRequestBandOptions, animation: false };
 
   const gpBandOptions = { ...percentageOptions, scales: { ...percentageOptions.scales, y: { ...percentageOptions.scales.y, min: 0, suggestedMax: 1.6 } }, plugins: { ...percentageOptions.plugins, backgroundBands: { bands: [{ from: 0, to: 0.85, color: GP_BAND_RED }, { from: 0.85, to: 1.10, color: GP_BAND_AMBER }, { from: 1.10, to: 1.30, color: GP_BAND_GREEN }, { from: 1.30, to: 5.00, color: GP_BAND_BLUE }] } } };
   const pdfGpBandOptions = { ...gpBandOptions, animation: false };
@@ -1693,10 +1864,10 @@ export default function App() {
             {activeTab === 'gp' && (
               <div className="space-y-6">
                 <Card className="h-96 border-2 border-teal-100 shadow-md bg-gradient-to-br from-white to-teal-50/30">
-                  <h3 className="font-bold text-slate-800 mb-2 text-lg flex items-center gap-2"><Activity className="text-teal-600" size={24} /> Total Clinical Capacity (GP Appointments + Digital Resolves)</h3>
-                  <p className="text-sm text-slate-500 mb-4">Includes both face-to-face/telephone appointments AND clinical online requests resolved without booking an appointment.</p>
+                  <h3 className="font-bold text-slate-800 mb-2 text-lg flex items-center gap-2"><Activity className="text-teal-600" size={24} /> Patients with GP Appointment or Resolved Online Request per Day (%)</h3>
+                  <p className="text-sm text-slate-500 mb-4">Percentage of registered patients each working day who either attended a GP appointment or had their online request resolved without needing one.</p>
                   <div className="h-72">
-                    <Line data={createChartData('Total Capacity % (Appts + Digital)', 'gpTriageCapacityPerDayPct', NHS_AQUA, false)} options={gpBandOptions} />
+                    <Line data={createChartData('GP appointment or online resolve per day (%)', 'gpTriageCapacityPerDayPct', NHS_AQUA, false)} options={gpBandOptions} />
                   </div>
                 </Card>
 
@@ -2085,7 +2256,7 @@ export default function App() {
 
               <div id="pdf-gp-section" className="p-10 space-y-8 break-after-page">
                 <h2 className="text-3xl font-bold text-slate-800 border-b border-slate-200 pb-4 mb-6">2. GP Metrics</h2>
-                <div className="h-96 border border-slate-200 rounded-xl p-4"><h3 className="font-bold text-slate-800 mb-2 text-lg">Total Clinical Capacity (Appts + Digital)</h3><Line data={createChartData('Total Capacity %', 'gpTriageCapacityPerDayPct', NHS_AQUA, true)} options={pdfGpBandOptions} /></div>
+                <div className="h-96 border border-slate-200 rounded-xl p-4"><h3 className="font-bold text-slate-800 mb-2 text-lg">Patients with GP Appointment or Resolved Online Request per Day (%)</h3><Line data={createChartData('GP appointment or online resolve per day (%)', 'gpTriageCapacityPerDayPct', NHS_AQUA, true)} options={pdfGpBandOptions} /></div>
                 <div className="h-96 border border-slate-200 rounded-xl p-4 mt-6"><h3 className="font-bold text-slate-800 mb-2 text-lg">Patients with GP Appointment (%)</h3><Line data={createChartData('GP Appts %', 'gpApptsPerDay', NHS_DARK_BLUE, false)} options={pdfGpBandOptions} /></div>
                 <div className="grid grid-cols-2 gap-6">
                   <div className="h-80 border border-slate-200 rounded-xl p-4"><Line data={createChartData('Utilisation %', 'gpUtilization', NHS_GREEN)} options={pdfUtilizationOptions} /></div>
