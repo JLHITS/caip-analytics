@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { GoogleGenAI } from "@google/genai";
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -52,7 +53,7 @@ GlobalWorkerOptions.workerSrc = pdfWorker;
 const apiKey = (import.meta && import.meta.env && import.meta.env.VITE_GEMINI_KEY) || "";
 
 // Version Info
-const APP_VERSION = "0.8.4-beta";
+const APP_VERSION = "0.8.5-beta";
 
 // Initialize ChartJS
 ChartJS.register(
@@ -1051,12 +1052,44 @@ export default function App() {
   const fetchAIReport = async () => {
     const dataSummary = displayedData.map(d => ({
       month: d.month,
+      workingDays: d.workingDays,
+      totalAppts: d.totalAppts,
       gpAppts: d.gpAppts,
-      onlineRequests: d.onlineTotal,
-      gpTriageCapacity: d.gpTriageCapacityPerDayPct.toFixed(2) + '%',
-      utilization: d.utilization.toFixed(1) + '%',
-      bookingConversion: d.conversionRatio.toFixed(2),
-      inboundCalls: d.inboundReceived,
+      gpApptsPerDay: d.gpApptsPerDay?.toFixed(1),
+      allApptsPerDay: d.allApptsPerDay?.toFixed(1),
+
+      // Utilization & DNA
+      utilization: d.utilization?.toFixed(1) + '%',
+      gpUtilization: d.gpUtilization?.toFixed(1) + '%',
+      gpUnusedPct: d.gpUnusedPct?.toFixed(1) + '%',
+      gpDNAPct: d.gpDNAPct?.toFixed(1) + '%',
+      allUnusedPct: d.allUnusedPct?.toFixed(1) + '%',
+      allDNAPct: d.allDNAPct?.toFixed(1) + '%',
+
+      // Online
+      onlineTotal: d.onlineTotal,
+      onlineClinicalNoAppt: d.onlineClinicalNoAppt,
+      onlineRequestsPer1000: d.onlineRequestsPer1000?.toFixed(1),
+      gpTriageCapacity: d.gpTriageCapacityPerDayPct?.toFixed(2) + '%',
+
+      // Telephony
+      inboundReceived: d.inboundReceived,
+      inboundAnswered: d.inboundAnswered,
+      missedFromQueue: d.missedFromQueue,
+      missedFromQueueExRepeat: d.missedFromQueueExRepeat,
+      missedFromQueueExRepeatPct: d.missedFromQueueExRepeatPct?.toFixed(1) + '%',
+      answeredFromQueue: d.answeredFromQueue,
+      abandonedCalls: d.abandonedCalls,
+      callbacksSuccessful: d.callbacksSuccessful,
+      avgQueueTimeAnswered: d.avgQueueTimeAnswered, // in seconds
+      avgQueueTimeMissed: d.avgQueueTimeMissed, // in seconds
+      avgInboundTalkTime: d.avgInboundTalkTime, // in seconds
+      capitationCallingPerDay: d.capitationCallingPerDay?.toFixed(1) + '%',
+
+      // Ratios & Capacity
+      bookingConversion: d.conversionRatio?.toFixed(2),
+      gpBookingConversion: d.gpConversionRatio?.toFixed(2),
+      extraSlotsPerDay: d.extraSlotsPerDay?.toFixed(1)
     }));
 
     const prompt = `
@@ -1081,15 +1114,13 @@ export default function App() {
         Keep the tone professional, constructive, and specific to NHS Primary Care. Use British English.
     `;
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+    const ai = new GoogleGenAI({ apiKey });
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: prompt,
     });
 
-    if (!response.ok) throw new Error('Failed to generate insights');
-    const result = await response.json();
-    return result.candidates?.[0]?.content?.parts?.[0]?.text;
+    return response.text();
   };
 
   const generateAIInsights = async () => {
@@ -1602,7 +1633,7 @@ export default function App() {
                   <Card className="h-80">
                     <h3 className="font-bold text-slate-700 mb-2">Online Request Rate</h3>
                     <p className="text-xs text-slate-400 mb-4">Requests per 1000 patients per week</p>
-                    <Line data={createChartData('Requests/1000/wk', 'onlineRequestsPer1000', NHS_AQUA)} options={onlineRequestBandOptions} />
+                    <Line data={createChartData('Requests/1000/wk', 'onlineRequestsPer1000', NHS_AQUA, false)} options={onlineRequestBandOptions} />
                   </Card>
                 </div>
 
@@ -1662,7 +1693,7 @@ export default function App() {
                   <h3 className="font-bold text-slate-800 mb-2 text-lg flex items-center gap-2"><Activity className="text-teal-600" size={24} /> Total Clinical Capacity (GP Appointments + Digital Resolves)</h3>
                   <p className="text-sm text-slate-500 mb-4">Includes both face-to-face/telephone appointments AND clinical online requests resolved without booking an appointment.</p>
                   <div className="h-72">
-                    <Line data={createChartData('Total Capacity % (Appts + Digital)', 'gpTriageCapacityPerDayPct', NHS_AQUA, true)} options={gpBandOptions} />
+                    <Line data={createChartData('Total Capacity % (Appts + Digital)', 'gpTriageCapacityPerDayPct', NHS_AQUA, false)} options={gpBandOptions} />
                   </div>
                 </Card>
 
@@ -2215,3 +2246,4 @@ export default function App() {
     </div>
   );
 }
+
