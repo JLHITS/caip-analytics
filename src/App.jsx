@@ -53,7 +53,7 @@ GlobalWorkerOptions.workerSrc = pdfWorker;
 const apiKey = (import.meta && import.meta.env && import.meta.env.VITE_GEMINI_KEY) || "";
 
 // Version Info
-const APP_VERSION = "0.8.7-beta";
+const APP_VERSION = "0.8.8-beta";
 
 // Initialize ChartJS
 ChartJS.register(
