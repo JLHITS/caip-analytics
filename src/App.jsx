@@ -50,10 +50,10 @@ import sampleOct from './assets/sampledata/oct.pdf?url';
 GlobalWorkerOptions.workerSrc = pdfWorker;
 
 // API Key
-const apiKey = (import.meta && import.meta.env && import.meta.env.VITE_GEMINI_KEY) || "";
-
+//const apiKey = (import.meta && import.meta.env && import.meta.env.VITE_GEMINI_KEY) || "";
+const apiKey = "AIzaSyCIcR99Fj8doVXReWRROQhF10DBPBp9nkA";
 // Version Info
-const APP_VERSION = "0.8.5-beta";
+const APP_VERSION = "0.8.6-beta";
 
 // Initialize ChartJS
 ChartJS.register(
@@ -1115,12 +1115,15 @@ export default function App() {
     `;
 
     const ai = new GoogleGenAI({ apiKey });
+
+    // Updated: Properly structured contents for new SDK
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
-      contents: prompt,
+      contents: [{ parts: [{ text: prompt }] }],
     });
 
-    return response.text();
+    // Updated: Correct response parsing for new SDK (no .text() function)
+    return response.candidates?.[0]?.content?.parts?.[0]?.text;
   };
 
   const generateAIInsights = async () => {
