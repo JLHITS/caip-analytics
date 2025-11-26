@@ -1226,8 +1226,8 @@ export default function App() {
       },
       {
         key: 'extraSlotsPerDay',
-        title: 'Extra slots released per day',
-        description: 'Average number of extra slots added daily to meet demand',
+        title: 'Extra slots required per day',
+        description: 'Extra slots required per day over the different months. Sometimes this is minus if meeting capacity',
         format: 'decimal1'
       }
     ];
