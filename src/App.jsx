@@ -1115,12 +1115,27 @@ export default function App() {
     `;
 
     const ai = new GoogleGenAI({ apiKey });
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt,
-    });
+    try {
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: prompt,
+      });
 
-    return response.text();
+      console.log("AI Response:", response); // Debugging
+
+      if (response && typeof response.text === 'function') {
+        return response.text();
+      } else if (response && response.response && typeof response.response.text === 'function') {
+        return response.response.text();
+      } else if (response && response.candidates && response.candidates.length > 0) {
+        return response.candidates[0].content.parts[0].text;
+      } else {
+        throw new Error("Unexpected response structure from AI SDK");
+      }
+    } catch (error) {
+      console.error("AI Generation Error:", error);
+      throw error;
+    }
   };
 
   const generateAIInsights = async () => {
@@ -1168,7 +1183,7 @@ export default function App() {
   const commonOptions = { responsive: true, maintainAspectRatio: false, layout: { padding: 20 }, plugins: { legend: { position: 'bottom' }, tooltip: { backgroundColor: 'rgba(255, 255, 255, 0.9)', titleColor: '#1e293b', bodyColor: '#475569', borderColor: '#e2e8f0', borderWidth: 1, padding: 12, boxPadding: 6 } }, scales: { y: { beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { color: '#64748b' } }, x: { grid: { display: false }, ticks: { color: '#64748b' } } }, elements: { line: { tension: 0.4 }, point: { radius: 4, hoverRadius: 6 } } };
   const pdfChartOptions = { ...commonOptions, animation: false };
 
-  const percentageOptions = { ...commonOptions, scales: { ...commonOptions.scales, y: { ...commonOptions.scales.y, min: 0, ticks: { color: '#64748b', callback: (v) => `${Number(v).toFixed(2)}%` } } } };
+  const percentageOptions = { ...commonOptions, scales: { ...commonOptions.scales, y: { ...commonOptions.scales.y, min: 0, ticks: { color: '#64748b', callback: (v) => `${Number(v).toFixed(2)}% ` } } } };
   const pdfPercentageOptions = { ...percentageOptions, animation: false };
 
   const onlineRequestBandOptions = { ...commonOptions, scales: { ...commonOptions.scales, y: { ...commonOptions.scales.y, min: 0 } }, plugins: { ...commonOptions.plugins, backgroundBands: { bands: [{ from: 0, to: 5.0, color: GP_BAND_RED }, { from: 5.0, to: 100, color: GP_BAND_GREEN }] } } };
@@ -1183,7 +1198,7 @@ export default function App() {
   const pdfRatioOptions = { ...ratioOptions, animation: false };
   const utilizationOptions = { ...percentageOptions, scales: { ...percentageOptions.scales, y: { ...percentageOptions.scales.y, min: 0, max: 100 } } };
   const pdfUtilizationOptions = { ...utilizationOptions, animation: false };
-  const timeOptions = { ...commonOptions, scales: { ...commonOptions.scales, y: { ...commonOptions.scales.y, ticks: { color: '#64748b', callback: (v) => `${Math.floor(v / 60)}m ${v % 60}s` } } } };
+  const timeOptions = { ...commonOptions, scales: { ...commonOptions.scales, y: { ...commonOptions.scales.y, ticks: { color: '#64748b', callback: (v) => `${Math.floor(v / 60)}m ${v % 60} s` } } } };
   const pdfTimeOptions = { ...timeOptions, animation: false };
 
   // Helper for Donut/Pie charts
@@ -1210,7 +1225,7 @@ export default function App() {
       label: label,
       data: displayedData?.map(d => d[dataKey]),
       borderColor: color,
-      backgroundColor: fill ? `${color}20` : 'transparent',
+      backgroundColor: fill ? `${color} 20` : 'transparent',
       fill: fill,
     }]
   });
@@ -1242,7 +1257,7 @@ export default function App() {
     const hasFile = isMulti ? (file && file.length > 0) : !!file;
 
     return (
-      <div className={`mb-6 transition-opacity ${disabled ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
+      <div className={`mb - 6 transition - opacity ${disabled ? 'opacity-50 pointer-events-none' : 'opacity-100'} `}>
         <div className="flex justify-between items-baseline mb-2">
           <label className="block text-sm font-bold text-slate-700">{label}</label>
           {badge && <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full border border-blue-200 font-semibold">{badge}</span>}
@@ -1294,7 +1309,7 @@ export default function App() {
           {/* Upload Area - Always show for multi, or if no file for single */}
           {(isMulti || !hasFile) && (
             <label className="block cursor-pointer group">
-              <div className={`flex flex-col items-center justify-center px-4 py-6 border-2 border-dashed rounded-xl transition-all ${isMulti && hasFile ? 'border-slate-300 bg-slate-50 hover:bg-white' : 'border-slate-300 hover:border-blue-400 hover:bg-blue-50'}`}>
+              <div className={`flex flex - col items - center justify - center px - 4 py - 6 border - 2 border - dashed rounded - xl transition - all ${isMulti && hasFile ? 'border-slate-300 bg-slate-50 hover:bg-white' : 'border-slate-300 hover:border-blue-400 hover:bg-blue-50'} `}>
                 <input type="file" className="hidden" accept={accept} onChange={onChange} multiple={isMulti} disabled={disabled} />
                 <div className="flex flex-col items-center gap-2 text-slate-500 group-hover:text-blue-600 transition-colors">
                   {isMulti && hasFile ? <Plus size={24} /> : <Upload size={24} />}
@@ -1509,9 +1524,9 @@ export default function App() {
               <button
                 onClick={() => processFiles()}
                 disabled={isProcessing || !files.appointments}
-                className={`w-full py-3 rounded-xl font-bold text-white shadow-lg shadow-blue-500/20 transition-all
+                className={`w - full py - 3 rounded - xl font - bold text - white shadow - lg shadow - blue - 500 / 20 transition - all
                    ${isProcessing || !files.appointments ? 'bg-slate-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 hover:scale-[1.02] active:scale-[0.98]'}
-                 `}
+    `}
               >
                 {isProcessing ? 'Analysing Data...' : 'Generate Dashboard'}
               </button>
@@ -1589,7 +1604,7 @@ export default function App() {
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === tab.id ? 'bg-slate-100 text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
+                    className={`flex items - center gap - 2 px - 4 py - 2 rounded - lg text - sm font - medium transition - all ${activeTab === tab.id ? 'bg-slate-100 text-slate-900' : 'text-slate-500 hover:text-slate-700'} `}
                   >
                     <tab.icon size={16} />
                     {tab.label}
@@ -1890,13 +1905,13 @@ export default function App() {
                         { l: 'Answered Queue', k: 'answeredFromQueue', c: 'text-green-600', suffix: '%' },
                         { l: 'Abandoned', k: 'abandonedCalls', c: 'text-amber-600', suffix: '%' },
                         { l: 'Callbacks Success', k: 'callbacksSuccessful', c: 'text-blue-500' },
-                        { l: 'Avg Wait', k: 'avgQueueTimeAnswered', c: 'text-slate-600', fmt: v => `${Math.floor(v / 60)}m ${v % 60}s` }
+                        { l: 'Avg Wait', k: 'avgQueueTimeAnswered', c: 'text-slate-600', fmt: v => `${Math.floor(v / 60)}m ${v % 60} s` }
                       ].map((m, i) => (
                         <Card key={i} className="p-4 border border-slate-200 shadow-none bg-slate-50">
                           <p className="text-xs font-bold text-slate-400 uppercase">{m.l}</p>
-                          <p className={`text-xl font-bold ${m.c} mt-1`}>
+                          <p className={`text - xl font - bold ${m.c} mt - 1`}>
                             {m.fmt ? m.fmt(displayedData[displayedData.length - 1][m.k]) :
-                              `${displayedData[displayedData.length - 1][m.k].toLocaleString()}${m.suffix || ''}`}
+                              `${displayedData[displayedData.length - 1][m.k].toLocaleString()}${m.suffix || ''} `}
                           </p>
                           <p className="text-[10px] text-slate-400">{selectedMonth === 'All' ? 'Latest Month' : selectedMonth}</p>
                         </Card>
@@ -2032,7 +2047,7 @@ export default function App() {
                 <div className="grid grid-cols-3 gap-6">
                   <MetricCard title="Total Appointments" value={displayedData.reduce((a, b) => a + b.totalAppts, 0).toLocaleString()} icon={Calendar} color="text-blue-600" />
                   <MetricCard title="Avg Inbound Calls" value={Math.round(displayedData.reduce((a, b) => a + b.inboundReceived, 0) / (selectedMonth === 'All' ? displayedData.length : 1)).toLocaleString()} icon={Phone} color="text-indigo-600" />
-                  <MetricCard title="Avg DNA Rate" value={`${(displayedData.reduce((a, b) => a + b.allDNAPct, 0) / (selectedMonth === 'All' ? displayedData.length : 1)).toFixed(2)}%`} icon={XCircle} color="text-red-500" />
+                  <MetricCard title="Avg DNA Rate" value={`${(displayedData.reduce((a, b) => a + b.allDNAPct, 0) / (selectedMonth === 'All' ? displayedData.length : 1)).toFixed(2)}% `} icon={XCircle} color="text-red-500" />
                 </div>
                 <div className="h-96 border border-slate-200 rounded-xl p-4"><Line data={createChartData('Total Appointments', 'totalAppts', NHS_BLUE)} options={pdfChartOptions} /></div>
 
@@ -2174,13 +2189,13 @@ export default function App() {
                       { l: 'Answered Queue', k: 'answeredFromQueue', c: 'text-green-600', suffix: '%' },
                       { l: 'Abandoned', k: 'abandonedCalls', c: 'text-amber-600', suffix: '%' },
                       { l: 'Callbacks Success', k: 'callbacksSuccessful', c: 'text-blue-500' },
-                      { l: 'Avg Wait', k: 'avgQueueTimeAnswered', c: 'text-slate-600', fmt: v => `${Math.floor(v / 60)}m ${v % 60}s` }
+                      { l: 'Avg Wait', k: 'avgQueueTimeAnswered', c: 'text-slate-600', fmt: v => `${Math.floor(v / 60)}m ${v % 60} s` }
                     ].map((m, i) => (
                       <Card key={i} className="p-4 border border-slate-200 shadow-none bg-slate-50">
                         <p className="text-xs font-bold text-slate-400 uppercase">{m.l}</p>
-                        <p className={`text-xl font-bold ${m.c} mt-1`}>
+                        <p className={`text - xl font - bold ${m.c} mt - 1`}>
                           {m.fmt ? m.fmt(displayedData[displayedData.length - 1][m.k]) :
-                            `${displayedData[displayedData.length - 1][m.k].toLocaleString()}${m.suffix || ''}`}
+                            `${displayedData[displayedData.length - 1][m.k].toLocaleString()}${m.suffix || ''} `}
                         </p>
                         <p className="text-[10px] text-slate-400">{selectedMonth === 'All' ? 'Latest Month' : selectedMonth}</p>
                       </Card>
