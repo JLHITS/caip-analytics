@@ -1061,7 +1061,7 @@ export default function App() {
 
     const prompt = `
         You are an expert NHS Practice Manager and Data Analyst using CAIP Analytics.
-        Analyze the following monthly performance data.
+        Analyse the following monthly performance data.
         
         Data: ${JSON.stringify(dataSummary)}
 
@@ -1076,11 +1076,12 @@ export default function App() {
             * If **Online Requests** are high but **GP Triage Capacity** is low, suggest: "High digital demand is not being fully captured in clinical workload data."
             * If **Booking Conversion** is low, suggest: "High call volume not converting to appts. Review signposting."
             * If **Utilization** is low (<95%), suggest: "Wasted capacity. Review embargoes."
+		* Also discover your own logic for improvement on some of the metrics based on best practice and research on improving access in GP surgeries in the NHS UK.
 
         Keep the tone professional, constructive, and specific to NHS Primary Care. Use British English.
     `;
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
