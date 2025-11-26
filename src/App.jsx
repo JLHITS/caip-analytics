@@ -18,7 +18,7 @@ import {
   BarChart3, PieChart, ArrowRight, CheckCircle, AlertCircle,
   Menu, X, ChevronDown, HelpCircle, Info, Sparkles, XCircle,
   Download, Loader2, PlayCircle, AlertTriangle, Trash2, Plus, Monitor, User, Search,
-  ArrowUpDown, ArrowUp, ArrowDown
+  ArrowUpDown, ArrowUp, ArrowDown, ChevronUp
 } from 'lucide-react';
 
 // --- PRODUCTION IMPORTS ---
@@ -52,7 +52,7 @@ GlobalWorkerOptions.workerSrc = pdfWorker;
 const apiKey = (import.meta && import.meta.env && import.meta.env.VITE_GEMINI_KEY) || "";
 
 // Version Info
-const APP_VERSION = "0.8.2-beta";
+const APP_VERSION = "0.8.3-beta";
 
 // Initialize ChartJS
 ChartJS.register(
