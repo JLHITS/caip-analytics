@@ -52,7 +52,7 @@ GlobalWorkerOptions.workerSrc = pdfWorker;
 const apiKey = (import.meta && import.meta.env && import.meta.env.VITE_GEMINI_KEY) || "";
 
 // Version Info
-const APP_VERSION = "0.8.3-beta";
+const APP_VERSION = "0.8.4-beta";
 
 // Initialize ChartJS
 ChartJS.register(
@@ -1613,8 +1613,8 @@ export default function App() {
                       columns={[
                         { header: 'Name', accessor: 'name' },
                         { header: 'Appointments', accessor: 'appts', render: (row) => Math.round(row.appts).toLocaleString() },
-                        { header: unusedHeader, accessor: 'unused', render: (row) => Math.round(row.unused).toLocaleString() },
-                        { header: dnaHeader, accessor: 'dna', render: (row) => Math.round(row.dna).toLocaleString() }
+                        { header: unusedHeader, accessor: 'unused', render: (row) => `${Math.round(row.unused).toLocaleString()} (${((row.unused / (row.appts + row.unused || 1)) * 100).toFixed(1)}%)` },
+                        { header: dnaHeader, accessor: 'dna', render: (row) => `${Math.round(row.dna).toLocaleString()} (${((row.dna / (row.appts || 1)) * 100).toFixed(1)}%)` }
                       ]}
                     />
                   )}
@@ -1629,8 +1629,8 @@ export default function App() {
                       columns={[
                         { header: 'Slot Type', accessor: 'name' },
                         { header: 'Appointments', accessor: 'appts', render: (row) => Math.round(row.appts).toLocaleString() },
-                        { header: unusedHeader, accessor: 'unused', render: (row) => Math.round(row.unused).toLocaleString() },
-                        { header: dnaHeader, accessor: 'dna', render: (row) => Math.round(row.dna).toLocaleString() }
+                        { header: unusedHeader, accessor: 'unused', render: (row) => `${Math.round(row.unused).toLocaleString()} (${((row.unused / (row.appts + row.unused || 1)) * 100).toFixed(1)}%)` },
+                        { header: dnaHeader, accessor: 'dna', render: (row) => `${Math.round(row.dna).toLocaleString()} (${((row.dna / (row.appts || 1)) * 100).toFixed(1)}%)` }
                       ]}
                     />
                   )}
@@ -1646,8 +1646,8 @@ export default function App() {
                         { header: 'Name', accessor: 'name' },
                         { header: 'Slot Type', accessor: 'slot', render: (row) => row.slot || '-' },
                         { header: 'Appointments', accessor: 'appts', render: (row) => Math.round(row.appts).toLocaleString() },
-                        { header: unusedHeader, accessor: 'unused', render: (row) => Math.round(row.unused).toLocaleString() },
-                        { header: dnaHeader, accessor: 'dna', render: (row) => Math.round(row.dna).toLocaleString() }
+                        { header: unusedHeader, accessor: 'unused', render: (row) => `${Math.round(row.unused).toLocaleString()} (${((row.unused / (row.appts + row.unused || 1)) * 100).toFixed(1)}%)` },
+                        { header: dnaHeader, accessor: 'dna', render: (row) => `${Math.round(row.dna).toLocaleString()} (${((row.dna / (row.appts || 1)) * 100).toFixed(1)}%)` }
                       ]}
                     />
                   )}
@@ -1722,8 +1722,8 @@ export default function App() {
                       columns={[
                         { header: 'GP Name', accessor: 'name' },
                         { header: 'Appointments', accessor: 'appts', render: (row) => Math.round(row.appts).toLocaleString() },
-                        { header: unusedHeader, accessor: 'unused', render: (row) => Math.round(row.unused).toLocaleString() },
-                        { header: dnaHeader, accessor: 'dna', render: (row) => Math.round(row.dna).toLocaleString() }
+                        { header: unusedHeader, accessor: 'unused', render: (row) => `${Math.round(row.unused).toLocaleString()} (${((row.unused / (row.appts + row.unused || 1)) * 100).toFixed(1)}%)` },
+                        { header: dnaHeader, accessor: 'dna', render: (row) => `${Math.round(row.dna).toLocaleString()} (${((row.dna / (row.appts || 1)) * 100).toFixed(1)}%)` }
                       ]}
                     />
                   )}
@@ -1738,8 +1738,8 @@ export default function App() {
                       columns={[
                         { header: 'Slot Type', accessor: 'name' },
                         { header: 'Appointments', accessor: 'appts', render: (row) => Math.round(row.appts).toLocaleString() },
-                        { header: unusedHeader, accessor: 'unused', render: (row) => Math.round(row.unused).toLocaleString() },
-                        { header: dnaHeader, accessor: 'dna', render: (row) => Math.round(row.dna).toLocaleString() }
+                        { header: unusedHeader, accessor: 'unused', render: (row) => `${Math.round(row.unused).toLocaleString()} (${((row.unused / (row.appts + row.unused || 1)) * 100).toFixed(1)}%)` },
+                        { header: dnaHeader, accessor: 'dna', render: (row) => `${Math.round(row.dna).toLocaleString()} (${((row.dna / (row.appts || 1)) * 100).toFixed(1)}%)` }
                       ]}
                     />
                   )}
@@ -1755,8 +1755,8 @@ export default function App() {
                         { header: 'Name', accessor: 'name' },
                         { header: 'Slot Type', accessor: 'slot', render: (row) => row.slot || '-' },
                         { header: 'Appointments', accessor: 'appts', render: (row) => Math.round(row.appts).toLocaleString() },
-                        { header: unusedHeader, accessor: 'unused', render: (row) => Math.round(row.unused).toLocaleString() },
-                        { header: dnaHeader, accessor: 'dna', render: (row) => Math.round(row.dna).toLocaleString() }
+                        { header: unusedHeader, accessor: 'unused', render: (row) => `${Math.round(row.unused).toLocaleString()} (${((row.unused / (row.appts + row.unused || 1)) * 100).toFixed(1)}%)` },
+                        { header: dnaHeader, accessor: 'dna', render: (row) => `${Math.round(row.dna).toLocaleString()} (${((row.dna / (row.appts || 1)) * 100).toFixed(1)}%)` }
                       ]}
                     />
                   )}
@@ -2011,8 +2011,8 @@ export default function App() {
                     columns={[
                       { header: 'Name', accessor: 'name' },
                       { header: 'Appointments', accessor: 'appts', render: (row) => Math.round(row.appts).toLocaleString() },
-                      { header: unusedHeader, accessor: 'unused', render: (row) => Math.round(row.unused).toLocaleString() },
-                      { header: dnaHeader, accessor: 'dna', render: (row) => Math.round(row.dna).toLocaleString() }
+                      { header: unusedHeader, accessor: 'unused', render: (row) => `${Math.round(row.unused).toLocaleString()} (${((row.unused / (row.appts + row.unused || 1)) * 100).toFixed(1)}%)` },
+                      { header: dnaHeader, accessor: 'dna', render: (row) => `${Math.round(row.dna).toLocaleString()} (${((row.dna / (row.appts || 1)) * 100).toFixed(1)}%)` }
                     ]}
                     isPrint={true}
                   />
@@ -2025,8 +2025,8 @@ export default function App() {
                     columns={[
                       { header: 'Slot Type', accessor: 'name' },
                       { header: 'Appointments', accessor: 'appts', render: (row) => Math.round(row.appts).toLocaleString() },
-                      { header: unusedHeader, accessor: 'unused', render: (row) => Math.round(row.unused).toLocaleString() },
-                      { header: dnaHeader, accessor: 'dna', render: (row) => Math.round(row.dna).toLocaleString() }
+                      { header: unusedHeader, accessor: 'unused', render: (row) => `${Math.round(row.unused).toLocaleString()} (${((row.unused / (row.appts + row.unused || 1)) * 100).toFixed(1)}%)` },
+                      { header: dnaHeader, accessor: 'dna', render: (row) => `${Math.round(row.dna).toLocaleString()} (${((row.dna / (row.appts || 1)) * 100).toFixed(1)}%)` }
                     ]}
                     isPrint={true}
                   />
@@ -2040,8 +2040,8 @@ export default function App() {
                       { header: 'Name', accessor: 'name' },
                       { header: 'Slot Type', accessor: 'slot', render: (row) => row.slot || '-' },
                       { header: 'Appointments', accessor: 'appts', render: (row) => Math.round(row.appts).toLocaleString() },
-                      { header: unusedHeader, accessor: 'unused', render: (row) => Math.round(row.unused).toLocaleString() },
-                      { header: dnaHeader, accessor: 'dna', render: (row) => Math.round(row.dna).toLocaleString() }
+                      { header: unusedHeader, accessor: 'unused', render: (row) => `${Math.round(row.unused).toLocaleString()} (${((row.unused / (row.appts + row.unused || 1)) * 100).toFixed(1)}%)` },
+                      { header: dnaHeader, accessor: 'dna', render: (row) => `${Math.round(row.dna).toLocaleString()} (${((row.dna / (row.appts || 1)) * 100).toFixed(1)}%)` }
                     ]}
                     isPrint={true}
                   />
@@ -2069,8 +2069,8 @@ export default function App() {
                     columns={[
                       { header: 'GP Name', accessor: 'name' },
                       { header: 'Appointments', accessor: 'appts', render: (row) => Math.round(row.appts).toLocaleString() },
-                      { header: unusedHeader, accessor: 'unused', render: (row) => Math.round(row.unused).toLocaleString() },
-                      { header: dnaHeader, accessor: 'dna', render: (row) => Math.round(row.dna).toLocaleString() }
+                      { header: unusedHeader, accessor: 'unused', render: (row) => `${Math.round(row.unused).toLocaleString()} (${((row.unused / (row.appts + row.unused || 1)) * 100).toFixed(1)}%)` },
+                      { header: dnaHeader, accessor: 'dna', render: (row) => `${Math.round(row.dna).toLocaleString()} (${((row.dna / (row.appts || 1)) * 100).toFixed(1)}%)` }
                     ]}
                     isPrint={true}
                   />
@@ -2083,8 +2083,8 @@ export default function App() {
                     columns={[
                       { header: 'Slot Type', accessor: 'name' },
                       { header: 'Appointments', accessor: 'appts', render: (row) => Math.round(row.appts).toLocaleString() },
-                      { header: unusedHeader, accessor: 'unused', render: (row) => Math.round(row.unused).toLocaleString() },
-                      { header: dnaHeader, accessor: 'dna', render: (row) => Math.round(row.dna).toLocaleString() }
+                      { header: unusedHeader, accessor: 'unused', render: (row) => `${Math.round(row.unused).toLocaleString()} (${((row.unused / (row.appts + row.unused || 1)) * 100).toFixed(1)}%)` },
+                      { header: dnaHeader, accessor: 'dna', render: (row) => `${Math.round(row.dna).toLocaleString()} (${((row.dna / (row.appts || 1)) * 100).toFixed(1)}%)` }
                     ]}
                     isPrint={true}
                   />
@@ -2098,8 +2098,8 @@ export default function App() {
                       { header: 'Name', accessor: 'name' },
                       { header: 'Slot Type', accessor: 'slot', render: (row) => row.slot || '-' },
                       { header: 'Appointments', accessor: 'appts', render: (row) => Math.round(row.appts).toLocaleString() },
-                      { header: unusedHeader, accessor: 'unused', render: (row) => Math.round(row.unused).toLocaleString() },
-                      { header: dnaHeader, accessor: 'dna', render: (row) => Math.round(row.dna).toLocaleString() }
+                      { header: unusedHeader, accessor: 'unused', render: (row) => `${Math.round(row.unused).toLocaleString()} (${((row.unused / (row.appts + row.unused || 1)) * 100).toFixed(1)}%)` },
+                      { header: dnaHeader, accessor: 'dna', render: (row) => `${Math.round(row.dna).toLocaleString()} (${((row.dna / (row.appts || 1)) * 100).toFixed(1)}%)` }
                     ]}
                     isPrint={true}
                   />
