@@ -1070,15 +1070,15 @@ export default function App() {
       },
       {
         key: 'gpApptsPerDay',
-        title: 'GP appointments per working day',
-        description: 'Average GP appointments delivered per working day',
-        format: 'decimal1'
+        title: 'Percentage of patient population with GP appointments per working day',
+        description: 'Percentage of patient population with GP appointments per working day so that practices can standardise the number of appointments per population',
+        format: 'percent1'
       },
       {
         key: 'allApptsPerDay',
-        title: 'All appointments per working day',
-        description: 'Average total appointments delivered per working day',
-        format: 'decimal1'
+        title: 'Percentage of patient population with any appointment per working day',
+        description: 'Percentage of patient population with any staff appointment per working day so that practices can standardise the number of appointments per population',
+        format: 'percent1'
       },
       {
         key: 'utilization',
