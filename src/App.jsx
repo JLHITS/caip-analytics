@@ -50,8 +50,8 @@ import sampleOct from './assets/sampledata/oct.pdf?url';
 GlobalWorkerOptions.workerSrc = pdfWorker;
 
 // API Key
-//const apiKey = (import.meta && import.meta.env && import.meta.env.VITE_GEMINI_KEY) || "";
-const apiKey = "AIzaSyCIcR99Fj8doVXReWRROQhF10DBPBp9nkA";
+const apiKey = (import.meta && import.meta.env && import.meta.env.VITE_GEMINI_KEY) || "";
+
 // Version Info
 const APP_VERSION = "0.8.6-beta";
 
@@ -1109,7 +1109,7 @@ export default function App() {
             * If **Online Requests** are high but **GP Triage Capacity** is low, suggest: "High digital demand is not being fully captured in clinical workload data."
             * If **Booking Conversion** is low, suggest: "High call volume not converting to appts. Review signposting."
             * If **Utilization** is low (<95%), suggest: "Wasted capacity. Review embargoes."
-		* Also discover your own logic for improvement on some of the metrics based on best practice and research on improving access in GP surgeries in the NHS UK.
+		* Also disur own logic for improvement on some of the metrics based on best practice and research on improving access in GP surgeries in the NHS UK.
 
         Keep the tone professional, constructive, and specific to NHS Primary Care. Use British English.
     `;
