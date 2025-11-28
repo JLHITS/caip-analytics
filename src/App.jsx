@@ -1744,8 +1744,8 @@ export default function App() {
               {/* 2. Print Report Button */}
               <button
                 onClick={handlePrint}
-                className="flex items-center gap-2 px-6 py-3 bg-white text-slate-600 border border-slate-200 rounded-full hover:bg-slate-50 hover:border-slate-300 hover:text-slate-800 transition-all shadow-sm hover:shadow-md disabled:opacity-70"
-              >
+					className="hidden flex items-center gap-2 px-6 py-3 bg-white text-slate-600 border border-slate-200 rounded-full hover:bg-slate-50 hover:border-slate-300 hover:text-slate-800 transition-all shadow-sm hover:shadow-md disabled:opacity-70"
+				>
                 <Download size={18} />
                 <span className="font-semibold">Print Report</span>
               </button>
