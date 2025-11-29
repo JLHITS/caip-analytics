@@ -1004,18 +1004,20 @@ export default function App() {
       console.log('API Key type:', typeof apiKey, 'Length:', apiKey.length);
       console.log('Model:', geminiModel);
 
-      const genAI = new GoogleGenAI(apiKey);
+      const ai = new GoogleGenAI({ apiKey });
       console.log('✅ GoogleGenAI instance created');
 
-      const model = genAI.getGenerativeModel({ model: geminiModel });
-      console.log('✅ Model instance created');
-
       console.log('🚀 Sending request to Gemini...');
-      const result = await model.generateContent(prompt);
+      const response = await ai.models.generateContent({
+        model: geminiModel,
+        contents: [{ parts: [{ text: prompt }] }],
+      });
       console.log('✅ Received response from Gemini');
 
-      const text = result.response.text();
-      console.log('✅ AI Analysis complete, text length:', text.length);
+      const text = response.candidates?.[0]?.content?.parts?.[0]?.text;
+      console.log('✅ AI Analysis complete, text length:', text ? text.length : 0);
+
+      if (!text) throw new Error('No response generated from AI');
 
       setAiReport(text);
       setIsAiLoading(false);
