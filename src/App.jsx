@@ -741,7 +741,7 @@ export default function App() {
 
     try {
       const genAI = new GoogleGenAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
+      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
       const lastMonth = processedData[processedData.length - 1];
 
