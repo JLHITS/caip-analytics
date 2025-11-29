@@ -83,6 +83,16 @@ GlobalWorkerOptions.workerSrc = pdfWorker;
 const apiKey = (import.meta && import.meta.env && import.meta.env.VITE_GEMINI_KEY) || "";
 const geminiModel = (import.meta && import.meta.env && import.meta.env.VITE_GEMINI_MODEL) || "gemini-2.5-flash";
 
+// Debug: Log API key status (not the actual key for security)
+console.log('🔑 API Key Debug:', {
+  hasImportMeta: !!import.meta,
+  hasEnv: !!(import.meta && import.meta.env),
+  hasViteGeminiKey: !!(import.meta && import.meta.env && import.meta.env.VITE_GEMINI_KEY),
+  apiKeyLength: apiKey ? apiKey.length : 0,
+  apiKeyFirstChars: apiKey ? apiKey.substring(0, 10) + '...' : 'EMPTY',
+  allEnvKeys: import.meta && import.meta.env ? Object.keys(import.meta.env) : []
+});
+
 // Auto-versioning from package.json via Vite
 const APP_VERSION = __APP_VERSION__;
 
@@ -726,12 +736,28 @@ export default function App() {
 
   // AI Analysis Handler - generates insights using Google Gemini
   const runAIAnalysis = async () => {
+    console.log('🤖 AI Analysis Started');
+    console.log('📊 Processed Data:', processedData?.length || 0, 'months');
+    console.log('🔑 API Key at analysis time:', {
+      exists: !!apiKey,
+      length: apiKey ? apiKey.length : 0,
+      firstChars: apiKey ? apiKey.substring(0, 10) + '...' : 'EMPTY',
+      type: typeof apiKey
+    });
+
     if (!processedData || processedData.length === 0) {
+      console.error('❌ No processed data!');
       setAiError("No data to analyze. Please process your files first.");
       return;
     }
 
     if (!apiKey) {
+      console.error('❌ No API key found!');
+      console.error('Environment check:', {
+        hasImportMeta: !!import.meta,
+        hasEnv: !!(import.meta?.env),
+        envKeys: import.meta?.env ? Object.keys(import.meta.env) : []
+      });
       setAiError("Google AI API key not configured. Please set VITE_GEMINI_KEY in your environment.");
       return;
     }
@@ -741,46 +767,265 @@ export default function App() {
     setAiReport(null);
 
     try {
+      console.log('✅ Initializing Google AI with key length:', apiKey.length);
+      // Comprehensive metric definitions with titles and descriptions for AI context
+      const metricDefinitions = [
+        {
+          key: 'workingDays',
+          title: 'Working days',
+          description: 'Clinical working days available in the month',
+          format: 'number'
+        },
+        {
+          key: 'totalAppts',
+          title: 'All appointments delivered',
+          description: 'Total appointments completed across the practice',
+          format: 'number'
+        },
+        {
+          key: 'gpAppts',
+          title: 'GP appointments delivered',
+          description: 'Number of GP-led appointments completed',
+          format: 'number'
+        },
+        {
+          key: 'gpApptsPerDay',
+          title: 'Percentage of patient population with GP appointments per working day',
+          description: 'Percentage of patient population with GP appointments per working day so that practices can standardise the number of appointments per population',
+          format: 'percent1'
+        },
+        {
+          key: 'allApptsPerDay',
+          title: 'Percentage of patient population with any appointment per working day',
+          description: 'Percentage of patient population with any staff appointment per working day so that practices can standardise the number of appointments per population',
+          format: 'percent1'
+        },
+        {
+          key: 'utilization',
+          title: 'Utilisation (all clinicians)',
+          description: 'Percentage of all appointment slots used',
+          format: 'percent1'
+        },
+        {
+          key: 'gpUtilPct',
+          title: 'GP utilisation',
+          description: 'Percentage of GP appointment slots used',
+          format: 'percent1'
+        },
+        {
+          key: 'gpUnusedPct',
+          title: 'Unused GP capacity',
+          description: 'Percentage of GP slots left unused after embargoes and DNA',
+          format: 'percent1'
+        },
+        {
+          key: 'gpDNAPct',
+          title: 'GP DNA rate',
+          description: 'Did-not-attend rate for GP appointments',
+          format: 'percent1'
+        },
+        {
+          key: 'allUnusedPct',
+          title: 'Unused capacity (all clinicians)',
+          description: 'Percentage of all clinician slots left unused',
+          format: 'percent1'
+        },
+        {
+          key: 'allDNAPct',
+          title: 'DNA rate (all clinicians)',
+          description: 'Did-not-attend rate for all clinicians',
+          format: 'percent1'
+        },
+        {
+          key: 'onlineTotal',
+          title: 'Online requests received',
+          description: 'Total online consultation requests submitted',
+          format: 'number'
+        },
+        {
+          key: 'onlineClinicalNoAppt',
+          title: 'Online clinical requests without appointment',
+          description: 'Clinical online requests resolved without booking an appointment',
+          format: 'number'
+        },
+        {
+          key: 'onlineRequestsPer1000',
+          title: 'Online requests per 1,000 patients',
+          description: 'Rate of online requests normalised by practice size',
+          format: 'decimal1'
+        },
+        {
+          key: 'gpTriageCapacityPerDayPct',
+          title: 'Patients with a GP appointment or resolved online request per day (%)',
+          description: 'Percentage of registered patients per working day who either had a GP appointment or had their online request resolved without an appointment',
+          format: 'percent2'
+        },
+        {
+          key: 'inboundReceived',
+          title: 'Inbound calls received',
+          description: 'Total inbound calls presented to the phone system',
+          format: 'number'
+        },
+        {
+          key: 'inboundAnswered',
+          title: 'Inbound calls answered',
+          description: 'Number of inbound calls answered by the team',
+          format: 'number'
+        },
+        {
+          key: 'missedFromQueue',
+          title: 'Calls missed from queue',
+          description: 'Total calls abandoned from the queue',
+          format: 'number'
+        },
+        {
+          key: 'missedFromQueueExRepeat',
+          title: 'Missed calls excluding repeats',
+          description: 'Unique callers who abandoned the queue (excludes repeat callers)',
+          format: 'number'
+        },
+        {
+          key: 'missedFromQueueExRepeatPct',
+          title: 'Missed call rate (unique)',
+          description: 'Percentage of unique callers who abandoned the queue',
+          format: 'percent1'
+        },
+        {
+          key: 'answeredFromQueue',
+          title: 'Calls answered from queue',
+          description: 'Calls successfully answered after waiting in queue',
+          format: 'number'
+        },
+        {
+          key: 'abandonedCalls',
+          title: 'Callback abandoned',
+          description: 'Callbacks that were not connected after being requested',
+          format: 'number'
+        },
+        {
+          key: 'callbacksSuccessful',
+          title: 'Callbacks successful',
+          description: 'Callbacks that successfully connected to a patient',
+          format: 'number'
+        },
+        {
+          key: 'avgQueueTimeAnswered',
+          title: 'Average queue time (answered)',
+          description: 'Average seconds callers waited before being answered',
+          format: 'seconds'
+        },
+        {
+          key: 'avgQueueTimeMissed',
+          title: 'Average queue time (missed)',
+          description: 'Average seconds callers waited before abandoning',
+          format: 'seconds'
+        },
+        {
+          key: 'avgInboundTalkTime',
+          title: 'Average inbound talk time',
+          description: 'Average call handling time for inbound calls (seconds)',
+          format: 'seconds'
+        },
+        {
+          key: 'capitationCallingPerDay',
+          title: 'Daily call volume per 1,000 patients',
+          description: 'Average daily inbound calls per 1,000 registered patients',
+          format: 'percent1'
+        },
+        {
+          key: 'gpBookConv',
+          title: 'Booking conversion (GP)',
+          description: 'Ratio of calls that resulted in a GP appointment booking',
+          format: 'decimal2'
+        },
+        {
+          key: 'extraSlots',
+          title: 'Extra slots required per day',
+          description: 'Extra slots required per day over the different months. Sometimes this is minus if meeting capacity',
+          format: 'decimal1'
+        }
+      ];
+
+      const formatMetricValue = (value, format) => {
+        if (value === undefined || value === null || Number.isNaN(value)) return null;
+
+        switch (format) {
+          case 'percent1':
+            return `${Number(value).toFixed(1)}%`;
+          case 'percent2':
+            return `${Number(value).toFixed(2)}%`;
+          case 'decimal2':
+            return Number(value).toFixed(2);
+          case 'decimal1':
+            return Number(value).toFixed(1);
+          case 'seconds':
+            return `${Number(value).toFixed(0)} seconds`;
+          default:
+            return Number(value);
+        }
+      };
+
+      const dataSummary = processedData.map(d => ({
+        month: d.month,
+        metrics: metricDefinitions
+          .map(metric => ({
+            title: metric.title,
+            description: metric.description,
+            value: formatMetricValue(d[metric.key], metric.format)
+          }))
+          .filter(metric => metric.value !== null)
+      }));
+
+      const prompt = `
+        You are an expert NHS Practice Manager and Data Analyst using CAIP Analytics.
+        Analyse the following monthly performance data for ${config.surgeryName || 'this practice'} (Population: ${config.population}).
+
+        Each metric includes a title and description to avoid ambiguity. Base all interpretations on these fields, not the raw field names.
+
+        Data (month by month): ${JSON.stringify(dataSummary, null, 2)}
+
+        Please provide a concise report in exactly these two sections using bullet points:
+
+        ### ✅ Positives
+        * Highlight metrics that are performing well.
+
+        ### 🚀 Room for Improvement & Actions
+        * Identify specific issues.
+        * Logic:
+            * If **Online Requests** are high but **Patients with a GP appointment or resolved online request per day (%)** is low, suggest: "High digital demand is not being fully captured in clinical workload data."
+            * If **Booking Conversion** is low, suggest: "High call volume not converting to appts. Review signposting."
+            * If **Utilization** is low (<95%), suggest: "Wasted capacity. Review embargoes."
+            * Apply additional best-practice logic from NHS UK access improvement guidance when proposing actions.
+
+        Keep the tone professional, constructive, and specific to NHS Primary Care. Use British English.
+      `;
+
+      console.log('🔧 About to initialize GoogleGenAI...');
+      console.log('API Key type:', typeof apiKey, 'Length:', apiKey.length);
+      console.log('Model:', geminiModel);
+
       const genAI = new GoogleGenAI(apiKey);
+      console.log('✅ GoogleGenAI instance created');
+
       const model = genAI.getGenerativeModel({ model: geminiModel });
+      console.log('✅ Model instance created');
 
-      const lastMonth = processedData[processedData.length - 1];
-
-      const dataStr = `Practice: ${config.surgeryName || 'Unknown'}
-Population: ${config.population}
-Latest Month: ${lastMonth.month}
-Total Appointments: ${lastMonth.totalAppts}
-GP Appointments: ${Math.round(lastMonth.gpAppts)}
-GP Appointments per working day: ${(lastMonth.gpAppts / lastMonth.workingDays).toFixed(1)}
-GP Triage Capacity (% pop per day): ${lastMonth.gpTriageCapacityPerDayPct.toFixed(2)}%
-GP Utilization: ${lastMonth.gpUtilPct.toFixed(1)}%
-GP Booking Conversion: ${lastMonth.gpBookConv.toFixed(2)}
-GP DNA Rate: ${lastMonth.gpDNAPct.toFixed(1)}%
-GP Unused Slot Rate: ${lastMonth.gpUnusedPct.toFixed(1)}%
-Extra Slots Needed Per Day: ${lastMonth.extraSlots.toFixed(1)}
-Inbound Calls: ${lastMonth.inboundTotal}
-Calls Answered: ${lastMonth.inboundAnswered}
-Missed from Queue: ${lastMonth.missedFromQueue}`;
-
-      const prompt = `You are an NHS primary care access improvement analyst. Analyze this practice data and provide actionable insights.
-
-${dataStr}
-
-Provide a structured report with:
-## Positives
-- List 2-3 strong points
-
-## Room for Improvement
-- List 2-3 areas to work on with specific evidence-based recommendations following NHS UK access improvement guidance
-
-Keep it concise (max 200 words) and professional. Use markdown formatting.`;
-
+      console.log('🚀 Sending request to Gemini...');
       const result = await model.generateContent(prompt);
+      console.log('✅ Received response from Gemini');
+
       const text = result.response.text();
+      console.log('✅ AI Analysis complete, text length:', text.length);
+
       setAiReport(text);
       setIsAiLoading(false);
     } catch (err) {
-      console.error("AI Error", err);
+      console.error("❌ AI Error Details:", {
+        message: err.message,
+        stack: err.stack,
+        name: err.name,
+        fullError: err
+      });
       setAiError(`AI analysis failed: ${err.message}`);
       setIsAiLoading(false);
     }
