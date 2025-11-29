@@ -27,14 +27,22 @@ export const calculateLinearForecast = (dataPoints, periodsToForecast = 2) => {
 };
 
 // Generate next N month names from a given month
-// Format: "MMM YYYY" (e.g., "Jan 2024")
+// Format: "MMM-YY" (e.g., "Jan-25") for input and output
 export const getNextMonthNames = (lastMonthStr, count) => {
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  const date = new Date(lastMonthStr);
-  if (isNaN(date.getTime())) return Array(count).fill('Future');
 
-  let currentMonthIndex = date.getMonth();
-  let currentYear = date.getFullYear();
+  // Parse "MMM-YY" format (e.g., "Aug-25")
+  const parts = lastMonthStr.split('-');
+  if (parts.length !== 2) return Array(count).fill('Future');
+
+  const monthName = parts[0];
+  const yearShort = parts[1];
+
+  let currentMonthIndex = months.indexOf(monthName);
+  if (currentMonthIndex === -1) return Array(count).fill('Future');
+
+  // Convert 2-digit year to 4-digit (assuming 2000s)
+  let currentYear = 2000 + parseInt(yearShort, 10);
 
   const result = [];
   for (let i = 0; i < count; i++) {
@@ -43,7 +51,8 @@ export const getNextMonthNames = (lastMonthStr, count) => {
       currentMonthIndex = 0;
       currentYear++;
     }
-    result.push(`${months[currentMonthIndex]} ${currentYear}`);
+    // Return in same "MMM-YY" format
+    result.push(`${months[currentMonthIndex]}-${String(currentYear).slice(-2)}`);
   }
   return result;
 };

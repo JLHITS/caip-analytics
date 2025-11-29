@@ -83,16 +83,6 @@ GlobalWorkerOptions.workerSrc = pdfWorker;
 const apiKey = (import.meta && import.meta.env && import.meta.env.VITE_GEMINI_KEY) || "";
 const geminiModel = (import.meta && import.meta.env && import.meta.env.VITE_GEMINI_MODEL) || "gemini-2.5-flash";
 
-// Debug: Log API key status (not the actual key for security)
-console.log('🔑 API Key Debug:', {
-  hasImportMeta: !!import.meta,
-  hasEnv: !!(import.meta && import.meta.env),
-  hasViteGeminiKey: !!(import.meta && import.meta.env && import.meta.env.VITE_GEMINI_KEY),
-  apiKeyLength: apiKey ? apiKey.length : 0,
-  apiKeyFirstChars: apiKey ? apiKey.substring(0, 10) + '...' : 'EMPTY',
-  allEnvKeys: import.meta && import.meta.env ? Object.keys(import.meta.env) : []
-});
-
 // Auto-versioning from package.json via Vite
 const APP_VERSION = __APP_VERSION__;
 
@@ -737,28 +727,12 @@ export default function App() {
 
   // AI Analysis Handler - generates insights using Google Gemini
   const runAIAnalysis = async () => {
-    console.log('🤖 AI Analysis Started');
-    console.log('📊 Processed Data:', processedData?.length || 0, 'months');
-    console.log('🔑 API Key at analysis time:', {
-      exists: !!apiKey,
-      length: apiKey ? apiKey.length : 0,
-      firstChars: apiKey ? apiKey.substring(0, 10) + '...' : 'EMPTY',
-      type: typeof apiKey
-    });
-
     if (!processedData || processedData.length === 0) {
-      console.error('❌ No processed data!');
       setAiError("No data to analyze. Please process your files first.");
       return;
     }
 
     if (!apiKey) {
-      console.error('❌ No API key found!');
-      console.error('Environment check:', {
-        hasImportMeta: !!import.meta,
-        hasEnv: !!(import.meta?.env),
-        envKeys: import.meta?.env ? Object.keys(import.meta.env) : []
-      });
       setAiError("Google AI API key not configured. Please set VITE_GEMINI_KEY in your environment.");
       return;
     }
@@ -768,7 +742,6 @@ export default function App() {
     setAiReport(null);
 
     try {
-      console.log('✅ Initializing Google AI with key length:', apiKey.length);
       // Comprehensive metric definitions with titles and descriptions for AI context
       const metricDefinitions = [
         {
@@ -1003,34 +976,20 @@ export default function App() {
         Keep the tone professional, constructive, and specific to NHS Primary Care. Use British English.
       `;
 
-      console.log('🔧 About to initialize GoogleGenAI...');
-      console.log('API Key type:', typeof apiKey, 'Length:', apiKey.length);
-      console.log('Model:', geminiModel);
-
       const ai = new GoogleGenAI({ apiKey });
-      console.log('✅ GoogleGenAI instance created');
-
-      console.log('🚀 Sending request to Gemini...');
       const response = await ai.models.generateContent({
         model: geminiModel,
         contents: [{ parts: [{ text: prompt }] }],
       });
-      console.log('✅ Received response from Gemini');
 
       const text = response.candidates?.[0]?.content?.parts?.[0]?.text;
-      console.log('✅ AI Analysis complete, text length:', text ? text.length : 0);
 
       if (!text) throw new Error('No response generated from AI');
 
       setAiReport(text);
       setIsAiLoading(false);
     } catch (err) {
-      console.error("❌ AI Error Details:", {
-        message: err.message,
-        stack: err.stack,
-        name: err.name,
-        fullError: err
-      });
+      console.error("AI Error:", err.message);
       setAiError(`AI analysis failed: ${err.message}`);
       setIsAiLoading(false);
     }
@@ -1776,6 +1735,7 @@ export default function App() {
                   </Card>
                   <Card className="h-64">
                     <h3 className="font-bold text-slate-700 mb-2 text-sm uppercase">GP Appointments</h3>
+                    <p className="text-xs text-slate-400 mb-4">Total GP appointments</p>
                     <div className="h-40">
                       <Bar data={{
                         labels: displayedData.map(d => d.month),
@@ -1840,7 +1800,11 @@ export default function App() {
             {/* NEW ONLINE TAB */}
             {activeTab === 'online' && onlineStats && (
               <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                  <Card className="p-4 flex flex-col justify-between">
+                    <p className="text-xs font-bold text-slate-400 uppercase">Total Online Requests</p>
+                    <h3 className="text-2xl font-bold text-teal-600">{displayedData.reduce((a, b) => a + (b.onlineTotal || 0), 0).toLocaleString()}</h3>
+                  </Card>
                   <Card className="p-4 flex flex-col justify-between">
                     <p className="text-xs font-bold text-slate-400 uppercase">Offered/Booked Appt</p>
                     <h3 className="text-2xl font-bold text-blue-600">{onlineStats.totalOfferedOrBooked.toLocaleString()}</h3>
@@ -1867,25 +1831,31 @@ export default function App() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <Card className="h-64">
+                  <Card>
                     <h3 className="font-bold text-slate-700 mb-4">Request Type</h3>
-                    <div className="h-48 relative">
+                    <div className="h-56 relative flex items-center justify-center">
                       <Doughnut data={createDonutData(onlineStats.typeBreakdown, [NHS_BLUE, NHS_AMBER])} options={donutOptions} />
                     </div>
                   </Card>
-                  <Card className="h-64">
+                  <Card>
                     <h3 className="font-bold text-slate-700 mb-4">Access Method</h3>
-                    <div className="h-48 relative">
+                    <div className="h-56 relative flex items-center justify-center">
                       <Doughnut data={createDonutData(onlineStats.accessMethod, [NHS_GREEN, NHS_PURPLE, NHS_AQUA])} options={donutOptions} />
                     </div>
                   </Card>
-                  <Card className="h-64">
+                  <Card>
                     <h3 className="font-bold text-slate-700 mb-4">Patient Sex</h3>
-                    <div className="h-48 relative">
+                    <div className="h-56 relative flex items-center justify-center">
                       <Doughnut data={createDonutData(onlineStats.sexSplit, [NHS_BLUE, NHS_PINK])} options={donutOptions} />
                     </div>
                   </Card>
                 </div>
+
+                <Card className="h-80">
+                  <h3 className="font-bold text-slate-700 mb-2">Online Request Rate</h3>
+                  <p className="text-xs text-slate-400 mb-4">Requests per 1000 patients per week</p>
+                  <Line data={createChartData('Requests/1000/wk', 'onlineRequestsPer1000', NHS_AQUA, false)} options={onlineRequestBandOptions} />
+                </Card>
 
                 <Card className="h-96">
                   <h3 className="font-bold text-slate-800 mb-4">Outcome Breakdown</h3>

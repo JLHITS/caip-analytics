@@ -5,7 +5,7 @@ import { GP_BAND_RED, GP_BAND_AMBER, GP_BAND_GREEN, GP_BAND_BLUE } from './color
 export const commonOptions = {
   responsive: true,
   maintainAspectRatio: false,
-  layout: { padding: 20 },
+  layout: { padding: { top: 20, right: 20, bottom: 30, left: 20 } },
   plugins: {
     legend: { position: 'bottom' },
     tooltip: {
