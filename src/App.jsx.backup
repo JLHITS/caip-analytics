@@ -22,49 +22,22 @@ import {
   ArrowUpDown, ArrowUp, ArrowDown, ChevronUp
 } from 'lucide-react';
 
-// PDF.js setup
-import { GlobalWorkerOptions } from 'pdfjs-dist';
+// --- PRODUCTION IMPORTS ---
+import Papa from 'papaparse';
+
+// PDF.js v5+ Import Strategy for Vite
+import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
+
+// Import the worker specifically as a URL so Vite bundles it correctly
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
-// Component imports
-import Card from './components/ui/Card';
-import MetricCard from './components/ui/MetricCard';
-import SectionHeader from './components/ui/SectionHeader';
-import Accordion from './components/ui/Accordion';
-import SortableTable from './components/ui/SortableTable';
-import FileInput from './components/ui/FileInput';
-import DisclaimerNotice from './components/ui/DisclaimerNotice';
-import SimpleMarkdown from './components/markdown/SimpleMarkdown';
-import DataProcessingModal from './components/modals/DataProcessingModal';
-import ResetConfirmationModal from './components/modals/ResetConfirmationModal';
-import AIConsentModal from './components/modals/AIConsentModal';
-
-// Utility imports
-import { calculateLinearForecast, getNextMonthNames, isGP } from './utils/calculations';
-import { parseCSV, extractTextFromPDF } from './utils/parsers';
-import { validateHeaders } from './utils/validators';
-
-// Constants imports
-import {
-  NHS_BLUE, NHS_DARK_BLUE, NHS_GREEN, NHS_RED, NHS_GREY, NHS_AMBER,
-  NHS_PURPLE, NHS_AQUA, NHS_PINK, GP_BAND_BLUE, GP_BAND_GREEN,
-  GP_BAND_AMBER, GP_BAND_RED
-} from './constants/colors';
-import { GP_PERFORMANCE_THRESHOLDS } from './constants/metrics';
-import {
-  commonOptions, percentageOptions, gpBandOptions, onlineRequestBandOptions,
-  stackedPercentageOptions, ratioOptions, utilizationOptions, timeOptions,
-  donutOptions,
-  pdfChartOptions, pdfPercentageOptions, pdfGpBandOptions, pdfStackedPercentageOptions,
-  pdfRatioOptions, pdfUtilizationOptions, pdfTimeOptions
-} from './constants/chartConfigs';
-
-// Asset imports
+// --- ASSET IMPORTS ---
 import logo from './assets/logo.png';
 import rushcliffeLogo from './assets/rushcliffe.png';
 import nottsWestLogo from './assets/nottswest.png';
+import dataProcessingImage from './assets/dataprocessing.png';
 
-// Sample data imports
+// --- SAMPLE DATA IMPORTS ---
 import sampleAppt from './assets/sampledata/AppointmentReport.csv?url';
 import sampleDNA from './assets/sampledata/DNA.csv?url';
 import sampleUnused from './assets/sampledata/Unused.csv?url';
@@ -73,20 +46,16 @@ import sampleAug from './assets/sampledata/aug.pdf?url';
 import sampleSep from './assets/sampledata/sep.pdf?url';
 import sampleOct from './assets/sampledata/oct.pdf?url';
 
-// Print styles
-import './styles/print.css';
-
-// Configure PDF.js worker
+// Set the worker source
 GlobalWorkerOptions.workerSrc = pdfWorker;
 
-// API Key for Google Gemini
+// API Key
 const apiKey = (import.meta && import.meta.env && import.meta.env.VITE_GEMINI_KEY) || "";
 
-// Auto-versioning from package.json via Vite
-const APP_VERSION = __APP_VERSION__;
+// Version Info
+const APP_VERSION = "0.8.9-beta";
 
-// Register ChartJS components and custom backgroundBands plugin
-// backgroundBands plugin draws colored performance zones behind GP metrics charts
+// Initialize ChartJS
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -117,12 +86,319 @@ ChartJS.register(
   }
 );
 
+const NHS_BLUE = '#005EB8';
+const NHS_DARK_BLUE = '#003087';
+const NHS_GREEN = '#009639';
+const NHS_RED = '#DA291C';
+const NHS_GREY = '#425563';
+const NHS_AMBER = '#ED8B00';
+const NHS_PURPLE = '#330072';
+const NHS_AQUA = '#00A9CE';
+const NHS_PINK = '#AE2573';
+const GP_BAND_BLUE = '#005EB820';
+const GP_BAND_GREEN = '#00963920';
+const GP_BAND_AMBER = '#ED8B0020';
+const GP_BAND_RED = '#DA291C20';
+
+// --- FORECASTING HELPER (Linear Regression) ---
+const calculateLinearForecast = (dataPoints, periodsToForecast = 2) => {
+  if (!dataPoints || dataPoints.length < 3) return [];
+
+  const n = dataPoints.length;
+  let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+
+  dataPoints.forEach((point, i) => {
+    sumX += i;
+    sumY += point;
+    sumXY += i * point;
+    sumXX += i * i;
+  });
+
+  const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+  const intercept = (sumY - slope * sumX) / n;
+
+  const forecast = [];
+  for (let i = 1; i <= periodsToForecast; i++) {
+    const nextIndex = n - 1 + i;
+    const predictedValue = slope * nextIndex + intercept;
+    forecast.push(Math.max(0, Math.round(predictedValue)));
+  }
+  return forecast;
+};
+
+const getNextMonthNames = (lastMonthStr, count) => {
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const date = new Date(lastMonthStr);
+  if (isNaN(date.getTime())) return Array(count).fill('Future');
+
+  let currentMonthIndex = date.getMonth();
+  let currentYear = date.getFullYear();
+
+  const result = [];
+  for (let i = 0; i < count; i++) {
+    currentMonthIndex++;
+    if (currentMonthIndex > 11) {
+      currentMonthIndex = 0;
+      currentYear++;
+    }
+    result.push(`${months[currentMonthIndex]} ${currentYear}`);
+  }
+  return result;
+};
+
+// --- UI COMPONENTS ---
+
+const Card = ({ children, className = '' }) => (
+  <div className={`bg-white/90 backdrop-blur-sm rounded-2xl shadow-sm border border-slate-200 p-6 transition-all hover:shadow-md ${className}`}>
+    {children}
+  </div>
+);
+
+const MetricCard = ({ title, value, subtext, icon: Icon, color = 'text-slate-700' }) => (
+  <Card className="flex flex-col justify-between h-full">
+    <div className="flex justify-between items-start mb-4">
+      <div>
+        <p className="text-sm font-medium text-slate-500 uppercase tracking-wider">{title}</p>
+        <h3 className={`text-2xl font-bold mt-1 ${color}`}>{value}</h3>
+      </div>
+      <div className={`p-3 rounded-xl bg-slate-50 ${color}`}>
+        {Icon && <Icon size={24} />}
+      </div>
+    </div>
+    {subtext && <p className="text-xs text-slate-400 mt-2">{subtext}</p>}
+  </Card>
+);
+
+const SectionHeader = ({ title, subtitle }) => (
+  <div className="mb-6">
+    <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+      {title}
+    </h2>
+    {subtitle && <p className="text-slate-500 text-sm mt-1">{subtitle}</p>}
+  </div>
+);
+
+const Accordion = ({ title, children, defaultOpen = false, icon: Icon }) => {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+  return (
+    <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm mb-4">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center justify-between p-4 bg-slate-50 hover:bg-slate-100 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          {Icon && <Icon size={20} className="text-slate-500" />}
+          <span className="font-bold text-slate-700">{title}</span>
+        </div>
+        {isOpen ? <ChevronUp size={20} className="text-slate-400" /> : <ChevronDown size={20} className="text-slate-400" />}
+      </button>
+      {isOpen && (
+        <div className="p-4 border-t border-slate-200 animate-in slide-in-from-top-2 duration-200 bg-white">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const SortableTable = ({ data, columns, isPrint = false, searchPlaceholder = "Search..." }) => {
+  const [search, setSearch] = useState('');
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'desc' });
+
+  const filteredData = useMemo(() => {
+    if (!search) return data;
+    return data.filter(row =>
+      Object.values(row).some(val =>
+        String(val).toLowerCase().includes(search.toLowerCase())
+      )
+    );
+  }, [data, search]);
+
+  const sortedData = useMemo(() => {
+    let sortableItems = [...filteredData];
+    if (sortConfig.key !== null) {
+      sortableItems.sort((a, b) => {
+        const aVal = a[sortConfig.key];
+        const bVal = b[sortConfig.key];
+
+        if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+    return sortableItems;
+  }, [filteredData, sortConfig]);
+
+  const requestSort = (key) => {
+    let direction = 'desc';
+    if (sortConfig.key === key && sortConfig.direction === 'desc') {
+      direction = 'asc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const displayData = isPrint ? sortedData : sortedData.slice(0, 50);
+
+  return (
+    <div>
+      {!isPrint && (
+        <div className="mb-4 relative">
+          <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
+          <input
+            type="text"
+            placeholder={searchPlaceholder}
+            className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+      )}
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm text-left text-slate-600">
+          <thead className="bg-slate-50 text-slate-700 uppercase font-bold text-xs">
+            <tr>
+              {columns.map((col, i) => (
+                <th
+                  key={i}
+                  className="px-4 py-3 cursor-pointer hover:bg-slate-100 transition-colors select-none group"
+                  onClick={() => requestSort(col.accessor)}
+                >
+                  <div className="flex items-center gap-1">
+                    {col.header}
+                    {sortConfig.key === col.accessor ? (
+                      sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-blue-600" /> : <ArrowDown size={14} className="text-blue-600" />
+                    ) : (
+                      <ArrowUpDown size={14} className="text-slate-300 group-hover:text-slate-400" />
+                    )}
+                  </div>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {displayData.map((row, i) => (
+              <tr key={i} className="hover:bg-slate-50 transition-colors">
+                {columns.map((col, j) => (
+                  <td key={j} className="px-4 py-3 font-medium">
+                    {col.render ? col.render(row) : row[col.accessor]}
+                  </td>
+                ))}
+              </tr>
+            ))}
+            {sortedData.length === 0 && (
+              <tr><td colSpan={columns.length} className="p-4 text-center text-slate-400">No matching records found</td></tr>
+            )}
+          </tbody>
+        </table>
+        {!isPrint && sortedData.length > 50 && <p className="text-xs text-slate-400 text-center mt-2">Showing top 50 matches (sort to see more)</p>}
+      </div>
+    </div>
+  );
+};
+
+
+// --- Custom Markdown Renderer Component ---
+const SimpleMarkdown = ({ text }) => {
+  if (!text) return null;
+
+  const parseBold = (line) => {
+    const parts = line.split(/(\*\*.*?\*\*|\*.*?\*)/g);
+    return parts.map((part, i) => {
+      if ((part.startsWith('**') && part.endsWith('**')) || (part.startsWith('*') && part.endsWith('*'))) {
+        const clean = part.replace(/^[*]+|[*]+$/g, '');
+        return <strong key={i} className="font-bold text-indigo-900">{clean}</strong>;
+      }
+      return part;
+    });
+  };
+
+  return (
+    <div className="space-y-3 text-slate-700">
+      {text.split('\n').map((line, index) => {
+        const trimmed = line.trim();
+        if (!trimmed) return null;
+
+        if (trimmed.startsWith('###') || trimmed.startsWith('##')) {
+          const cleanText = trimmed.replace(/^#+\s*/, '');
+          return <h3 key={index} className="text-lg font-bold text-indigo-800 mt-6 mb-2 border-b border-indigo-100 pb-1">{cleanText}</h3>;
+        }
+
+        if (trimmed.startsWith('* ') || trimmed.startsWith('- ')) {
+          return (
+            <div key={index} className="flex items-start gap-2 ml-2">
+              <span className="text-indigo-500 mt-1.5">•</span>
+              <p className="flex-1">{parseBold(trimmed.replace(/^[*-]\s*/, ''))}</p>
+            </div>
+          );
+        }
+
+        return <p key={index} className="leading-relaxed">{parseBold(trimmed)}</p>;
+      })}
+    </div>
+  );
+};
+
+const DataProcessingModal = ({ isOpen, onClose }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
+      <div className="relative bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-auto animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+        <div className="sticky top-0 z-10 flex items-center justify-between p-4 border-b border-slate-100 bg-white/80 backdrop-blur-md">
+          <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+            <Sparkles className="text-blue-600" size={20} />
+            Data Processing Workflow
+          </h3>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-500 hover:text-slate-700">
+            <XCircle size={24} />
+          </button>
+        </div>
+        <div className="p-6 bg-slate-50 flex justify-center">
+          <img src={dataProcessingImage} alt="Data Processing Workflow" className="rounded-xl shadow-sm border border-slate-200 max-w-full h-auto" />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const ResetConfirmationModal = ({ isOpen, onClose, onConfirm }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
+      <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center gap-3 mb-4 text-amber-600">
+          <AlertTriangle size={28} />
+          <h3 className="text-xl font-bold text-slate-800">Reset Dashboard?</h3>
+        </div>
+        <p className="text-slate-600 mb-6">
+          Are you sure you want to clear all data and return to the start? This action cannot be undone.
+        </p>
+        <div className="flex justify-end gap-3">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-slate-600 font-medium hover:bg-slate-100 rounded-lg transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="px-4 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition-colors shadow-sm"
+          >
+            Yes, Reset Everything
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function App() {
-  // Application state management
+  // --- State ---
   const [config, setConfig] = useState({
     surgeryName: '',
     population: 10000,
-    analyseTelephony: true,
+    analyseTelephony: true, // Renaming logically below to useTelephony for internal clarity if needed, but keeping key for compat
     useTelephony: true,
     useOnline: true,
   });
@@ -139,7 +415,8 @@ export default function App() {
   const [rawStaffData, setRawStaffData] = useState([]);
   const [rawSlotData, setRawSlotData] = useState([]);
   const [rawCombinedData, setRawCombinedData] = useState([]);
-  const [rawOnlineData, setRawOnlineData] = useState([]);
+  const [rawOnlineData, setRawOnlineData] = useState([]); // Store raw online data for dynamic filtering
+  // const [onlineStats, setOnlineStats] = useState(null); // REMOVED: Now derived
   const [forecastData, setForecastData] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState(null);
@@ -151,9 +428,7 @@ export default function App() {
   const [aiError, setAiError] = useState(null);
   const [showProcessingInfo, setShowProcessingInfo] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
-  const [showAIConsent, setShowAIConsent] = useState(false);
 
-  // Set document title and favicon on mount
   useEffect(() => {
     document.title = "CAIP Analytics";
     const link = document.querySelector("link[rel~='icon']");
@@ -167,7 +442,46 @@ export default function App() {
     }
   }, []);
 
-  // Load example/sample data for demonstration
+  // --- PARSERS ---
+
+  const parseCSV = (file) => {
+    return new Promise((resolve, reject) => {
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        dynamicTyping: false,
+        complete: (results) => resolve(results.data),
+        error: (err) => reject(err),
+      });
+    });
+  };
+
+  const extractTextFromPDF = async (file) => {
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await getDocument({ data: arrayBuffer }).promise;
+      let fullText = '';
+
+      if (pdf.numPages === 0) throw new Error("PDF has no pages.");
+
+      const maxPages = Math.min(pdf.numPages, 3);
+      for (let i = 1; i <= maxPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        if (!textContent.items.length) continue;
+        const pageText = textContent.items.map((item) => item.str).join(' ');
+        fullText += ` --- PAGE ${i} --- \n ${pageText}`;
+      }
+
+      if (!fullText.trim()) throw new Error("No text found in PDF (it might be an image scan).");
+      return fullText;
+    } catch (e) {
+      console.error("PDF Parse Error", e);
+      throw new Error(`Error reading ${file.name}: ${e.message}`);
+    }
+  };
+
+  // --- DATA LOADERS ---
   const loadExampleData = async () => {
     setIsProcessing(true);
     setError(null);
@@ -221,8 +535,24 @@ export default function App() {
     }
   };
 
-  // Main data processing function
-  // Processes uploaded CSV and PDF files to generate dashboard metrics
+  const validateHeaders = (data, requiredColumns, fileName, forbiddenColumns = []) => {
+    if (!data || data.length === 0) {
+      throw new Error(`The file "${fileName}" appears to be empty.`);
+    }
+    const headers = Object.keys(data[0]);
+
+    const missing = requiredColumns.filter(col => !headers.includes(col));
+    if (missing.length > 0) {
+      throw new Error(`The file "${fileName}" is missing required columns: ${missing.join(', ')}.`);
+    }
+
+    const foundForbidden = forbiddenColumns.filter(col => headers.some(h => h.toLowerCase().includes(col.toLowerCase())));
+    if (foundForbidden.length > 0) {
+      throw new Error(`PRIVACY ERROR: The file "${fileName}" contains disallowed columns: ${foundForbidden.join(', ')}. Please remove patient identifiable data.`);
+    }
+  };
+
+  // --- Main Processing Logic ---
   const processFiles = async (customFiles = null, customConfig = null) => {
     setIsProcessing(true);
     setError(null);
@@ -236,211 +566,168 @@ export default function App() {
     const filesToProcess = customFiles || files;
     const configToUse = customConfig || config;
 
-    try {
-      if (!filesToProcess.appointments) {
-        throw new Error('Please upload an Appointments CSV file.');
-      }
+    let globalDNACount = 0;
+    let globalGPDNACount = 0;
+    let globalUnusedCount = 0;
+    let globalGPUnusedCount = 0;
 
-      // Parse CSV files
+    try {
+      if (!filesToProcess.appointments) throw new Error("Appointment CSV is required");
+
       const apptData = await parseCSV(filesToProcess.appointments);
       const dnaData = filesToProcess.dna ? await parseCSV(filesToProcess.dna) : [];
       const unusedData = filesToProcess.unused ? await parseCSV(filesToProcess.unused) : [];
-
+      // Process online only if enabled and file exists
       const onlineData = (configToUse.useOnline && filesToProcess.onlineRequests) ? await parseCSV(filesToProcess.onlineRequests) : [];
 
-      // Validate CSV headers and check for privacy violations
       validateHeaders(apptData, ['Date', 'Day'], 'Appointments CSV');
       if (filesToProcess.dna) validateHeaders(dnaData, ['Staff', 'Appointment Count'], 'DNA CSV');
       if (filesToProcess.unused) validateHeaders(unusedData, ['Staff', 'Unused Slots', 'Total Slots'], 'Unused CSV');
       if (configToUse.useOnline && filesToProcess.onlineRequests) validateHeaders(onlineData, ['Submission started', 'Type', 'Outcome'], 'Online Requests CSV', ['Patient Name', 'Name', 'Patient', 'NHS Number']);
 
-      const monthlyMap = {};
-      const staffMap = {};
-      const slotMap = {};
-      const combinedMap = {};
-
-      // Parse date from multiple formats: "DD/MM/YYYY HH:MM" or "DD MMM YYYY"
-      const parseDate = (dateStr) => {
-        if (!dateStr) return null;
-
-        // Try format: "01 Aug 2025" or "01 August 2025"
-        const monthNames = {
-          'jan': 0, 'january': 0,
-          'feb': 1, 'february': 1,
-          'mar': 2, 'march': 2,
-          'apr': 3, 'april': 3,
-          'may': 4,
-          'jun': 5, 'june': 5,
-          'jul': 6, 'july': 6,
-          'aug': 7, 'august': 7,
-          'sep': 8, 'september': 8,
-          'oct': 9, 'october': 9,
-          'nov': 10, 'november': 10,
-          'dec': 11, 'december': 11
-        };
-
-        const parts = dateStr.trim().split(' ');
-        if (parts.length === 3) {
-          // Format: "01 Aug 2025"
-          const day = parseInt(parts[0], 10);
-          const monthStr = parts[1].toLowerCase();
-          const year = parseInt(parts[2], 10);
-
-          if (monthNames.hasOwnProperty(monthStr) && !isNaN(day) && !isNaN(year)) {
-            return new Date(year, monthNames[monthStr], day);
-          }
+      let telephonyData = [];
+      if (configToUse.useTelephony && filesToProcess.telephony && filesToProcess.telephony.length > 0) {
+        for (const file of filesToProcess.telephony) {
+          const text = await extractTextFromPDF(file);
+          telephonyData.push({ filename: file.name, text });
         }
+      }
 
-        // Try format: "01/08/2025 HH:MM"
+      const months = {};
+      const monthlyStaffMap = {};
+      const monthlySlotMap = {};
+      const monthlyCombinedMap = {};
+
+      // REMOVED: onlineStatsData object - now calculating dynamically
+      const processedOnlineRows = [];
+
+      const getMonthKey = (dateStr) => {
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return null;
+        return d.toLocaleString('default', { month: 'short', year: 'numeric' });
+      };
+
+      const parseDateTime = (str) => {
+        if (!str) return null;
+        let d = new Date(str);
+        if (!isNaN(d.getTime())) return d;
+        const parts = str.split(' ');
         const dateParts = parts[0].split('/');
         if (dateParts.length === 3) {
           return new Date(`${dateParts[2]}-${dateParts[1]}-${dateParts[0]}T${parts[1] || '00:00'}`);
         }
-
         return null;
       };
 
-      // Generate standardized month key for data matching
-      // Format: "MMM-YY" (e.g., "Jan-24")
-      const toMonthKey = (date) => {
-        const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-        return `${months[date.getMonth()]}-${String(date.getFullYear()).slice(-2)}`;
+      const isGP = (name) => {
+        if (!name) return false;
+        const n = name.trim();
+        return n.includes('Dr') || n.toLowerCase().includes('locum');
       };
 
-      // Helper function to update staff aggregation by month
       const updateStaff = (month, name, type, value) => {
         if (!name) return;
         const key = `${month}_${name}`;
-        if (!staffMap[key]) {
-          staffMap[key] = { month, staff: name, isGP: isGP(name), totalAppts: 0, dnaCount: 0, unusedSlots: 0 };
+        if (!monthlyStaffMap[key]) {
+          monthlyStaffMap[key] = { month, name, isGP: isGP(name), appts: 0, dna: 0, unused: 0 };
         }
-        if (type === 'appts') staffMap[key].totalAppts += value;
-        else if (type === 'dna') staffMap[key].dnaCount += value;
-        else if (type === 'unused') staffMap[key].unusedSlots += value;
+        monthlyStaffMap[key][type] += value;
       };
 
-      // Helper function to update slot type aggregation by month
       const updateSlot = (month, slotName, type, value, associatedStaffName) => {
         if (!slotName) return;
         const key = `${month}_${slotName}`;
-        if (!slotMap[key]) {
-          slotMap[key] = { month, slotType: slotName, hasGPActivity: false, totalAppts: 0, dnaCount: 0, unusedSlots: 0 };
+        if (!monthlySlotMap[key]) {
+          monthlySlotMap[key] = { month, name: slotName, hasGPActivity: false, appts: 0, dna: 0, unused: 0 };
         }
-        if (type === 'appts') slotMap[key].totalAppts += value;
-        else if (type === 'dna') slotMap[key].dnaCount += value;
-        else if (type === 'unused') slotMap[key].unusedSlots += value;
+        monthlySlotMap[key][type] += value;
         if (associatedStaffName && isGP(associatedStaffName)) {
-          slotMap[key].hasGPActivity = true;
+          monthlySlotMap[key].hasGPActivity = true;
         }
       };
 
-      // Helper function to update combined staff + slot aggregation by month
       const updateCombined = (month, staffName, slotName, type, value) => {
         if (!staffName || !slotName) return;
         const key = `${month}_${staffName}_${slotName}`;
-        if (!combinedMap[key]) {
-          combinedMap[key] = {
+        if (!monthlyCombinedMap[key]) {
+          monthlyCombinedMap[key] = {
             month,
-            staff: staffName,
-            slotType: slotName,
+            name: staffName,
+            slot: slotName,
             isGP: isGP(staffName),
-            totalAppts: 0,
-            dnaCount: 0,
-            unusedSlots: 0
+            appts: 0,
+            dna: 0,
+            unused: 0
           };
         }
-        if (type === 'appts') combinedMap[key].totalAppts += value;
-        else if (type === 'dna') combinedMap[key].dnaCount += value;
-        else if (type === 'unused') combinedMap[key].unusedSlots += value;
+        monthlyCombinedMap[key][type] += value;
       };
 
-      // Process appointment data: Handle pivot table format where each staff member is a column
-      console.log('🔍 Starting appointment processing, rows:', apptData.length);
-      if (apptData.length > 0) {
-        console.log('  - First row keys:', Object.keys(apptData[0]).slice(0, 5));
-        console.log('  - First row sample:', apptData[0]);
-      }
+      // 1. Process Appointments
+      apptData.forEach(row => {
+        const date = row['Date'];
+        if (!date) return;
+        const monthKey = getMonthKey(date);
+        if (!monthKey) return;
 
-      let processedRows = 0;
-      for (const row of apptData) {
-        const dateStr = row['Date'];
-        if (!dateStr) {
-          console.log('  ⚠️ Skipping row - no date');
-          continue;
-        }
-
-        const dateObj = parseDate(dateStr);
-        if (!dateObj) {
-          console.log('  ⚠️ Skipping row - date parse failed:', dateStr);
-          continue;
-        }
-
-        const monthKey = toMonthKey(dateObj);
-        const dayOfWeek = row['Day'];
-
-        if (!monthlyMap[monthKey]) {
-          monthlyMap[monthKey] = {
+        if (!months[monthKey]) {
+          months[monthKey] = {
             month: monthKey,
-            dateObj: new Date(dateObj.getFullYear(), dateObj.getMonth(), 1),
+            workingDays: 0,
             totalAppts: 0,
-            daysWithAppts: new Set(),
+            gpAppts: 0,
+            staffAppts: 0,
             onlineTotal: 0,
-            onlineClinicalNoAppt: 0
+            onlineClinicalNoAppt: 0,
+            days: new Set(),
+            dates: []
           };
-          console.log('  ✅ Created month:', monthKey);
         }
 
-        // Track working days (exclude Sat/Sun)
+        const dayOfWeek = row['Day'];
         const isWorkingDay = dayOfWeek !== 'Sat' && dayOfWeek !== 'Sun';
-        if (isWorkingDay) {
-          monthlyMap[monthKey].daysWithAppts.add(dateStr);
+        if (isWorkingDay && !months[monthKey].days.has(date)) {
+          months[monthKey].workingDays += 1;
+          months[monthKey].days.add(date);
         }
+        months[monthKey].dates.push(date);
 
-        // Iterate through all columns (each column is a staff member)
-        let staffCount = 0;
         Object.keys(row).forEach(key => {
           if (key === 'Date' || key === 'Day') return;
-
           let val = row[key];
           if (typeof val === 'string') val = val.trim();
           const count = parseInt(val, 10);
-          if (isNaN(count) || count === 0) return;
+          if (isNaN(count)) return;
 
-          monthlyMap[monthKey].totalAppts += count;
+          months[monthKey].totalAppts += count;
+          if (isGP(key)) {
+            months[monthKey].gpAppts += count;
+          } else {
+            months[monthKey].staffAppts += count;
+          }
+
           updateStaff(monthKey, key, 'appts', count);
-          staffCount++;
+          if (row['Slot Type']) {
+            updateSlot(monthKey, row['Slot Type'], 'appts', count, key);
+          }
         });
-
-        processedRows++;
-        if (processedRows <= 3) {
-          console.log(`  - Row ${processedRows}: ${dateStr}, ${staffCount} staff with appointments`);
-        }
-      }
-      console.log(`✅ Processed ${processedRows} appointment rows`);
-      console.log(`   Created ${Object.keys(monthlyMap).length} months, ${Object.keys(staffMap).length} staff entries`);
-
-      // Calculate working days per month
-      Object.values(monthlyMap).forEach(m => {
-        m.workingDays = m.daysWithAppts.size;
-        delete m.daysWithAppts;
       });
 
-      // Helper to get all months a staff member worked
+      if (Object.keys(months).length === 0) {
+        throw new Error("No valid data found. Please check the Date formatting in your Appointments CSV.");
+      }
+
       const getMonthsForStaff = (name) => {
-        return Object.values(staffMap)
-          .filter(r => r.staff === name)
-          .map(r => r.month);
+        return Object.values(monthlyStaffMap).filter(r => r.name === name).map(r => r.month);
       };
 
-      // Process DNA data: Distribute missed appointments proportionally across months staff worked
-      let totalDNA = 0;
-      for (const row of dnaData) {
+      // 2. Process DNA
+      dnaData.forEach(row => {
         const count = parseInt(row['Appointment Count'], 10) || 0;
         const staffName = row['Staff'];
         const slotName = row['Slot Type'];
-
-        totalDNA += count;
-
+        globalDNACount += count;
+        if (isGP(staffName)) globalGPDNACount += count;
         const workedMonths = getMonthsForStaff(staffName);
         if (workedMonths.length > 0) {
           const splitCount = count / workedMonths.length;
@@ -452,8 +739,7 @@ export default function App() {
             }
           });
         } else {
-          // Staff not in appointment data - add to first month
-          const firstMonth = Object.keys(monthlyMap)[0];
+          const firstMonth = Object.keys(months)[0];
           if (firstMonth) {
             updateStaff(firstMonth, staffName, 'dna', count);
             if (slotName) {
@@ -462,19 +748,17 @@ export default function App() {
             }
           }
         }
-      }
+      });
 
-      // Process unused slots: Distribute wasted capacity across months staff worked
-      let totalUnused = 0;
-      for (const row of unusedData) {
+      // 3. Process Unused
+      unusedData.forEach(row => {
         const count = parseInt(row['Unused Slots'], 10) || 0;
         const totalSlots = parseInt(row['Total Slots'], 10) || 0;
         const booked = Math.max(0, totalSlots - count);
         const staffName = row['Staff'];
         const slotName = row['Slot Type'];
-
-        totalUnused += count;
-
+        globalUnusedCount += count;
+        if (isGP(staffName)) globalGPUnusedCount += count;
         const workedMonths = getMonthsForStaff(staffName);
         if (workedMonths.length > 0) {
           const splitCount = count / workedMonths.length;
@@ -489,8 +773,7 @@ export default function App() {
             }
           });
         } else {
-          // Staff not in appointment data - add to first month
-          const firstMonth = Object.keys(monthlyMap)[0];
+          const firstMonth = Object.keys(months)[0];
           if (firstMonth) {
             updateStaff(firstMonth, staffName, 'unused', count);
             if (slotName) {
@@ -501,97 +784,64 @@ export default function App() {
             }
           }
         }
-      }
+      });
 
-      // Process online requests data: Transform raw CSV into structured format with computed properties
-      const processedOnlineRows = [];
-      if (configToUse.useOnline && onlineData.length > 0) {
+      // 4. Process Online Requests
+      if (configToUse.useOnline) {
         onlineData.forEach(row => {
-          const dateStr = row['Submission started'];
-          if (dateStr) {
-            const date = parseDate(dateStr);
-            if (date) {
-              const monthKey = toMonthKey(date);
-              const type = row['Type'];
-              const outcome = (row['Outcome'] || '').trim();
-              const outcomeLower = outcome.toLowerCase();
-              const access = row['Access method'];
-              const sex = row['Sex'];
-              const age = parseInt(row['Age'], 10);
-              const completeStr = row['Submission started'];
-              const outcomeStr = row['Outcome dateTime'];
+          const dateStr = row['Submission started'] || row['Submitted'];
+          const completeStr = row['Submission completed'];
+          const outcomeStr = row['Outcome recorded'];
+          const date = parseDateTime(dateStr);
 
-              // Aggregate online totals into monthly map
-              if (monthlyMap[monthKey]) {
-                monthlyMap[monthKey].onlineTotal += 1;
+          if (!date) return;
 
-                // Count clinical requests that didn't result in an appointment
-                if (type === 'Clinical' && !outcomeLower.includes('appointment offered') && !outcomeLower.includes('appointment booked')) {
-                  monthlyMap[monthKey].onlineClinicalNoAppt += 1;
-                }
-              }
+          const monthKey = date.toLocaleString('default', { month: 'short', year: 'numeric' });
 
-              processedOnlineRows.push({
-                month: monthKey,
-                type,
-                outcome,
-                outcomeLower,
-                access,
-                sex,
-                age: !isNaN(age) ? age : null,
-                date,
-                completeStr,
-                outcomeStr
-              });
+          if (months[monthKey]) {
+            months[monthKey].onlineTotal += 1;
+
+            const type = row['Type'];
+            const outcome = (row['Outcome'] || '').trim();
+            const outcomeLower = outcome.toLowerCase();
+            const access = row['Access method'];
+            const sex = row['Sex'];
+            const age = parseInt(row['Age'], 10);
+
+            if (type === 'Clinical' && !outcomeLower.includes('appointment offered') && !outcomeLower.includes('appointment booked')) {
+              months[monthKey].onlineClinicalNoAppt += 1;
             }
+
+            // Store raw row with monthKey for dynamic filtering
+            processedOnlineRows.push({
+              month: monthKey,
+              type,
+              outcome,
+              outcomeLower,
+              access,
+              sex,
+              age: !isNaN(age) ? age : null,
+              date,
+              completeStr,
+              outcomeStr
+            });
           }
         });
       }
 
-      // Store raw data for tables
-      console.log('📊 Data Processing Complete:');
-      console.log('  - Staff entries:', Object.keys(staffMap).length);
-      console.log('  - Slot entries:', Object.keys(slotMap).length);
-      console.log('  - Combined entries:', Object.keys(combinedMap).length);
-      console.log('  - Monthly entries:', Object.keys(monthlyMap).length);
-      console.log('  - Staff sample:', Object.values(staffMap).slice(0, 3));
-      console.log('  - Monthly sample:', Object.values(monthlyMap).slice(0, 2));
-
-      setRawStaffData(Object.values(staffMap));
-      setRawSlotData(Object.values(slotMap));
-      setRawCombinedData(Object.values(combinedMap));
-      if (configToUse.useOnline) setRawOnlineData(processedOnlineRows);
-
-      // Process telephony data: Extract call metrics from PDF reports using regex patterns
-      if (configToUse.useTelephony && filesToProcess.telephony && filesToProcess.telephony.length > 0) {
-        for (const pdfFile of filesToProcess.telephony) {
-          const text = await extractTextFromPDF(pdfFile);
-
-          // Extract month from PDF text
+      // 5. Process Telephony
+      if (configToUse.useTelephony) {
+        telephonyData.forEach(item => {
+          const text = item.text;
           const monthMatch = text.match(/(January|February|March|April|May|June|July|August|September|October|November|December)\s20\d{2}/i);
           if (monthMatch) {
             const pdfDate = new Date(monthMatch[0]);
-            const monthKey = toMonthKey(pdfDate);
-
-            if (monthlyMap[monthKey]) {
-              // Extract metrics from PDF text using regex
+            const monthKey = pdfDate.toLocaleString('default', { month: 'short', year: 'numeric' });
+            if (months[monthKey]) {
               const extract = (r) => { const m = text.match(r); return m && m[1] ? parseFloat(m[1].replace(/,/g, '')) : 0; };
-              const extractTime = (r) => {
-                const m = text.match(r);
-                if (m) {
-                  let min = 0, sec = 0;
-                  const fm = m[0];
-                  const mm = fm.match(/(\d+)m/);
-                  const sm = fm.match(/(\d+)s/);
-                  if (mm) min = parseInt(mm[1]);
-                  if (sm) sec = parseInt(sm[1]);
-                  return (min * 60) + sec;
-                }
-                return 0;
-              };
+              const extractTime = (r) => { const m = text.match(r); if (m) { let min = 0, sec = 0; if (m[1]) min = parseInt(m[1]); if (m[2]) sec = parseInt(m[2]); const fm = m[0]; const mm = fm.match(/(\d+)m/); const sm = fm.match(/(\d+)s/); if (mm) min = parseInt(mm[1]); if (sm) sec = parseInt(sm[1]); return (min * 60) + sec; } return 0; };
               const missedUniqueMatch = text.match(/Missed From Queue\s+Excluding Repeat Callers\s+[\d,]+\s+\(([\d.]+)%\)/i);
-
-              monthlyMap[monthKey].telephony = {
+              months[monthKey].telephony = {
                 inboundReceived: extract(/Inbound Received\s+([\d,]+)/i),
                 inboundAnswered: extract(/Inbound Answered\s+([\d,]+)/i),
                 missedFromQueue: extract(/Missed From Queue\s+([\d,]+)/i),
@@ -606,318 +856,122 @@ export default function App() {
               };
             }
           }
-        }
+        });
       }
 
-      // Sort months chronologically
-      const monthsArray = Object.values(monthlyMap).sort((a, b) => a.dateObj - b.dateObj);
+      const sortedMonths = Object.values(months).sort((a, b) => new Date(a.month) - new Date(b.month));
+      const totalApptsAll = Object.values(months).reduce((s, m) => s + m.totalAppts, 0);
+      const totalGPApptsAll = Object.values(months).reduce((s, m) => s + m.gpAppts, 0);
 
-      const totalApptsAll = monthsArray.reduce((sum, m) => sum + m.totalAppts, 0);
-      // totalDNA and totalUnused are already calculated during DNA/Unused processing above
+      const finalData = sortedMonths.map(m => {
+        const weight = totalApptsAll > 0 ? m.totalAppts / totalApptsAll : 0;
+        const gpWeight = totalGPApptsAll > 0 ? m.gpAppts / totalGPApptsAll : 0;
+        const estDNA = Math.round(globalDNACount * weight);
+        const estGPDNA = Math.round(globalGPDNACount * gpWeight);
+        const estUnused = Math.round(globalUnusedCount * weight);
+        const estGPUnused = Math.round(globalGPUnusedCount * gpWeight);
 
-      // Calculate metrics for each month
-      const enrichedMonths = monthsArray.map(m => {
-        const { month, dateObj, totalAppts, workingDays, telephony, onlineTotal, onlineClinicalNoAppt } = m;
+        const t = m.telephony || {};
+        const population = parseFloat(configToUse.population) || 1;
+        const capitationCalling = t.inboundAnswered ? ((t.inboundAnswered / population) * 100) : 0;
 
-        // Calculate estimated DNA and unused slots using proportional distribution
-        // based on this month's appointment volume relative to total appointments
-        const weight = totalApptsAll > 0 ? totalAppts / totalApptsAll : 0;
-        const estDNA = Math.round(totalDNA * weight);
-        const estUnused = Math.round(totalUnused * weight);
-
-        const t = telephony || {};
-
-        const gpAppts = Object.values(staffMap)
-          .filter(s => isGP(s.staff))
-          .reduce((sum, s) => sum + (s.totalAppts * weight), 0);
-
-        const estGPDNA = Math.round(estDNA * (gpAppts / (totalAppts || 1)));
-        const estGPUnused = Math.round(estUnused * (gpAppts / (totalAppts || 1)));
-
-        // Primary metric: "Patients with GP Appointment or Resolved Online Request per Day (%)"
-        // Combines traditional face-to-face appointments with digitally resolved requests
-        // Provides true picture of GP capacity including modern triage methods
-        const gpTriageCapacityPerDayPct = workingDays > 0 && configToUse.population > 0
-          ? ((gpAppts / workingDays) / configToUse.population * 100)
-          : 0;
-
-        const gpRatio = t.inboundAnswered > 0 ? (gpAppts / t.inboundAnswered) : 0;
+        const gpRatio = t.inboundAnswered > 0 ? (m.gpAppts / t.inboundAnswered) : 0;
         const gpMissedDemand = gpRatio * (t.missedFromQueueExRepeat || 0);
         const gpWaste = estGPUnused + estGPDNA;
-        const extraSlotsPerDay = workingDays > 0 ? ((gpMissedDemand - gpWaste) / workingDays) : 0;
+        const extraSlots = m.workingDays > 0 ? ((gpMissedDemand - gpWaste) / m.workingDays) : 0;
+
+        // Online Metrics
+        const onlineRequestsPer1000 = ((m.onlineTotal / population) * 1000) / 4;
+        const totalTriageCapacity = m.gpAppts + m.onlineClinicalNoAppt;
+        const gpTriageCapacityPerDayPct = m.workingDays ? ((totalTriageCapacity / population * 100) / m.workingDays) : 0;
 
         return {
-          month,
-          dateObj,
-          totalAppts,
-          workingDays,
-          gpAppts,
-          estDNA,
-          estUnused,
-          estGPDNA,
-          estGPUnused,
-          onlineTotal: onlineTotal || 0,
-          onlineClinicalNoAppt: onlineClinicalNoAppt || 0,
-          onlineRequestsPer1000: configToUse.population > 0 ? ((onlineTotal || 0) / configToUse.population * 1000) / 4 : 0,
+          month: m.month,
+          workingDays: m.workingDays,
+          totalAppts: m.totalAppts,
+          gpAppts: m.gpAppts,
+          conversionRatio: t.inboundAnswered ? (m.totalAppts / t.inboundAnswered) : 0,
+          gpConversionRatio: t.inboundAnswered ? (m.gpAppts / t.inboundAnswered) : 0,
+          utilization: (m.totalAppts + estUnused) > 0 ? (m.totalAppts / (m.totalAppts + estUnused) * 100) : 0,
+          gpUtilization: (m.gpAppts + estGPUnused) > 0 ? (m.gpAppts / (m.gpAppts + estGPUnused) * 100) : 0,
+          gpApptsPerDay: m.workingDays ? (m.gpAppts / population * 100) / m.workingDays : 0,
+          gpUnusedPct: (m.gpAppts + estGPUnused) > 0 ? (estGPUnused / (m.gpAppts + estGPUnused) * 100) : 0,
+          gpDNAPct: m.gpAppts > 0 ? (estGPDNA / m.gpAppts * 100) : 0,
+          allApptsPerDay: m.workingDays ? (m.totalAppts / population * 100) / m.workingDays : 0,
+          allUnusedPct: (m.totalAppts + estUnused) > 0 ? (estUnused / (m.totalAppts + estUnused) * 100) : 0,
+          allDNAPct: m.totalAppts > 0 ? (estDNA / m.totalAppts * 100) : 0,
+
+          // Online
+          onlineTotal: m.onlineTotal,
+          onlineClinicalNoAppt: m.onlineClinicalNoAppt,
+          onlineRequestsPer1000,
           gpTriageCapacityPerDayPct,
-          gpApptsPerDay: workingDays > 0 ? (gpAppts / configToUse.population * 100) / workingDays : 0,
-          gpUtilization: (gpAppts + estGPUnused) > 0 ? (gpAppts / (gpAppts + estGPUnused) * 100) : 0,
-          gpDNAPct: gpAppts > 0 ? (estGPDNA / gpAppts * 100) : 0,
-          gpUnusedPct: gpAppts > 0 ? (estGPUnused / gpAppts * 100) : 0,
-          conversionRatio: t.inboundAnswered ? (totalAppts / t.inboundAnswered) : 0,
-          gpConversionRatio: t.inboundAnswered ? (gpAppts / t.inboundAnswered) : 0,
-          utilization: (totalAppts + estUnused) > 0 ? (totalAppts / (totalAppts + estUnused) * 100) : 0,
-          allApptsPerDay: workingDays > 0 ? (totalAppts / configToUse.population * 100) / workingDays : 0,
-          allUnusedPct: (totalAppts + estUnused) > 0 ? (estUnused / (totalAppts + estUnused) * 100) : 0,
-          allDNAPct: totalAppts > 0 ? (estDNA / totalAppts * 100) : 0,
-          extraSlotsPerDay,
-          inboundTotal: t.inboundReceived || 0,
-          ...t
+
+          ...t,
+          capitationCallingPerDay: m.workingDays ? (capitationCalling / m.workingDays) : 0,
+          extraSlotsPerDay: extraSlots
         };
       });
 
-      console.log('📈 Enriched Months:', enrichedMonths.length, 'months');
-      console.log('  - Sample month data:', enrichedMonths[0]);
-
-      setProcessedData(enrichedMonths);
-
-      // Generate forecast data using linear regression
-      if (enrichedMonths.length >= 3) {
-        const totalApptsData = enrichedMonths.map(m => m.totalAppts);
-        const gpApptsData = enrichedMonths.map(m => m.gpAppts);
-        const inboundTotalData = enrichedMonths.map(m => m.inboundTotal || 0);
-
-        const forecastTotalAppts = calculateLinearForecast(totalApptsData, 2);
-        const forecastGPAppts = calculateLinearForecast(gpApptsData, 2);
-        const forecastInbound = calculateLinearForecast(inboundTotalData, 2);
-
-        const lastMonth = enrichedMonths[enrichedMonths.length - 1].month;
-        const nextMonthNames = getNextMonthNames(lastMonth, 2);
-        const forecastLabels = [...enrichedMonths.map(m => m.month), ...nextMonthNames];
-
-        setForecastData({
-          labels: forecastLabels,
-          hasData: true,
-          appts: {
-            actual: [...totalApptsData, null, null],
-            projected: [...totalApptsData, ...forecastTotalAppts]
-          },
-          calls: {
-            actual: [...inboundTotalData, null, null],
-            projected: [...inboundTotalData, ...forecastInbound]
-          },
-          gpAppts: {
-            actual: [...gpApptsData, null, null],
-            projected: [...gpApptsData, ...forecastGPAppts]
-          }
-        });
-      } else {
-        setForecastData({ hasData: false, count: enrichedMonths.length });
+      // Forecasting
+      const apptArray = finalData.map(d => d.totalAppts);
+      const callArray = finalData.map(d => d.inboundReceived || 0);
+      let futureAppts = [], futureCalls = [], futureLabels = [];
+      if (apptArray.length >= 3) {
+        futureAppts = calculateLinearForecast(apptArray, 2);
+        futureCalls = calculateLinearForecast(callArray, 2);
+        const lastMonth = finalData[finalData.length - 1]?.month;
+        futureLabels = getNextMonthNames(lastMonth, 2);
       }
 
-      setIsProcessing(false);
+      setForecastData(apptArray.length >= 3 ? {
+        labels: [...finalData.map(d => d.month), ...futureLabels],
+        appts: { actual: [...apptArray, null, null], projected: [...Array(apptArray.length - 1).fill(null), apptArray[apptArray.length - 1], ...futureAppts] },
+        calls: { actual: [...callArray, null, null], projected: [...Array(callArray.length - 1).fill(null), callArray[callArray.length - 1], ...futureCalls] },
+        hasData: true
+      } : { hasData: false, count: apptArray.length });
+
+      setProcessedData(finalData);
+      setRawStaffData(Object.values(monthlyStaffMap));
+      setRawSlotData(Object.values(monthlySlotMap));
+      setRawCombinedData(Object.values(monthlyCombinedMap));
+      setRawOnlineData(processedOnlineRows);
+      // setOnlineStats(configToUse.useOnline ? onlineStatsData : null); // REMOVED
+
     } catch (err) {
-      console.error("Processing Error", err);
-      setError(err.message || 'An error occurred while processing the files.');
+      setError(err.message);
+      setProcessedData(null);
+      setRawStaffData([]);
+      setRawSlotData([]);
+      setRawCombinedData([]);
+      setForecastData(null);
+      console.error("Processing Failed:", err);
+    } finally {
       setIsProcessing(false);
     }
   };
 
-  // AI Analysis Handler - generates insights using Google Gemini
-  const runAIAnalysis = async () => {
-    if (!processedData || processedData.length === 0) {
-      setAiError("No data to analyze. Please process your files first.");
-      return;
-    }
-
-    if (!apiKey) {
-      setAiError("Google AI API key not configured. Please set VITE_GEMINI_KEY in your environment.");
-      return;
-    }
-
-    setIsAiLoading(true);
-    setAiError(null);
-    setAiReport(null);
-
-    try {
-      const genAI = new GoogleGenAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
-
-      const lastMonth = processedData[processedData.length - 1];
-
-      const dataStr = `Practice: ${config.surgeryName || 'Unknown'}
-Population: ${config.population}
-Latest Month: ${lastMonth.month}
-Total Appointments: ${lastMonth.totalAppts}
-GP Appointments: ${Math.round(lastMonth.gpAppts)}
-GP Appointments per working day: ${(lastMonth.gpAppts / lastMonth.workingDays).toFixed(1)}
-GP Triage Capacity (% pop per day): ${lastMonth.gpTriageCapacityPerDayPct.toFixed(2)}%
-GP Utilization: ${lastMonth.gpUtilPct.toFixed(1)}%
-GP Booking Conversion: ${lastMonth.gpBookConv.toFixed(2)}
-GP DNA Rate: ${lastMonth.gpDNAPct.toFixed(1)}%
-GP Unused Slot Rate: ${lastMonth.gpUnusedPct.toFixed(1)}%
-Extra Slots Needed Per Day: ${lastMonth.extraSlots.toFixed(1)}
-Inbound Calls: ${lastMonth.inboundTotal}
-Calls Answered: ${lastMonth.inboundAnswered}
-Missed from Queue: ${lastMonth.missedFromQueue}`;
-
-      const prompt = `You are an NHS primary care access improvement analyst. Analyze this practice data and provide actionable insights.
-
-${dataStr}
-
-Provide a structured report with:
-## Positives
-- List 2-3 strong points
-
-## Room for Improvement
-- List 2-3 areas to work on with specific evidence-based recommendations following NHS UK access improvement guidance
-
-Keep it concise (max 200 words) and professional. Use markdown formatting.`;
-
-      const result = await model.generateContent(prompt);
-      const text = result.response.text();
-      setAiReport(text);
-      setIsAiLoading(false);
-    } catch (err) {
-      console.error("AI Error", err);
-      setAiError(`AI analysis failed: ${err.message}`);
-      setIsAiLoading(false);
-    }
-  };
-
-  // Print/PDF export handler
-  const handlePrint = async () => {
-    // Ensure AI report is rendered before printing
-    if (aiReport) {
-      await new Promise(resolve => setTimeout(resolve, 500));
-    }
-    window.print();
-  };
-
-  // Reset all data and return to initial state
-  const handleReset = () => {
-    setConfig({
-      surgeryName: '',
-      population: 10000,
-      analyseTelephony: true,
-      useTelephony: true,
-      useOnline: true,
-    });
-    setFiles({
-      appointments: null,
-      dna: null,
-      unused: null,
-      onlineRequests: null,
-      telephony: [],
-    });
-    setProcessedData(null);
-    setRawStaffData([]);
-    setRawSlotData([]);
-    setRawCombinedData([]);
-    setRawOnlineData([]);
-    setForecastData(null);
-    setError(null);
-    setAiReport(null);
-    setAiError(null);
-    setActiveTab('dashboard');
-    setSelectedMonth('All');
-    setShowResetConfirm(false);
-  };
-
-  // Compute aggregated data with optional month filtering
-  const getAggregatedData = useCallback((rawData, monthFilter, monthlyData) => {
-    if (monthFilter === 'All') {
-      return rawData;
-    }
-
-    const selectedMonthData = monthlyData?.find(m => m.month === monthFilter);
-    if (!selectedMonthData) return rawData;
-
-    const totalApptsAll = monthlyData.reduce((sum, m) => sum + m.totalAppts, 0);
-    const weight = totalApptsAll > 0 ? selectedMonthData.totalAppts / totalApptsAll : 0;
-
-    return rawData.map(item => {
-      const monthlyAppts = Math.round(item.totalAppts * weight);
-      const monthlyDNA = Math.round((item.dnaCount || 0) * weight);
-      const monthlyUnused = Math.round((item.unusedSlots || 0) * weight);
-      const monthlyTotal = Math.round((item.totalSlots || 0) * weight);
-
-      return {
-        ...item,
-        totalAppts: monthlyAppts,
-        dnaCount: monthlyDNA,
-        unusedSlots: monthlyUnused,
-        totalSlots: monthlyTotal
-      };
-    });
-  }, []);
-
-  const aggregatedStaffData = useMemo(() => {
-    const data = getAggregatedData(rawStaffData, selectedMonth, processedData);
-
-    // Group by staff name and sum across months
-    const grouped = {};
-    data?.forEach(item => {
-      const key = item.staff;
-      if (!grouped[key]) {
-        grouped[key] = { name: item.staff, appts: 0, unused: 0, dna: 0, isGP: item.isGP };
+  // --- Aggregated Data Helpers (Filtered) ---
+  const getAggregatedData = useCallback((rawData) => {
+    if (!rawData || rawData.length === 0) return [];
+    const filtered = selectedMonth === 'All' ? rawData : rawData.filter(d => d.month === selectedMonth);
+    const grouped = filtered.reduce((acc, curr) => {
+      const key = curr.name + (curr.slot ? `_${curr.slot}` : '');
+      if (!acc[key]) {
+        acc[key] = { name: curr.name, slot: curr.slot || null, isGP: curr.isGP, hasGPActivity: curr.hasGPActivity || false, appts: 0, dna: 0, unused: 0 };
       }
-      grouped[key].appts += item.totalAppts || 0;
-      grouped[key].unused += item.unusedSlots || 0;
-      grouped[key].dna += item.dnaCount || 0;
-    });
-
-    const result = Object.values(grouped).sort((a, b) => b.appts - a.appts);
-    console.log('👥 Aggregated Staff Data:', result?.length || 0, 'entries');
-    if (result && result.length > 0) console.log('  - Sample:', result[0]);
-    return result;
-  }, [rawStaffData, selectedMonth, processedData, getAggregatedData]);
-
-  const aggregatedSlotData = useMemo(() => {
-    const data = getAggregatedData(rawSlotData, selectedMonth, processedData);
-
-    // Group by slot type and sum across months
-    const grouped = {};
-    data?.forEach(item => {
-      const key = item.slotType;
-      if (!grouped[key]) {
-        grouped[key] = { name: item.slotType, appts: 0, unused: 0, dna: 0, hasGPActivity: false };
-      }
-      grouped[key].appts += item.totalAppts || 0;
-      grouped[key].unused += item.unusedSlots || 0;
-      grouped[key].dna += item.dnaCount || 0;
-      if (item.hasGPActivity) grouped[key].hasGPActivity = true;
-    });
-
+      acc[key].appts += curr.appts; acc[key].dna += curr.dna; acc[key].unused += curr.unused;
+      if (curr.hasGPActivity) acc[key].hasGPActivity = true;
+      return acc;
+    }, {});
     return Object.values(grouped).sort((a, b) => b.appts - a.appts);
-  }, [rawSlotData, selectedMonth, processedData, getAggregatedData]);
+  }, [selectedMonth]);
 
-  const aggregatedCombinedData = useMemo(() => {
-    const data = getAggregatedData(rawCombinedData, selectedMonth, processedData);
+  const aggregatedStaffData = useMemo(() => getAggregatedData(rawStaffData), [getAggregatedData, rawStaffData]);
+  const aggregatedSlotData = useMemo(() => getAggregatedData(rawSlotData), [getAggregatedData, rawSlotData]);
+  const aggregatedCombinedData = useMemo(() => getAggregatedData(rawCombinedData), [getAggregatedData, rawCombinedData]);
 
-    // Group by staff + slot combination and sum across months
-    const grouped = {};
-    data?.forEach(item => {
-      const key = `${item.staff}|||${item.slotType}`;
-      if (!grouped[key]) {
-        grouped[key] = {
-          name: item.staff,
-          slot: item.slotType,
-          appts: 0,
-          unused: 0,
-          dna: 0,
-          isGP: item.isGP
-        };
-      }
-      grouped[key].appts += item.totalAppts || 0;
-      grouped[key].unused += item.unusedSlots || 0;
-      grouped[key].dna += item.dnaCount || 0;
-    });
-
-    return Object.values(grouped).sort((a, b) => b.appts - a.appts);
-  }, [rawCombinedData, selectedMonth, processedData, getAggregatedData]);
-
-  // Calculate online request statistics
+  // --- Dynamic Online Stats ---
   const onlineStats = useMemo(() => {
     if (!config.useOnline || !rawOnlineData || rawOnlineData.length === 0) return null;
 
@@ -993,21 +1047,337 @@ Keep it concise (max 200 words) and professional. Use markdown formatting.`;
     return stats;
   }, [rawOnlineData, selectedMonth, config.useOnline]);
 
-  // Filter displayed data by selected month
+  // --- AI Handler ---
+  const fetchAIReport = async () => {
+    const metricDefinitions = [
+      {
+        key: 'workingDays',
+        title: 'Working days',
+        description: 'Clinical working days available in the month',
+        format: 'number'
+      },
+      {
+        key: 'totalAppts',
+        title: 'All appointments delivered',
+        description: 'Total appointments completed across the practice',
+        format: 'number'
+      },
+      {
+        key: 'gpAppts',
+        title: 'GP appointments delivered',
+        description: 'Number of GP-led appointments completed',
+        format: 'number'
+      },
+      {
+        key: 'gpApptsPerDay',
+        title: 'Percentage of patient population with GP appointments per working day',
+        description: 'Percentage of patient population with GP appointments per working day so that practices can standardise the number of appointments per population',
+        format: 'percent1'
+      },
+      {
+        key: 'allApptsPerDay',
+        title: 'Percentage of patient population with any appointment per working day',
+        description: 'Percentage of patient population with any staff appointment per working day so that practices can standardise the number of appointments per population',
+        format: 'percent1'
+      },
+      {
+        key: 'utilization',
+        title: 'Utilisation (all clinicians)',
+        description: 'Percentage of all appointment slots used',
+        format: 'percent1'
+      },
+      {
+        key: 'gpUtilization',
+        title: 'GP utilisation',
+        description: 'Percentage of GP appointment slots used',
+        format: 'percent1'
+      },
+      {
+        key: 'gpUnusedPct',
+        title: 'Unused GP capacity',
+        description: 'Percentage of GP slots left unused after embargoes and DNA',
+        format: 'percent1'
+      },
+      {
+        key: 'gpDNAPct',
+        title: 'GP DNA rate',
+        description: 'Did-not-attend rate for GP appointments',
+        format: 'percent1'
+      },
+      {
+        key: 'allUnusedPct',
+        title: 'Unused capacity (all clinicians)',
+        description: 'Percentage of all clinician slots left unused',
+        format: 'percent1'
+      },
+      {
+        key: 'allDNAPct',
+        title: 'DNA rate (all clinicians)',
+        description: 'Did-not-attend rate for all clinicians',
+        format: 'percent1'
+      },
+      {
+        key: 'onlineTotal',
+        title: 'Online requests received',
+        description: 'Total online consultation requests submitted',
+        format: 'number'
+      },
+      {
+        key: 'onlineClinicalNoAppt',
+        title: 'Online clinical requests without appointment',
+        description: 'Clinical online requests resolved without booking an appointment',
+        format: 'number'
+      },
+      {
+        key: 'onlineRequestsPer1000',
+        title: 'Online requests per 1,000 patients',
+        description: 'Rate of online requests normalised by practice size',
+        format: 'decimal1'
+      },
+      {
+        key: 'gpTriageCapacityPerDayPct',
+        title: 'Patients with a GP appointment or resolved online request per day (%)',
+        description: 'Percentage of registered patients per working day who either had a GP appointment or had their online request resolved without an appointment',
+        format: 'percent2'
+      },
+      {
+        key: 'inboundReceived',
+        title: 'Inbound calls received',
+        description: 'Total inbound calls presented to the phone system',
+        format: 'number'
+      },
+      {
+        key: 'inboundAnswered',
+        title: 'Inbound calls answered',
+        description: 'Number of inbound calls answered by the team',
+        format: 'number'
+      },
+      {
+        key: 'missedFromQueue',
+        title: 'Calls missed from queue',
+        description: 'Total calls abandoned from the queue',
+        format: 'number'
+      },
+      {
+        key: 'missedFromQueueExRepeat',
+        title: 'Missed calls excluding repeats',
+        description: 'Unique callers who abandoned the queue (excludes repeat callers)',
+        format: 'number'
+      },
+      {
+        key: 'missedFromQueueExRepeatPct',
+        title: 'Missed call rate (unique)',
+        description: 'Percentage of unique callers who abandoned the queue',
+        format: 'percent1'
+      },
+      {
+        key: 'answeredFromQueue',
+        title: 'Calls answered from queue',
+        description: 'Calls successfully answered after waiting in queue',
+        format: 'number'
+      },
+      {
+        key: 'abandonedCalls',
+        title: 'Callback abandoned',
+        description: 'Callbacks that were not connected after being requested',
+        format: 'number'
+      },
+      {
+        key: 'callbacksSuccessful',
+        title: 'Callbacks successful',
+        description: 'Callbacks that successfully connected to a patient',
+        format: 'number'
+      },
+      {
+        key: 'avgQueueTimeAnswered',
+        title: 'Average queue time (answered)',
+        description: 'Average seconds callers waited before being answered',
+        format: 'seconds'
+      },
+      {
+        key: 'avgQueueTimeMissed',
+        title: 'Average queue time (missed)',
+        description: 'Average seconds callers waited before abandoning',
+        format: 'seconds'
+      },
+      {
+        key: 'avgInboundTalkTime',
+        title: 'Average inbound talk time',
+        description: 'Average call handling time for inbound calls (seconds)',
+        format: 'seconds'
+      },
+      {
+        key: 'capitationCallingPerDay',
+        title: 'Daily call volume per 1,000 patients',
+        description: 'Average daily inbound calls per 1,000 registered patients',
+        format: 'percent1'
+      },
+      {
+        key: 'conversionRatio',
+        title: 'Booking conversion (all)',
+        description: 'Ratio of calls that resulted in any appointment booking',
+        format: 'decimal2'
+      },
+      {
+        key: 'gpConversionRatio',
+        title: 'Booking conversion (GP)',
+        description: 'Ratio of calls that resulted in a GP appointment booking',
+        format: 'decimal2'
+      },
+      {
+        key: 'extraSlotsPerDay',
+        title: 'Extra slots required per day',
+        description: 'Extra slots required per day over the different months. Sometimes this is minus if meeting capacity',
+        format: 'decimal1'
+      }
+    ];
+
+    const formatMetricValue = (value, format) => {
+      if (value === undefined || value === null || Number.isNaN(value)) return null;
+
+      switch (format) {
+        case 'percent1':
+          return `${Number(value).toFixed(1)}%`;
+        case 'percent2':
+          return `${Number(value).toFixed(2)}%`;
+        case 'decimal2':
+          return Number(value).toFixed(2);
+        case 'decimal1':
+          return Number(value).toFixed(1);
+        case 'seconds':
+          return `${Number(value).toFixed(0)} seconds`;
+        default:
+          return Number(value);
+      }
+    };
+
+    const dataSummary = displayedData.map(d => ({
+      month: d.month,
+      metrics: metricDefinitions
+        .map(metric => ({
+          title: metric.title,
+          description: metric.description,
+          value: formatMetricValue(d[metric.key], metric.format)
+        }))
+        .filter(metric => metric.value !== null)
+    }));
+
+    const prompt = `
+        You are an expert NHS Practice Manager and Data Analyst using CAIP Analytics.
+        Analyse the following monthly performance data.
+
+        Each metric includes a title and description to avoid ambiguity. Base all interpretations on these fields, not the raw field names.
+
+        Data (month by month): ${JSON.stringify(dataSummary, null, 2)}
+
+        Please provide a concise report in exactly these two sections using bullet points:
+
+        ### ✅ Positives
+        * Highlight metrics that are performing well.
+
+        ### 🚀 Room for Improvement & Actions
+        * Identify specific issues.
+        * Logic:
+            * If **Online Requests** are high but **Patients with a GP appointment or resolved online request per day (%)** is low, suggest: "High digital demand is not being fully captured in clinical workload data."
+            * If **Booking Conversion** is low, suggest: "High call volume not converting to appts. Review signposting."
+            * If **Utilization** is low (<95%), suggest: "Wasted capacity. Review embargoes."
+            * Apply additional best-practice logic from NHS UK access improvement guidance when proposing actions.
+
+        Keep the tone professional, constructive, and specific to NHS Primary Care. Use British English.
+    `;
+
+    const ai = new GoogleGenAI({ apiKey });
+
+    // Updated: Properly structured contents for new SDK
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [{ parts: [{ text: prompt }] }],
+    });
+
+    // Updated: Correct response parsing for new SDK (no .text() function)
+    return response.candidates?.[0]?.content?.parts?.[0]?.text;
+  };
+
+  const generateAIInsights = async () => {
+    if (!displayedData || displayedData.length === 0) return;
+    setIsAiLoading(true);
+    setAiError(null);
+    try {
+      const text = await fetchAIReport();
+      if (text) setAiReport(text); else throw new Error('No insight generated');
+    } catch (e) {
+      setAiError(`AI Error: ${e.message}`);
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
+
+  const handlePrint = async () => {
+    if (!aiReport) {
+      setIsAiLoading(true);
+      try {
+        const text = await fetchAIReport();
+        setAiReport(text);
+        // Small delay to allow React to render the AI report into the DOM before printing
+        await new Promise(resolve => setTimeout(resolve, 500));
+      } catch (e) {
+        console.error("AI fail", e);
+      } finally {
+        setIsAiLoading(false);
+      }
+    }
+    window.print();
+  };
+
   const displayedData = useMemo(() => {
     if (!processedData) return null;
     if (selectedMonth === 'All') return processedData;
-    return processedData.filter(m => m.month === selectedMonth);
+    return processedData.filter(d => d.month === selectedMonth);
   }, [processedData, selectedMonth]);
 
-  // Get available months for filter dropdown
   const availableMonths = useMemo(() => {
-    if (!processedData) return ['All'];
+    if (!processedData) return [];
     return ['All', ...processedData.map(d => d.month)];
   }, [processedData]);
 
-  // Helper to create forecast chart data
-  // Helper function to create line chart data (uses displayedData from component scope)
+  const commonOptions = { responsive: true, maintainAspectRatio: false, layout: { padding: 20 }, plugins: { legend: { position: 'bottom' }, tooltip: { backgroundColor: 'rgba(255, 255, 255, 0.9)', titleColor: '#1e293b', bodyColor: '#475569', borderColor: '#e2e8f0', borderWidth: 1, padding: 12, boxPadding: 6 } }, scales: { y: { beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { color: '#64748b' } }, x: { grid: { display: false }, ticks: { color: '#64748b' } } }, elements: { line: { tension: 0.4 }, point: { radius: 4, hoverRadius: 6 } } };
+  const pdfChartOptions = { ...commonOptions, animation: false };
+
+  const percentageOptions = { ...commonOptions, scales: { ...commonOptions.scales, y: { ...commonOptions.scales.y, min: 0, ticks: { color: '#64748b', callback: (v) => `${Number(v).toFixed(2)}%` } } } };
+  const pdfPercentageOptions = { ...percentageOptions, animation: false };
+
+  const onlineRequestBandOptions = { ...commonOptions, scales: { ...commonOptions.scales, y: { ...commonOptions.scales.y, min: 0 } }, plugins: { ...commonOptions.plugins, backgroundBands: { bands: [{ from: 0, to: 5.0, color: GP_BAND_RED }, { from: 5.0, to: 100, color: GP_BAND_GREEN }] } } };
+
+  const gpBandOptions = { ...percentageOptions, scales: { ...percentageOptions.scales, y: { ...percentageOptions.scales.y, min: 0, suggestedMax: 1.6 } }, plugins: { ...percentageOptions.plugins, backgroundBands: { bands: [{ from: 0, to: 0.85, color: GP_BAND_RED }, { from: 0.85, to: 1.10, color: GP_BAND_AMBER }, { from: 1.10, to: 1.30, color: GP_BAND_GREEN }, { from: 1.30, to: 5.00, color: GP_BAND_BLUE }] } } };
+  const pdfGpBandOptions = { ...gpBandOptions, animation: false };
+
+  const stackedPercentageOptions = { ...percentageOptions, scales: { x: { ...commonOptions.scales.x, stacked: true }, y: { ...percentageOptions.scales.y, stacked: true, max: 100 } } };
+  const pdfStackedPercentageOptions = { ...stackedPercentageOptions, animation: false };
+  const ratioOptions = { ...commonOptions, scales: { ...commonOptions.scales, y: { ...commonOptions.scales.y, min: 0, ticks: { color: '#64748b', callback: (v) => Number(v).toFixed(2) } } } };
+  const pdfRatioOptions = { ...ratioOptions, animation: false };
+  const utilizationOptions = { ...percentageOptions, scales: { ...percentageOptions.scales, y: { ...percentageOptions.scales.y, min: 0, max: 100 } } };
+  const pdfUtilizationOptions = { ...utilizationOptions, animation: false };
+  const timeOptions = { ...commonOptions, scales: { ...commonOptions.scales, y: { ...commonOptions.scales.y, ticks: { color: '#64748b', callback: (v) => `${Math.floor(v / 60)}m ${v % 60}s` } } } };
+  const pdfTimeOptions = { ...timeOptions, animation: false };
+
+  // Helper for Donut/Pie charts
+  const createDonutData = (dataMap, colors) => {
+    const labels = Object.keys(dataMap);
+    const values = Object.values(dataMap);
+    const total = values.reduce((acc, val) => acc + val, 0);
+    const percentages = values.map(value => ((value / total) * 100).toFixed(1) + "%");
+
+    return {
+      labels: labels.map((l, i) => `${l} (${percentages[i]})`),
+      datasets: [{
+        data: values,
+        backgroundColor: colors,
+        borderWidth: 0
+      }]
+    };
+  };
+  const donutOptions = { maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 } } } } };
+
   const createChartData = (label, dataKey, color, fill = true) => ({
     labels: displayedData?.map(d => d.month),
     datasets: [{
@@ -1018,25 +1388,6 @@ Keep it concise (max 200 words) and professional. Use markdown formatting.`;
       fill: fill,
     }]
   });
-
-  // Helper function to create donut chart data with percentages and counts
-  const createDonutData = (data, colors) => {
-    const values = Object.values(data || {});
-    const labels = Object.keys(data || {});
-    const total = values.reduce((sum, val) => sum + val, 0);
-
-    return {
-      labels: labels.map((label, i) => {
-        const percentage = total > 0 ? ((values[i] / total) * 100).toFixed(1) : 0;
-        return `${label}: ${values[i]} (${percentage}%)`;
-      }),
-      datasets: [{
-        data: values,
-        backgroundColor: colors,
-        borderWidth: 0,
-      }]
-    };
-  };
 
   const createForecastChartData = (labelActual, labelProjected, dataObj, color) => ({
     labels: forecastData?.labels,
@@ -1053,7 +1404,7 @@ Keep it concise (max 200 words) and professional. Use markdown formatting.`;
         label: labelProjected,
         data: forecastData ? dataObj.projected : [],
         borderColor: color,
-        borderDash: [5, 5],
+        borderDash: [5, 5], // Dotted line for forecast
         backgroundColor: 'transparent',
         tension: 0.3,
         pointRadius: 4
@@ -1061,7 +1412,82 @@ Keep it concise (max 200 words) and professional. Use markdown formatting.`;
     ]
   });
 
-  // Month filter headers
+  const FileInput = ({ label, helpText, accept, onChange, file, badge, disabled, onRemove, isMulti }) => {
+    const hasFile = isMulti ? (file && file.length > 0) : !!file;
+
+    return (
+      <div className={`mb-6 transition-opacity ${disabled ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
+        <div className="flex justify-between items-baseline mb-2">
+          <label className="block text-sm font-bold text-slate-700">{label}</label>
+          {badge && <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full border border-blue-200 font-semibold">{badge}</span>}
+        </div>
+        {helpText && <p className="text-xs text-slate-500 mb-3">{helpText}</p>}
+
+        <div className="space-y-3">
+          {/* Existing Files Display */}
+          {hasFile && (
+            <div className="space-y-2">
+              {isMulti ? (
+                file.map((f, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-3 bg-white border border-slate-200 rounded-lg shadow-sm group hover:border-blue-300 transition-all">
+                    <div className="flex items-center gap-3 overflow-hidden">
+                      <div className="p-2 bg-green-50 text-green-600 rounded-lg">
+                        <FileText size={18} />
+                      </div>
+                      <span className="text-sm font-medium text-slate-700 truncate">{f.name}</span>
+                    </div>
+                    <button
+                      onClick={() => onRemove(idx)}
+                      className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Remove file"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                ))
+              ) : (
+                <div className="flex items-center justify-between p-3 bg-white border border-green-200 rounded-lg shadow-sm ring-1 ring-green-500/20">
+                  <div className="flex items-center gap-3 overflow-hidden">
+                    <div className="p-2 bg-green-50 text-green-600 rounded-lg">
+                      <CheckCircle size={18} />
+                    </div>
+                    <span className="text-sm font-medium text-slate-700 truncate">{file.name}</span>
+                  </div>
+                  <button
+                    onClick={onRemove}
+                    className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                    title="Remove file"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Upload Area - Always show for multi, or if no file for single */}
+          {(isMulti || !hasFile) && (
+            <label className="block cursor-pointer group">
+              <div className={`flex flex-col items-center justify-center px-4 py-6 border-2 border-dashed rounded-xl transition-all ${isMulti && hasFile ? 'border-slate-300 bg-slate-50 hover:bg-white' : 'border-slate-300 hover:border-blue-400 hover:bg-blue-50'}`}>
+                <input type="file" className="hidden" accept={accept} onChange={onChange} multiple={isMulti} disabled={disabled} />
+                <div className="flex flex-col items-center gap-2 text-slate-500 group-hover:text-blue-600 transition-colors">
+                  {isMulti && hasFile ? <Plus size={24} /> : <Upload size={24} />}
+                  <span className="text-sm font-medium">
+                    {isMulti && hasFile ? 'Add another file' : 'Click to upload or drag and drop'}
+                  </span>
+                  <span className="text-xs text-slate-400">
+                    {isMulti ? 'Supports multiple files' : 'Single file upload'}
+                  </span>
+                </div>
+              </div>
+            </label>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // Define headers based on filter state
   const isFiltered = selectedMonth !== 'All';
   const unusedHeader = isFiltered ? 'Unused Slots (Est. Monthly)' : 'Unused Slots';
   const dnaHeader = isFiltered ? 'DNAs (Est. Monthly)' : 'DNAs';
@@ -1254,8 +1680,6 @@ Keep it concise (max 200 words) and professional. Use markdown formatting.`;
                 </div>
               )}
 
-              <DisclaimerNotice />
-
               <button
                 onClick={() => processFiles()}
                 disabled={isProcessing || !files.appointments}
@@ -1302,7 +1726,7 @@ Keep it concise (max 200 words) and professional. Use markdown formatting.`;
             <div className="flex justify-center gap-4 mb-6" data-html2canvas-ignore="true">
               {/* 1. CAIP Analysis Button */}
               <button
-                onClick={() => setShowAIConsent(true)}
+                onClick={generateAIInsights}
                 disabled={isAiLoading}
                 className="group relative inline-flex items-center justify-center px-8 py-3 overflow-hidden rounded-full bg-slate-900 font-medium text-white shadow-2xl transition-all duration-300 hover:scale-105 hover:shadow-purple-500/50 disabled:opacity-70"
               >
@@ -1320,8 +1744,8 @@ Keep it concise (max 200 words) and professional. Use markdown formatting.`;
               {/* 2. Print Report Button */}
               <button
                 onClick={handlePrint}
-                className="flex items-center gap-2 px-6 py-3 bg-white text-slate-600 border border-slate-200 rounded-full hover:bg-slate-50 hover:border-slate-300 hover:text-slate-800 transition-all shadow-sm hover:shadow-md disabled:opacity-70"
-              >
+					className="hidden flex items-center gap-2 px-6 py-3 bg-white text-slate-600 border border-slate-200 rounded-full hover:bg-slate-50 hover:border-slate-300 hover:text-slate-800 transition-all shadow-sm hover:shadow-md disabled:opacity-70"
+				>
                 <Download size={18} />
                 <span className="font-semibold">Print Report</span>
               </button>
@@ -1641,19 +2065,16 @@ Keep it concise (max 200 words) and professional. Use markdown formatting.`;
                         { l: 'Abandoned', k: 'abandonedCalls', c: 'text-amber-600', suffix: '%' },
                         { l: 'Callbacks Success', k: 'callbacksSuccessful', c: 'text-blue-500' },
                         { l: 'Avg Wait', k: 'avgQueueTimeAnswered', c: 'text-slate-600', fmt: v => `${Math.floor(v / 60)}m ${v % 60}s` }
-                      ].map((m, i) => {
-                        const lastMonth = displayedData[displayedData.length - 1] || {};
-                        const value = lastMonth[m.k] || 0;
-                        return (
-                          <Card key={i} className="p-4 border border-slate-200 shadow-none bg-slate-50">
-                            <p className="text-xs font-bold text-slate-400 uppercase">{m.l}</p>
-                            <p className={`text-xl font-bold ${m.c} mt-1`}>
-                              {m.fmt ? m.fmt(value) : `${value.toLocaleString()}${m.suffix || ''}`}
-                            </p>
-                            <p className="text-[10px] text-slate-400">{selectedMonth === 'All' ? 'Latest Month' : selectedMonth}</p>
-                          </Card>
-                        );
-                      })}
+                      ].map((m, i) => (
+                        <Card key={i} className="p-4 border border-slate-200 shadow-none bg-slate-50">
+                          <p className="text-xs font-bold text-slate-400 uppercase">{m.l}</p>
+                          <p className={`text-xl font-bold ${m.c} mt-1`}>
+                            {m.fmt ? m.fmt(displayedData[displayedData.length - 1][m.k]) :
+                              `${displayedData[displayedData.length - 1][m.k].toLocaleString()}${m.suffix || ''}`}
+                          </p>
+                          <p className="text-[10px] text-slate-400">{selectedMonth === 'All' ? 'Latest Month' : selectedMonth}</p>
+                        </Card>
+                      ))}
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1918,7 +2339,7 @@ Keep it concise (max 200 words) and professional. Use markdown formatting.`;
                 </div>
               )}
 
-              {config.useTelephony && displayedData && displayedData.length > 0 && (
+              {config.useTelephony && (
                 <div id="pdf-telephony-section" className="p-10 space-y-8 break-after-page">
                   <h2 className="text-3xl font-bold text-slate-800 border-b border-slate-200 pb-4 mb-6">4. Telephony Performance</h2>
                   <div className="grid grid-cols-5 gap-4 mb-6">
@@ -1928,19 +2349,16 @@ Keep it concise (max 200 words) and professional. Use markdown formatting.`;
                       { l: 'Abandoned', k: 'abandonedCalls', c: 'text-amber-600', suffix: '%' },
                       { l: 'Callbacks Success', k: 'callbacksSuccessful', c: 'text-blue-500' },
                       { l: 'Avg Wait', k: 'avgQueueTimeAnswered', c: 'text-slate-600', fmt: v => `${Math.floor(v / 60)}m ${v % 60}s` }
-                    ].map((m, i) => {
-                      const lastMonth = displayedData[displayedData.length - 1] || {};
-                      const value = lastMonth[m.k] || 0;
-                      return (
-                        <Card key={i} className="p-4 border border-slate-200 shadow-none bg-slate-50">
-                          <p className="text-xs font-bold text-slate-400 uppercase">{m.l}</p>
-                          <p className={`text-xl font-bold ${m.c} mt-1`}>
-                            {m.fmt ? m.fmt(value) : `${value.toLocaleString()}${m.suffix || ''}`}
-                          </p>
-                          <p className="text-[10px] text-slate-400">{selectedMonth === 'All' ? 'Latest Month' : selectedMonth}</p>
-                        </Card>
-                      );
-                    })}
+                    ].map((m, i) => (
+                      <Card key={i} className="p-4 border border-slate-200 shadow-none bg-slate-50">
+                        <p className="text-xs font-bold text-slate-400 uppercase">{m.l}</p>
+                        <p className={`text-xl font-bold ${m.c} mt-1`}>
+                          {m.fmt ? m.fmt(displayedData[displayedData.length - 1][m.k]) :
+                            `${displayedData[displayedData.length - 1][m.k].toLocaleString()}${m.suffix || ''}`}
+                        </p>
+                        <p className="text-[10px] text-slate-400">{selectedMonth === 'All' ? 'Latest Month' : selectedMonth}</p>
+                      </Card>
+                    ))}
                   </div>
                   <div className="grid grid-cols-3 gap-6 h-80">
                     <div className="border border-slate-200 rounded-xl p-4"><Bar data={{ labels: displayedData.map(d => d.month), datasets: [{ label: 'Answered %', data: displayedData.map(d => 100 - (d.missedFromQueueExRepeatPct || 0)), backgroundColor: NHS_GREEN }, { label: 'Missed %', data: displayedData.map(d => d.missedFromQueueExRepeatPct || 0), backgroundColor: NHS_RED }] }} options={pdfStackedPercentageOptions} /></div>
@@ -1997,15 +2415,6 @@ Keep it concise (max 200 words) and professional. Use markdown formatting.`;
           setRawOnlineData([]);
           setForecastData(null);
           setShowResetConfirm(false);
-        }}
-      />
-
-      <AIConsentModal
-        isOpen={showAIConsent}
-        onClose={() => setShowAIConsent(false)}
-        onProceed={() => {
-          setShowAIConsent(false);
-          runAIAnalysis();
         }}
       />
     </div>

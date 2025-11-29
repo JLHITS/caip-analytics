@@ -1,0 +1,92 @@
+/* Print-specific styles for dashboard PDF export */
+
+@media print {
+  /* Hide navigation, controls, and interactive elements */
+  .no-print {
+    display: none !important;
+  }
+
+  /* Ensure full width usage for printed content */
+  .print-container {
+    width: 100%;
+    max-width: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  /* Chart sizing - make charts print-friendly */
+  canvas {
+    max-width: 100%;
+    height: auto !important;
+  }
+
+  /* Table formatting for clean page breaks */
+  table {
+    page-break-inside: auto;
+  }
+
+  tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  /* Force page breaks before major sections */
+  .page-break {
+    page-break-before: always;
+  }
+
+  /* Ensure colors print correctly (not grayscale) */
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    color-adjust: exact;
+  }
+
+  /* Remove shadows and effects that don't print well */
+  .shadow,
+  .shadow-sm,
+  .shadow-md,
+  .shadow-lg {
+    box-shadow: none !important;
+  }
+
+  /* Ensure backgrounds print */
+  body {
+    background: white !important;
+  }
+
+  /* Make sure charts are visible */
+  .chart-container {
+    break-inside: avoid;
+  }
+
+  /* Page margins */
+  @page {
+    margin: 1.5cm;
+    size: A4;
+  }
+
+  /* Remove unnecessary padding/margins */
+  body {
+    padding: 0 !important;
+  }
+
+  /* Ensure text is legible */
+  body,
+  p,
+  td,
+  th {
+    color: #000 !important;
+  }
+
+  /* Keep borders visible */
+  table,
+  th,
+  td {
+    border-color: #ccc !important;
+  }
+}

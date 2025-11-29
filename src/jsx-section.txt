@@ -1,0 +1,100 @@
+                  Reset
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 print:hidden">
+        {!processedData && (
+          <div className="max-w-2xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="text-center mb-10">
+              <div className="flex justify-center mb-4">
+                <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 shadow-sm">
+                  <Activity size={32} />
+                </div>
+              </div>
+              <h2 className="text-3xl font-bold text-slate-900 mb-2">Let's analyse your demand and capacity</h2>
+              <p className="text-slate-500">Upload your TPP SystmOne extracts (no patient data required) and X-on Surgery Connect management reports to get started.</p>
+            </div>
+
+            <Card className="mb-6">
+              <SectionHeader title="Practice Details" />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Surgery Name</label>
+                  <input
+                    type="text"
+                    className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all"
+                    placeholder="e.g. High Street Practice"
+                    value={config.surgeryName}
+                    onChange={e => setConfig({ ...config, surgeryName: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Patient Population</label>
+                  <input
+                    type="number"
+                    className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all"
+                    value={config.population}
+                    onChange={e => setConfig({ ...config, population: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex flex-col">
+                  <div className="flex items-center gap-2">
+                    <input type="checkbox" id="telephony" className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500" checked={config.useTelephony} onChange={e => setConfig({ ...config, useTelephony: e.target.checked })} />
+                    <label htmlFor="telephony" className="text-sm text-slate-700 font-medium">Analyse Telephony Data</label>
+                  </div>
+                  {!config.useTelephony && <p className="text-xs text-amber-600 mt-1 ml-6">Dashboard will be incomplete without call data.</p>}
+                </div>
+                <div className="flex flex-col">
+                  <div className="flex items-center gap-2">
+                    <input type="checkbox" id="online" className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500" checked={config.useOnline} onChange={e => setConfig({ ...config, useOnline: e.target.checked })} />
+                    <label htmlFor="online" className="text-sm text-slate-700 font-medium">Analyse Online Requests</label>
+                  </div>
+                  {!config.useOnline && <p className="text-xs text-amber-600 mt-1 ml-6">Digital capacity metrics will not be shown.</p>}
+                </div>
+              </div>
+            </Card>
+
+            <Card>
+              <SectionHeader title="Data Uploads" subtitle="Ensure date ranges match across files." />
+
+              <FileInput
+                label="Appointment Extract (CSV) *"
+                accept=".csv"
+                file={files.appointments}
+                onChange={(e) => setFiles({ ...files, appointments: e.target.files[0] })}
+                onRemove={() => setFiles({ ...files, appointments: null })}
+              />
+              <FileInput
+                label="DNA Extract (CSV) *"
+                helpText="(Must tick staff name and slot type in SystmOne)"
+                accept=".csv"
+                file={files.dna}
+                onChange={(e) => setFiles({ ...files, dna: e.target.files[0] })}
+                onRemove={() => setFiles({ ...files, dna: null })}
+              />
+              <FileInput
+                label="Unused Extract (CSV) *"
+                helpText="(Must tick staff name and slot type in SystmOne)"
+                accept=".csv"
+                file={files.unused}
+                onChange={(e) => setFiles({ ...files, unused: e.target.files[0] })}
+                onRemove={() => setFiles({ ...files, unused: null })}
+              />
+              <FileInput
+                label="Online Requests (CSV) - SystmConnect"
+                helpText="Misc Reports -> SystmConnect Report (Remove Patient Name column)"
+                accept=".csv"
+                file={files.onlineRequests}
+                onChange={(e) => setFiles({ ...files, onlineRequests: e.target.files[0] })}
+                onRemove={() => setFiles({ ...files, onlineRequests: null })}
+                badge="Accurx Coming Soon"
+                disabled={!config.useOnline}
+              />
+
+              <FileInput
