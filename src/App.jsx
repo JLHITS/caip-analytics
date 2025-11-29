@@ -19,7 +19,7 @@ import {
   BarChart3, PieChart, ArrowRight, CheckCircle, AlertCircle,
   Menu, X, ChevronDown, HelpCircle, Info, Sparkles, XCircle,
   Download, Loader2, PlayCircle, AlertTriangle, Trash2, Plus, Monitor, User, Search,
-  ArrowUpDown, ArrowUp, ArrowDown, ChevronUp
+  ArrowUpDown, ArrowUp, ArrowDown, ChevronUp, Copy, Minimize2, Maximize2
 } from 'lucide-react';
 
 // PDF.js setup
@@ -160,6 +160,7 @@ export default function App() {
   const [aiReport, setAiReport] = useState(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiError, setAiError] = useState(null);
+  const [isAiMinimized, setIsAiMinimized] = useState(false);
   const [showProcessingInfo, setShowProcessingInfo] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showAIConsent, setShowAIConsent] = useState(false);
@@ -984,7 +985,9 @@ export default function App() {
 
         Data (month by month): ${JSON.stringify(dataSummary, null, 2)}
 
-        Please provide a concise report in exactly these two sections using bullet points:
+        IMPORTANT: Start your response DIRECTLY with the first section heading. Do NOT include any introduction, preamble, or explanatory text before the sections.
+
+        Provide your analysis in exactly these two sections using bullet points:
 
         ### ✅ Positives
         * Highlight metrics that are performing well.
@@ -1040,6 +1043,18 @@ export default function App() {
       await new Promise(resolve => setTimeout(resolve, 500));
     }
     window.print();
+  };
+
+  // Copy AI report to clipboard
+  const handleCopyAIReport = async () => {
+    if (!aiReport) return;
+    try {
+      await navigator.clipboard.writeText(aiReport);
+      // Could add a toast notification here if desired
+      console.log('✅ AI report copied to clipboard');
+    } catch (err) {
+      console.error('❌ Failed to copy to clipboard:', err);
+    }
   };
 
   // Reset all data and return to initial state
@@ -1531,11 +1546,39 @@ export default function App() {
                     <Sparkles size={20} />
                   </div>
                   <h3 className="text-lg font-bold text-indigo-900">CAIP Analysis</h3>
-                  <button onClick={() => setAiReport(null)} className="ml-auto text-slate-400 hover:text-slate-600 text-sm">Close</button>
+                  <div className="ml-auto flex items-center gap-2">
+                    <button
+                      onClick={handleCopyAIReport}
+                      className="flex items-center gap-1 px-3 py-1 text-sm text-indigo-600 hover:text-indigo-800 hover:bg-indigo-100 rounded-lg transition-colors"
+                      title="Copy to clipboard"
+                    >
+                      <Copy size={14} />
+                      <span>Copy</span>
+                    </button>
+                    <button
+                      onClick={() => setIsAiMinimized(!isAiMinimized)}
+                      className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded transition-colors"
+                      title={isAiMinimized ? "Expand" : "Minimize"}
+                    >
+                      {isAiMinimized ? <Maximize2 size={16} /> : <Minimize2 size={16} />}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setAiReport(null);
+                        setIsAiMinimized(false);
+                      }}
+                      className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                      title="Close"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
                 </div>
-                <div className="prose prose-sm prose-indigo max-w-none">
-                  <SimpleMarkdown text={aiReport} />
-                </div>
+                {!isAiMinimized && (
+                  <div className="prose prose-sm prose-indigo max-w-none">
+                    <SimpleMarkdown text={aiReport} />
+                  </div>
+                )}
               </Card>
             )}
 
