@@ -81,6 +81,7 @@ GlobalWorkerOptions.workerSrc = pdfWorker;
 
 // API Key for Google Gemini
 const apiKey = (import.meta && import.meta.env && import.meta.env.VITE_GEMINI_KEY) || "";
+const geminiModel = (import.meta && import.meta.env && import.meta.env.VITE_GEMINI_MODEL) || "gemini-2.5-flash";
 
 // Auto-versioning from package.json via Vite
 const APP_VERSION = __APP_VERSION__;
@@ -741,7 +742,7 @@ export default function App() {
 
     try {
       const genAI = new GoogleGenAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+      const model = genAI.getGenerativeModel({ model: geminiModel });
 
       const lastMonth = processedData[processedData.length - 1];
 
