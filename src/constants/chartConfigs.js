@@ -48,6 +48,7 @@ export const percentageOptions = {
       min: 0,
       ticks: {
         color: '#64748b',
+        count: 6, // Force more evenly spaced ticks to avoid squished axes
         callback: (v) => `${Number(v).toFixed(2)}%`
       }
     }
@@ -152,7 +153,7 @@ export const timeOptions = {
       grace: '20%',  // Add 20% padding above max value for better visual spacing
       ticks: {
         color: '#64748b',
-        maxTicksLimit: 8,  // Force more tick marks for better spacing
+        count: 6,  // Force more tick marks for better spacing
         callback: (v) => `${Math.floor(v / 60)}m ${v % 60}s`
       }
     }
