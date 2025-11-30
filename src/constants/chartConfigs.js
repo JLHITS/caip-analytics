@@ -148,7 +148,8 @@ export const timeOptions = {
     ...commonOptions.scales,
     y: {
       ...commonOptions.scales.y,
-      beginAtZero: false,  // Allow auto-scaling for better visual spacing
+      beginAtZero: true,
+      grace: '20%',  // Add 20% padding above max value for better visual spacing
       ticks: {
         color: '#64748b',
         callback: (v) => `${Math.floor(v / 60)}m ${v % 60}s`
