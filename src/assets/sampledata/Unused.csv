@@ -1,44 +1,157 @@
-Branch,Staff,Slot Type,Total Slots,Unused Slots,Unused Slots %,Total Duration,Unused Duration,Unused Duration %
-Main Site,Person2,Care Home Round,64,25,39.1,990,375,37.9
-Main Site,Dr Person3,Triage - Telephone,330,42,12.7,4950,630,12.7
-Main Site,Dr Person4,GP 5 Day Face to Face,205,5,2.4,2130,50,2.3
-Main Site,Dr Person4,PCN planned clinic,1,1,100.0,15,15,100.0
-Main Site,Dr Person4,GP 14 Day Face to Face,480,3,0.6,5410,30,0.6
-Main Site,Dr Person4,GP Same Day Telephone,5,2,40.0,40,20,50.0
-Main Site,Dr Person4,GP Same Day Face to Face,190,62,32.6,2045,620,30.3
-Main Site,Dr Person7,GP Urgent,97,13,13.4,1065,130,12.2
-Main Site,Dr Person7,GP Same Day Face to Face,78,10,12.8,860,100,11.6
-Main Site,Mrs Person14,Nurse Planned clinic,686,46,6.7,9385,230,2.5
-Main Site,Mr Person12,PCN planned clinic,67,2,3.0,1460,40,2.7
-Main Site,Mr Person12,Physio Telephone,57,1,1.8,1200,20,1.7
-Main Site,Person18,NHS111 Telephone Appointment,130,113,86.9,3900,3390,86.9
-Main Site,Dr Person6,GP Face to Face,239,1,0.4,3690,15,0.4
-Main Site,Dr Person6,GP Urgent,39,10,25.6,690,150,21.7
-Main Site,Dr Person6,GP Same Day Face to Face,99,24,24.2,1515,360,23.8
-Main Site,Miss Person9,NHS Health Check,64,7,10.9,590,65,11.0
-Main Site,Miss Person9,Flu/Covid Vaccination,404,26,6.4,808,52,6.4
-Main Site,Miss Person9,HCA Face to face,802,112,14.0,9895,558,5.6
-Main Site,Miss Person9,Blood Test,521,11,2.1,2710,55,2.0
-Main Site,Miss Person9,Slot,82,5,6.1,162,8,4.9
-Main Site,Miss Person9,Home Visits,45,17,37.8,610,85,13.9
-Main Site,Miss Person9,Minor  Surgery,144,131,91.0,880,655,74.4
-Main Site,Person19,Childrens flu,61,18,29.5,630,180,28.6
-Main Site,Ms Person17,Blood Test,261,8,3.1,1300,40,3.1
-Main Site,Ms Person17,Home Visits,130,12,9.2,2600,240,9.2
-Main Site,Mrs Person15,ANP 5 Day Face to Face,211,32,15.2,3290,428,13.0
-Main Site,Mrs Person15,ANP Same Day Face to Face,667,173,25.9,11130,2587,23.2
-Main Site,Mrs Person15,Embargo,1,1,100.0,15,15,100.0
-Main Site,Mrs Person13,PCN planned clinic,226,2,0.9,1935,10,0.5
-Main Site,Mrs Person16,Nurse Planned clinic,829,67,8.1,11335,335,3.0
-Main Site,Person1,Initial Assessment,36,2,5.6,1620,90,5.6
-Main Site,Person1,Embargo,16,6,37.5,360,90,25.0
-Main Site,Person10,PCN Telephone appointment,150,8,5.3,2290,110,4.8
-Main Site,Dr Person5,Medicals only,12,1,8.3,270,15,5.6
-Main Site,Dr Person5,GP 5 Day Face to Face,194,3,1.5,2055,30,1.5
-Main Site,Dr Person5,GP Urgent,32,5,15.6,370,50,13.5
-Main Site,Dr Person5,GP 5 Day Telephone,30,5,16.7,300,50,16.7
-Main Site,Dr Person5,GP 14 Day Face to Face,370,1,0.3,4390,10,0.2
-Main Site,Dr Person5,GP Telephone,140,7,5.0,1410,70,5.0
-Main Site,Dr Person5,GP Same Day Face to Face,302,58,19.2,3410,580,17.0
-Main Site,Dr Person5,Online,25,7,28.0,480,70,14.6
-Main Site,Dr Person5,Flu/Covid Vaccination,301,24,8.0,602,48,8.0
+Staff,Slot Type,Total Slots,Unused Slots,Unused Slots %,Total Duration,Unused Duration,Unused Duration %
+Dr Mark Dickson,Embargo,8,1,12.5,150,15,10.0
+Dr Abda Noreen,GP 5 Day Face to Face,123,6,4.9,1345,60,4.5
+Dr Abda Noreen,GP Same Day Face to Face,157,48,30.6,1580,480,30.4
+Dr Sandhya Gopakumar,GP Urgent,112,10,8.9,1400,100,7.1
+Mrs Hannah Croft,Nurse Planned clinic,751,84,11.2,11135,420,3.8
+Dr Subramaniam Sivan,Embargo,15,1,6.7,270,15,5.6
+Mrs Sharon Chitiki,Triage - Telephone,36,2,5.6,540,30,5.6
+Mr Sean Massey,Physio Embargo,23,4,17.4,460,80,17.4
+Mr Sean Massey,PCN planned clinic,73,2,2.7,1620,40,2.5
+Nhs111 NHS111 Giltbrook Surgery,NHS111 Telephone Appointment,126,106,84.1,3780,3180,84.1
+Miss Aimee Wright,HCA Face to face,562,56,10.0,7225,277,3.8
+Miss Aimee Wright,Blood Test,454,9,2.0,2735,45,1.6
+Miss Aimee Wright,Home Visits,84,7,8.3,2470,150,6.1
+Miss Aimee Wright,Minor  Surgery,110,108,98.2,660,540,81.8
+Dr Kelvin Lim,GP Urgent,47,6,12.8,710,90,12.7
+Dr Kelvin Lim,GP Same Day Face to Face,50,4,8.0,810,60,7.4
+Ms Pcg Phlebotomist,Blood Test,253,7,2.8,1260,35,2.8
+Ms Pcg Phlebotomist,Home Visits,84,9,10.7,1680,180,10.7
+Mrs Jennifer Palfreyman,ANP 5 Day Face to Face,244,38,15.6,4215,570,13.5
+Mrs Jennifer Palfreyman,ANP Same Day Face to Face,955,164,17.2,14805,2460,16.6
+Ms Sonia Hutchby,Slot,8,5,62.5,320,200,62.5
+Mrs Emma Hallam,PCN planned clinic,239,6,2.5,3830,100,2.6
+Mrs Karen Liddell,Nurse Planned clinic,978,96,9.8,13290,477,3.6
+Mrs Karen Liddell,Telephone Appointment Slot,20,7,35.0,185,35,18.9
+Dr Thankam Dickson,GP Same Day Face to Face,12,6,50.0,180,90,50.0
+Catherine Seals,MHOT PCN Embargo,29,2,6.9,795,30,3.8
+Catherine Seals,Initial Assessment,48,3,6.3,2160,135,6.3
+Dr Jacques Ransford,GP 5 Day Face to Face,289,24,8.3,3130,240,7.7
+Dr Jacques Ransford,GP Urgent,18,8,44.4,180,80,44.4
+Dr Jacques Ransford,GP Telephone,150,7,4.7,1462,57,3.9
+Dr Jacques Ransford,GP 14 Day Face to Face,430,1,0.2,4940,10,0.2
+Dr Jacques Ransford,GP Same Day Face to Face,340,76,22.4,4622,760,16.4
+Dr Jacques Ransford,Minor  Surgery,38,3,7.9,750,45,6.0
+Dr Jacques Ransford,Slot,19,5,26.3,310,50,16.1
+Dr A Locum,Triage - Telephone,64,26,40.6,960,390,40.6
+Dr Abda Noreen,GP 5 Day Face to Face,226,7,3.1,2330,70,3.0
+Dr Abda Noreen,Flu/Covid Vaccination,139,3,2.2,231,4,1.9
+Dr Abda Noreen,GP 14 Day Face to Face,548,1,0.2,6025,10,0.2
+Dr Abda Noreen,GP Same Day Face to Face,227,62,27.3,2545,620,24.4
+Dr Sandhya Gopakumar,GP Face to Face,169,2,1.2,3060,20,0.7
+Dr Sandhya Gopakumar,GP Urgent,83,2,2.4,920,15,1.6
+Dr Sandhya Gopakumar,GP Telephone,156,1,0.6,1535,10,0.7
+Dr Sandhya Gopakumar,GP Same Day Face to Face,64,2,3.1,700,15,2.1
+Mrs Hannah Croft,Nurse Planned clinic,848,50,5.9,11690,250,2.1
+Mr Sean Massey,PCN planned clinic,66,1,1.5,1560,20,1.3
+Mr Sean Massey,Physio Telephone,54,1,1.9,1200,20,1.7
+Mrs Sharon Chitiki,Slot,119,5,4.2,1715,25,1.5
+Nhs111 NHS111 Giltbrook Surgery,NHS111 Telephone Appointment,122,104,85.2,3660,3120,85.2
+Miss Aimee Wright,NHS Health Check,24,2,8.3,220,20,9.1
+Miss Aimee Wright,HCA Face to face,558,55,9.9,6980,275,3.9
+Miss Aimee Wright,Blood Test,450,9,2.0,2505,45,1.8
+Miss Aimee Wright,Home Visits,81,24,29.6,2340,625,26.7
+Miss Aimee Wright,Minor  Surgery,117,113,96.6,645,565,87.6
+Ms Pcg Phlebotomist,Blood Test,287,10,3.5,1440,50,3.5
+Ms Pcg Phlebotomist,Home Visits,84,1,1.2,1720,20,1.2
+Mrs Jennifer Palfreyman,ANP 5 Day Face to Face,217,25,11.5,3105,365,11.8
+Mrs Jennifer Palfreyman,ANP Same Day Face to Face,754,114,15.1,11430,1580,13.8
+Mrs Emma Hallam,PCN planned clinic,214,4,1.9,3360,70,2.1
+Mrs Karen Liddell,Nurse Planned clinic,728,35,4.8,10440,175,1.7
+Mrs Preeti Joshi,PCN Telephone appointment,307,8,2.6,9760,160,1.6
+Catherine Seals,MHOT PCN Embargo,25,4,16.0,690,60,8.7
+Karen Richardson,Nurse Planned clinic,20,1,5.0,390,30,7.7
+Karen Richardson,Slot,33,1,3.0,540,7,1.4
+Mohammed Akram,PCN Telephone appointment,74,1,1.4,820,10,1.2
+Dr Jacques Ransford,GP 5 Day Face to Face,229,19,8.3,2480,190,7.7
+Dr Jacques Ransford,GP Urgent,37,6,16.2,390,60,15.4
+Dr Jacques Ransford,GP 14 Day Face to Face,374,2,0.5,4010,20,0.5
+Dr Jacques Ransford,GP Telephone,188,7,3.7,1890,70,3.7
+Dr Jacques Ransford,GP Same Day Face to Face,278,61,21.9,3470,660,19.0
+Dr Jacques Ransford,Minor  Surgery,28,4,14.3,420,60,14.3
+Dr Jacques Ransford,Flu/Covid Vaccination,87,7,8.0,234,10,4.5
+Dr Jacques Ransford,Slot,12,1,8.3,520,60,11.5
+Dr A Locum,ANP Same Day Face to Face,32,13,40.6,570,195,34.2
+Dr A Locum,Triage - Telephone,104,62,59.6,1560,930,59.6
+Dr Abda Noreen,GP 5 Day Face to Face,254,8,3.1,2645,75,2.8
+Dr Abda Noreen,GP 14 Day Face to Face,617,1,0.2,6850,10,0.1
+Dr Abda Noreen,GP Same Day Face to Face,257,64,24.9,3065,650,21.2
+Dr Sandhya Gopakumar,GP Urgent,97,6,6.2,1100,60,5.5
+Dr Sandhya Gopakumar,GP Telephone,174,1,0.6,1690,10,0.6
+Dr Sandhya Gopakumar,GP Same Day Face to Face,79,13,16.5,870,130,14.9
+Mrs Hannah Croft,Nurse Planned clinic,620,25,4.0,8480,125,1.5
+Mr Sean Massey,PCN planned clinic,53,1,1.9,1160,20,1.7
+Mr Sean Massey,Physio Telephone,40,1,2.5,900,20,2.2
+Nhs111 NHS111 Giltbrook Surgery,NHS111 Telephone Appointment,128,102,79.7,3840,3060,79.7
+Miss Aimee Wright,NHS Health Check,82,11,13.4,730,105,14.4
+Miss Aimee Wright,HCA Face to face,946,321,33.9,9885,1605,16.2
+Miss Aimee Wright,Blood Test,426,20,4.7,2425,100,4.1
+Miss Aimee Wright,Home Visits,48,9,18.8,955,55,5.8
+Miss Aimee Wright,Minor  Surgery,144,135,93.8,845,675,79.9
+Dr Kelvin Lim,GP Urgent,22,3,13.6,450,45,10.0
+Dr Kelvin Lim,GP Same Day Face to Face,34,4,11.8,630,60,9.5
+Ms Pcg Phlebotomist,Blood Test,401,17,4.2,2005,85,4.2
+Ms Pcg Phlebotomist,Home Visits,119,4,3.4,2400,80,3.3
+Mrs Jennifer Palfreyman,ANP 5 Day Face to Face,207,7,3.4,3370,105,3.1
+Mrs Jennifer Palfreyman,ANP Same Day Face to Face,736,172,23.4,11715,2572,22.0
+Mrs Jennifer Palfreyman,ANP Same Day Telephone,76,8,10.5,1200,120,10.0
+Mrs Emma Hallam,PCN Telephone appointment,139,1,0.7,1800,10,0.6
+Mrs Emma Hallam,PCN planned clinic,299,4,1.3,2800,35,1.3
+Mrs Karen Liddell,Nurse Planned clinic,701,50,7.1,9890,250,2.5
+Mrs Karen Liddell,Out of clinic hours,2,1,50.0,20,15,75.0
+Catherine Seals,Planned clinic,3,2,66.7,60,30,50.0
+Catherine Seals,MHOT PCN Embargo,25,5,20.0,720,75,10.4
+Catherine Seals,Initial Assessment,54,2,3.7,2535,90,3.6
+Dr Jacques Ransford,Medicals only,10,2,20.0,270,60,22.2
+Dr Jacques Ransford,GP 5 Day Face to Face,184,14,7.6,2010,140,7.0
+Dr Jacques Ransford,GP Urgent,33,13,39.4,330,130,39.4
+Dr Jacques Ransford,GP 5 Day Telephone,2,1,50.0,20,10,50.0
+Dr Jacques Ransford,GP 14 Day Face to Face,323,5,1.5,3560,50,1.4
+Dr Jacques Ransford,GP Telephone,159,5,3.1,1590,50,3.1
+Dr Jacques Ransford,GP Same Day Face to Face,270,57,21.1,3300,570,17.3
+Dr Jacques Ransford,GP Same Day Telephone,14,6,42.9,170,60,35.3
+Dr Jacques Ransford,Minor  Surgery,20,2,10.0,300,30,10.0
+Dr Jacques Ransford,Slot,6,1,16.7,60,10,16.7
+Connor Laycock,Care Home Round,64,25,39.1,990,375,37.9
+Dr A Locum,Triage - Telephone,330,42,12.7,4950,630,12.7
+Dr Abda Noreen,GP 5 Day Face to Face,205,5,2.4,2130,50,2.3
+Dr Abda Noreen,PCN planned clinic,1,1,100.0,15,15,100.0
+Dr Abda Noreen,GP 14 Day Face to Face,480,3,0.6,5410,30,0.6
+Dr Abda Noreen,GP Same Day Telephone,5,2,40.0,40,20,50.0
+Dr Abda Noreen,GP Same Day Face to Face,190,62,32.6,2045,620,30.3
+Dr Sandhya Gopakumar,GP Urgent,97,13,13.4,1065,130,12.2
+Dr Sandhya Gopakumar,GP Same Day Face to Face,78,10,12.8,860,100,11.6
+Mrs Hannah Croft,Nurse Planned clinic,686,46,6.7,9385,230,2.5
+Mr Sean Massey,PCN planned clinic,67,2,3.0,1460,40,2.7
+Mr Sean Massey,Physio Telephone,57,1,1.8,1200,20,1.7
+Nhs111 NHS111 Giltbrook Surgery,NHS111 Telephone Appointment,130,113,86.9,3900,3390,86.9
+Dr Kelvin Lim,GP Face to Face,239,1,0.4,3690,15,0.4
+Dr Kelvin Lim,GP Urgent,39,10,25.6,690,150,21.7
+Dr Kelvin Lim,GP Same Day Face to Face,99,24,24.2,1515,360,23.8
+Miss Aimee Wright,NHS Health Check,64,7,10.9,590,65,11.0
+Miss Aimee Wright,Flu/Covid Vaccination,404,26,6.4,808,52,6.4
+Miss Aimee Wright,HCA Face to face,802,112,14.0,9895,558,5.6
+Miss Aimee Wright,Blood Test,521,11,2.1,2710,55,2.0
+Miss Aimee Wright,Slot,82,5,6.1,162,8,4.9
+Miss Aimee Wright,Home Visits,45,17,37.8,610,85,13.9
+Miss Aimee Wright,Minor  Surgery,144,131,91.0,880,655,74.4
+Practice Nurse,Childrens flu,61,18,29.5,630,180,28.6
+Ms Pcg Phlebotomist,Blood Test,261,8,3.1,1300,40,3.1
+Ms Pcg Phlebotomist,Home Visits,130,12,9.2,2600,240,9.2
+Mrs Jennifer Palfreyman,ANP 5 Day Face to Face,211,32,15.2,3290,428,13.0
+Mrs Jennifer Palfreyman,ANP Same Day Face to Face,667,173,25.9,11130,2587,23.2
+Mrs Jennifer Palfreyman,Embargo,1,1,100.0,15,15,100.0
+Mrs Emma Hallam,PCN planned clinic,226,2,0.9,1935,10,0.5
+Mrs Karen Liddell,Nurse Planned clinic,829,67,8.1,11335,335,3.0
+Catherine Seals,Initial Assessment,36,2,5.6,1620,90,5.6
+Catherine Seals,Embargo,16,6,37.5,360,90,25.0
+Mohammed Akram,PCN Telephone appointment,150,8,5.3,2290,110,4.8
+Dr Jacques Ransford,Medicals only,12,1,8.3,270,15,5.6
+Dr Jacques Ransford,GP 5 Day Face to Face,194,3,1.5,2055,30,1.5
+Dr Jacques Ransford,GP Urgent,32,5,15.6,370,50,13.5
+Dr Jacques Ransford,GP 5 Day Telephone,30,5,16.7,300,50,16.7
+Dr Jacques Ransford,GP 14 Day Face to Face,370,1,0.3,4390,10,0.2
+Dr Jacques Ransford,GP Telephone,140,7,5.0,1410,70,5.0
+Dr Jacques Ransford,GP Same Day Face to Face,302,58,19.2,3410,580,17.0
+Dr Jacques Ransford,Online,25,7,28.0,480,70,14.6
+Dr Jacques Ransford,Flu/Covid Vaccination,301,24,8.0,602,48,8.0

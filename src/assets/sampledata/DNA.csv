@@ -1,37 +1,85 @@
 Staff,Slot Type,Appointment Count,Time Wasted
-Dr Person3,Triage - Telephone,3,45
-Dr Person4,GP 5 Day Telephone,1,10
-Dr Person4,GP 14 Day Face to Face,30,360
-Dr Person4,GP 14 Day Telephone,1,10
-Dr Person4,GP 5 Day Face to Face,10,100
-Dr Person7,GP Telephone,8,80
-Dr Person7,GP Face to Face,2,30
-Dr Person7,GP Urgent,2,20
-Mrs Person14,Nurse Planned clinic,42,550
-Mr Person12,PCN planned clinic,3,60
-Dr Person6,GP 14 Day Face to Face,1,15
-Dr Person6,GP Face to Face,12,180
-Dr Person6,GP Same Day Face to Face,1,15
-Dr Person6,GP Urgent,1,15
-Miss Person9,Blood Test,16,80
-Miss Person9,Minor  Surgery,1,15
-Miss Person9,Slot,1,2
-Miss Person9,Flu/Covid Vaccination,6,12
-Miss Person9,Home Visits,1,15
-Miss Person9,HCA Face to face,36,355
-Miss Person9,NHS Health Check,9,85
-Person19,Childrens flu,6,60
-Ms Person17,Blood Test,13,65
-Mrs Person15,ANP Same Day Face to Face,13,195
-Mrs Person15,ANP 5 Day Face to Face,7,105
-Mrs Person13,PCN planned clinic,1,20
-Mrs Person16,Nurse Planned clinic,40,543
-Person1,Embargo,2,60
-Person1,Initial Assessment,5,225
-Person8,Nurse Planned clinic,2,60
-Dr Person5,GP 14 Day Face to Face,17,190
-Dr Person5,GP Telephone,4,40
-Dr Person5,GP 14 Day Telephone,1,10
-Dr Person5,GP Same Day Face to Face,8,90
-Dr Person5,GP 5 Day Face to Face,9,100
-Dr Person5,GP Urgent,1,10
+Dr Mark Dickson,Embargo,1,15
+Dr A Locum,GP Face to Face,1,15
+Dr A Locum,GP 5 Day Face to Face,1,15
+Dr A Locum,GP Urgent,2,30
+Dr Abda Noreen,GP 14 Day Face to Face,36,430
+Dr Abda Noreen,GP Telephone,1,10
+Dr Abda Noreen,Flu/Covid Vaccination,3,5
+Dr Abda Noreen,GP Face to Face,1,10
+Dr Abda Noreen,GP Same Day Face to Face,3,30
+Dr Abda Noreen,GP 5 Day Face to Face,5,40
+Dr Sandhya Gopakumar,GP Telephone,13,140
+Dr Sandhya Gopakumar,GP Face to Face,16,290
+Dr Sandhya Gopakumar,GP Same Day Face to Face,3,40
+Dr Sandhya Gopakumar,GP Urgent,1,10
+Mrs Hannah Croft,Nurse Planned clinic,86,1245
+Dr Subramaniam Sivan,Slot,3,45
+Mrs Sharon Chitiki,Triage - Telephone,2,30
+Mrs Sharon Chitiki,Slot,12,180
+Mr Sean Massey,PCN planned clinic,11,220
+Miss Aimee Wright,Blood Test,57,300
+Miss Aimee Wright,Home Visits,2,65
+Miss Aimee Wright,HCA Face to face,48,500
+Dr Kelvin Lim,GP Face to Face,23,345
+Dr Kelvin Lim,GP Urgent,1,15
+Ms Pcg Phlebotomist,Blood Test,29,145
+Mrs Jennifer Palfreyman,ANP Same Day Face to Face,38,553
+Mrs Jennifer Palfreyman,ANP 5 Day Face to Face,19,295
+Mrs Emma Hallam,PCN planned clinic,11,210
+Mrs Karen Liddell,Nurse Planned clinic,96,1375
+Chantelle Bright,Slot,1,10
+Catherine Seals,Initial Assessment,16,720
+Catherine Seals,MHOT PCN Embargo,6,180
+Karen Richardson,Slot,5,113
+Karen Richardson,Nurse Planned clinic,1,30
+Dr Jacques Ransford,Minor  Surgery,1,15
+Dr Jacques Ransford,GP 14 Day Face to Face,56,640
+Dr Jacques Ransford,GP Telephone,36,358
+Dr Jacques Ransford,Embargo,1,10
+Dr Jacques Ransford,GP Face to Face,2,40
+Dr Jacques Ransford,GP Same Day Face to Face,14,205
+Dr Jacques Ransford,GP 5 Day Face to Face,8,80
+Dr Jacques Ransford,Medicals only,2,60
+Dr Jacques Ransford,GP Urgent,2,20
+Dr A Locum,Triage - Telephone,3,45
+Dr A Locum,ANP Same Day Face to Face,4,60
+Dr Abda Noreen,GP 5 Day Telephone,1,10
+Dr Abda Noreen,GP 14 Day Face to Face,67,775
+Dr Abda Noreen,GP 14 Day Telephone,1,10
+Dr Abda Noreen,GP Same Day Face to Face,1,10
+Dr Abda Noreen,GP 5 Day Face to Face,18,195
+Dr Sandhya Gopakumar,GP Telephone,14,140
+Dr Sandhya Gopakumar,GP Face to Face,13,250
+Dr Sandhya Gopakumar,GP Same Day Face to Face,1,10
+Dr Sandhya Gopakumar,GP Urgent,5,60
+Mrs Hannah Croft,Nurse Planned clinic,77,1000
+Mr Sean Massey,PCN planned clinic,7,140
+Miss Aimee Wright,Blood Test,47,240
+Miss Aimee Wright,Minor  Surgery,1,15
+Miss Aimee Wright,Slot,1,2
+Miss Aimee Wright,Flu/Covid Vaccination,6,12
+Miss Aimee Wright,Home Visits,1,15
+Miss Aimee Wright,HCA Face to face,69,778
+Miss Aimee Wright,NHS Health Check,11,105
+Dr Kelvin Lim,GP 14 Day Face to Face,1,15
+Dr Kelvin Lim,GP Face to Face,17,255
+Dr Kelvin Lim,GP Same Day Face to Face,1,15
+Dr Kelvin Lim,GP Urgent,1,15
+Practice Nurse,Childrens flu,6,60
+Ms Pcg Phlebotomist,Blood Test,38,190
+Mrs Jennifer Palfreyman,ANP Same Day Face to Face,22,330
+Mrs Jennifer Palfreyman,ANP Same Day Telephone,2,30
+Mrs Jennifer Palfreyman,ANP 5 Day Face to Face,15,225
+Mrs Emma Hallam,PCN planned clinic,2,40
+Mrs Karen Liddell,Nurse Planned clinic,80,1128
+Catherine Seals,Embargo,2,60
+Catherine Seals,Initial Assessment,15,675
+Catherine Seals,MHOT PCN Embargo,1,45
+Karen Richardson,Nurse Planned clinic,3,90
+Dr Jacques Ransford,GP Telephone,19,190
+Dr Jacques Ransford,GP 14 Day Face to Face,38,450
+Dr Jacques Ransford,GP 14 Day Telephone,1,10
+Dr Jacques Ransford,GP Same Day Face to Face,18,190
+Dr Jacques Ransford,GP 5 Day Face to Face,16,180
+Dr Jacques Ransford,GP Urgent,1,10

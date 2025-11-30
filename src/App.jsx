@@ -74,16 +74,16 @@ import sampleDNA from './assets/sampledata/DNA.csv?url';
 import sampleUnused from './assets/sampledata/Unused.csv?url';
 import sampleOnline from './assets/sampledata/OnlineRequests.csv?url';
 // 12 months of telephony PDFs
-import samplePdf1 from './assets/sampledata/0d66a5575690e8df43cb0ae793580ac521c5a33c.pdf?url';
-import samplePdf2 from './assets/sampledata/22b3c9bf39efaab6ce391ab58bbf8219e325adac.pdf?url';
-import samplePdf3 from './assets/sampledata/24785122585c06bf64c372061d197f3464616ed4.pdf?url';
-import samplePdf4 from './assets/sampledata/6f64a7dc62f11eddce256a04ef41c047f18fb816.pdf?url';
-import samplePdf5 from './assets/sampledata/75eaa0e095420e7b0c1e58da1134cf629f6ec810.pdf?url';
-import samplePdf6 from './assets/sampledata/86181d00f8593c18d00113167b8ecca1820ef45a.pdf?url';
-import samplePdf7 from './assets/sampledata/99ab0893981016327c2c80ea264d4314fd374563.pdf?url';
-import samplePdf8 from './assets/sampledata/aug.pdf?url';
-import samplePdf9 from './assets/sampledata/c4446b9d502ead705baa83deb6ca1737fa8d57b4.pdf?url';
-import samplePdf10 from './assets/sampledata/d627d238be281cd870fdd9582d9b5fe87578fc8f.pdf?url';
+import samplePdf1 from './assets/sampledata/1.pdf?url';
+import samplePdf2 from './assets/sampledata/2.pdf?url';
+import samplePdf3 from './assets/sampledata/3.pdf?url';
+import samplePdf4 from './assets/sampledata/4.pdf?url';
+import samplePdf5 from './assets/sampledata/5.pdf?url';
+import samplePdf6 from './assets/sampledata/6.pdf?url';
+import samplePdf7 from './assets/sampledata/7.pdf?url';
+import samplePdf8 from './assets/sampledata/8.pdf?url';
+import samplePdf9 from './assets/sampledata/9.pdf?url';
+import samplePdf10 from './assets/sampledata/aug.pdf?url';
 import samplePdf11 from './assets/sampledata/oct.pdf?url';
 import samplePdf12 from './assets/sampledata/sep.pdf?url';
 
