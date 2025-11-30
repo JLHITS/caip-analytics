@@ -1,5 +1,8 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { GoogleGenAI } from "@google/genai";
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
+import LZString from 'lz-string';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -19,7 +22,7 @@ import {
   BarChart3, PieChart, ArrowRight, CheckCircle, AlertCircle,
   Menu, X, ChevronDown, HelpCircle, Info, Sparkles, XCircle,
   Download, Loader2, PlayCircle, AlertTriangle, Trash2, Plus, Monitor, User, Search,
-  ArrowUpDown, ArrowUp, ArrowDown, ChevronUp, Copy, Minimize2, Maximize2
+  ArrowUpDown, ArrowUp, ArrowDown, ChevronUp, Copy, Minimize2, Maximize2, Share2
 } from 'lucide-react';
 
 // PDF.js setup
@@ -38,6 +41,7 @@ import SimpleMarkdown from './components/markdown/SimpleMarkdown';
 import DataProcessingModal from './components/modals/DataProcessingModal';
 import ResetConfirmationModal from './components/modals/ResetConfirmationModal';
 import AIConsentModal from './components/modals/AIConsentModal';
+import ShareModal from './components/modals/ShareModal';
 
 // Utility imports
 import { calculateLinearForecast, getNextMonthNames, isGP } from './utils/calculations';
@@ -154,6 +158,7 @@ export default function App() {
   const [showProcessingInfo, setShowProcessingInfo] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showAIConsent, setShowAIConsent] = useState(false);
+  const [shareUrl, setShareUrl] = useState(null);
 
   // Set document title and favicon on mount
   useEffect(() => {
@@ -167,6 +172,51 @@ export default function App() {
     } else {
       link.href = logo;
     }
+  }, []);
+
+  // Load shared dashboard from URL on mount
+  useEffect(() => {
+    const loadSharedDashboard = () => {
+      try {
+        // Check if URL has hash fragment with shared data
+        const hash = window.location.hash;
+        if (!hash || !hash.startsWith('#/')) return;
+
+        // Extract compressed data from hash
+        const compressed = hash.substring(2); // Remove '#/'
+        if (!compressed) return;
+
+        console.log('📥 Loading shared dashboard from URL...');
+
+        // Decompress data
+        const decompressed = LZString.decompressFromEncodedURIComponent(compressed);
+        if (!decompressed) {
+          console.error('❌ Failed to decompress shared data');
+          alert('Invalid share URL. The link may be corrupted.');
+          return;
+        }
+
+        // Parse JSON
+        const shareData = JSON.parse(decompressed);
+
+        // Restore essential state from shared data (raw data is not included to keep URLs shorter)
+        if (shareData.processedData) setProcessedData(shareData.processedData);
+        if (shareData.config) setConfig(shareData.config);
+        if (shareData.forecastData) setForecastData(shareData.forecastData);
+        if (shareData.aiReport) setAiReport(shareData.aiReport);
+
+        console.log('✅ Shared dashboard loaded successfully');
+        console.log(`📊 Loaded ${shareData.processedData?.length || 0} months of data`);
+
+        // Clear the hash from URL to keep it clean (optional)
+        // window.history.replaceState(null, '', window.location.pathname);
+      } catch (error) {
+        console.error('❌ Failed to load shared dashboard:', error);
+        alert('Failed to load shared dashboard. The URL may be invalid or corrupted.');
+      }
+    };
+
+    loadSharedDashboard();
   }, []);
 
   // Load example/sample data for demonstration
@@ -995,13 +1045,244 @@ export default function App() {
     }
   };
 
-  // Print/PDF export handler
-  const handlePrint = async () => {
-    // Ensure AI report is rendered before printing
-    if (aiReport) {
-      await new Promise(resolve => setTimeout(resolve, 500));
+  // PDF Export handler
+  const handleExportPDF = async () => {
+    try {
+      const previousMonth = selectedMonth;
+      const previousTab = activeTab;
+
+      // Show all data for complete report
+      if (selectedMonth !== 'All') {
+        setSelectedMonth('All');
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+
+      // Create PDF in landscape mode
+      const pdf = new jsPDF('landscape', 'mm', 'a4');
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+
+      // ===== PAGE 1: NHS BLUE COVER PAGE =====
+      pdf.setFillColor(0, 94, 184); // NHS Blue
+      pdf.rect(0, 0, pageWidth, pageHeight, 'F');
+
+      // Add logo with white rounded box background
+      const logoImg = new Image();
+      logoImg.src = logo;
+      await new Promise(resolve => { logoImg.onload = resolve; });
+
+      // White rounded box for logo
+      pdf.setFillColor(255, 255, 255);
+      const logoBoxSize = 60;
+      const logoBoxX = pageWidth / 2 - logoBoxSize / 2;
+      const logoBoxY = 35;
+      pdf.roundedRect(logoBoxX, logoBoxY, logoBoxSize, logoBoxSize, 8, 8, 'F');
+
+      // Logo centered in white box
+      pdf.addImage(logoImg, 'PNG', pageWidth / 2 - 25, 40, 50, 50);
+
+      // Practice name in white NHS font
+      pdf.setTextColor(255, 255, 255);
+      pdf.setFontSize(36);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text(config.surgeryName || 'Surgery Report', pageWidth / 2, 120, { align: 'center' });
+
+      // Title
+      pdf.setFontSize(48);
+      const dateRange = displayedData && displayedData.length > 0
+        ? `${displayedData[0].month} - ${displayedData[displayedData.length - 1].month}`
+        : 'N/A';
+      pdf.text('Capacity & Access Data', pageWidth / 2, 145, { align: 'center' });
+
+      // Date range
+      pdf.setFontSize(24);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(dateRange, pageWidth / 2, 160, { align: 'center' });
+
+      // www.CAIP.app on front page
+      pdf.setFontSize(16);
+      pdf.text('www.CAIP.app', pageWidth / 2, 175, { align: 'center' });
+
+      // ===== PAGE 2: AI ANALYSIS (with placeholder if not generated) =====
+      pdf.addPage();
+      pdf.setFillColor(0, 94, 184);
+      pdf.rect(0, 0, pageWidth, 20, 'F');
+      pdf.setTextColor(255, 255, 255);
+      pdf.setFontSize(18);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('C', 10, 13);
+
+      // Highlight "AI" in CAIP
+      pdf.setTextColor(255, 215, 0); // Gold color for AI
+      pdf.text('AI', 17, 13);
+      pdf.setTextColor(255, 255, 255);
+      pdf.text('P Analysis', 28, 13);
+
+      if (aiReport) {
+        // Show AI analysis content
+        pdf.setTextColor(0, 0, 0);
+        pdf.setFontSize(11);
+        pdf.setFont('helvetica', 'normal');
+        const lines = pdf.splitTextToSize(aiReport, pageWidth - 20);
+        pdf.text(lines, 10, 30);
+      } else {
+        // Show placeholder message
+        pdf.setTextColor(100, 100, 100);
+        pdf.setFontSize(14);
+        pdf.setFont('helvetica', 'normal');
+        pdf.text('CAIP Analysis using AI has not been generated.', pageWidth / 2, pageHeight / 2 - 10, { align: 'center' });
+        pdf.text('Go back and press CAIP Analysis before exporting your data', pageWidth / 2, pageHeight / 2 + 10, { align: 'center' });
+        pdf.text('to include your analysis.', pageWidth / 2, pageHeight / 2 + 25, { align: 'center' });
+      }
+
+      // ===== CAPTURE SECTIONS AS IMAGES =====
+      const sectionConfigs = [
+        { id: 'overview-section', title: 'Overview', tab: 'dashboard' },
+        { id: 'gp-metrics-section', title: 'GP Metrics', tab: 'gp' },
+      ];
+
+      if (config.useOnline && onlineStats) {
+        sectionConfigs.push({ id: 'online-section', title: 'Online Requests', tab: 'online' });
+      }
+
+      if (config.useTelephony) {
+        sectionConfigs.push({ id: 'telephony-section', title: 'Telephony', tab: 'telephony' });
+      }
+
+      sectionConfigs.push({ id: 'forecast-section', title: 'Demand Forecast', tab: 'forecast' });
+
+      for (const section of sectionConfigs) {
+        // Switch to the tab to make content visible
+        setActiveTab(section.tab);
+        await new Promise(resolve => setTimeout(resolve, 800)); // Wait for render and tables to expand
+
+        const element = document.getElementById(section.id);
+        if (!element) continue;
+
+        // Expand all accordions/tables in the section before capturing
+        const accordions = element.querySelectorAll('[data-accordion]');
+        accordions.forEach(acc => {
+          const button = acc.querySelector('button');
+          if (button && button.getAttribute('aria-expanded') === 'false') {
+            button.click();
+          }
+        });
+        await new Promise(resolve => setTimeout(resolve, 300)); // Wait for accordion expansion
+
+        const canvas = await html2canvas(element, {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          backgroundColor: '#ffffff'
+        });
+
+        const imgData = canvas.toDataURL('image/png');
+        const imgWidth = pageWidth - 20;
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+        pdf.addPage();
+
+        // Blue header bar with white text
+        pdf.setFillColor(0, 94, 184);
+        pdf.rect(0, 0, pageWidth, 20, 'F');
+        pdf.setTextColor(255, 255, 255);
+        pdf.setFontSize(18);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text(section.title, 10, 13);
+
+        // Add section image
+        let position = 30;
+        pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+
+        // Handle content that spans multiple pages
+        let heightLeft = imgHeight - (pageHeight - position);
+        while (heightLeft > 0) {
+          pdf.addPage();
+          pdf.setFillColor(0, 94, 184);
+          pdf.rect(0, 0, pageWidth, 20, 'F');
+          pdf.setTextColor(255, 255, 255);
+          pdf.text(section.title + ' (continued)', 10, 13);
+
+          position = 30 - (imgHeight - heightLeft);
+          pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+          heightLeft -= (pageHeight - 30);
+        }
+      }
+
+      // ===== LAST PAGE: DISCLAIMER & ADVERTISING =====
+      pdf.addPage();
+
+      pdf.setFillColor(0, 94, 184);
+      pdf.rect(0, 0, pageWidth, 20, 'F');
+      pdf.setTextColor(255, 255, 255);
+      pdf.setFontSize(18);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Important Information', 10, 13);
+
+      // Disclaimer
+      pdf.setTextColor(0, 0, 0);
+      pdf.setFontSize(11);
+      pdf.setFont('helvetica', 'normal');
+      const disclaimerText = 'By generating the dashboard, I understand that this tool is for decision support only and does not constitute clinical advice. Data processing happens locally in your browser, but AI analysis (if used) sends anonymized statistical data to third-party services.';
+      const disclaimerLines = pdf.splitTextToSize(disclaimerText, pageWidth - 20);
+      pdf.text(disclaimerLines, 10, 35);
+
+      // Advertising
+      pdf.setFontSize(14);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(0, 94, 184);
+      pdf.text('Create your own practice dashboard for free at www.CAIP.app', pageWidth / 2, pageHeight - 40, { align: 'center' });
+
+      // Logo at bottom
+      pdf.addImage(logoImg, 'PNG', pageWidth / 2 - 15, pageHeight - 30, 30, 30);
+
+      // Save PDF
+      const filename = `CAIP-Analytics-${config.surgeryName?.replace(/\s+/g, '-') || 'Report'}-${new Date().toISOString().split('T')[0]}.pdf`;
+      pdf.save(filename);
+
+      // Restore previous selections
+      setActiveTab(previousTab);
+      if (previousMonth !== 'All') {
+        setTimeout(() => setSelectedMonth(previousMonth), 100);
+      }
+
+    } catch (error) {
+      console.error('PDF export failed:', error);
+      alert('Failed to export PDF. Please try again.');
     }
-    window.print();
+  };
+
+  // Share dashboard handler - generates shareable URL with compressed data
+  const handleShare = async () => {
+    try {
+      // Package only essential data (skip raw data to reduce URL length)
+      // Raw data is only needed for initial processing, not for displaying the dashboard
+      const shareData = {
+        processedData,    // Aggregated monthly metrics (essential)
+        config,           // Surgery name and settings (essential)
+        forecastData,     // Demand forecasts (small, essential)
+        aiReport,         // AI analysis (optional but valuable)
+        version: APP_VERSION
+      };
+
+      // Compress data to URL-safe format
+      const compressed = LZString.compressToEncodedURIComponent(JSON.stringify(shareData));
+
+      // Generate shareable URL using hash-based routing
+      const generatedUrl = `https://www.caip.app/#/${compressed}`;
+
+      // Set URL for modal display
+      setShareUrl(generatedUrl);
+
+      // Copy to clipboard
+      await navigator.clipboard.writeText(generatedUrl);
+
+      console.log('✅ Share URL generated and copied to clipboard');
+      console.log(`📏 URL length: ${generatedUrl.length} characters`);
+    } catch (error) {
+      console.error('❌ Share generation failed:', error);
+      alert('Failed to generate share URL. The data might be too large.');
+    }
   };
 
   // Copy AI report to clipboard
@@ -1567,13 +1848,22 @@ export default function App() {
                 </span>
               </button>
 
-              {/* 2. Print Report Button */}
+              {/* 2. Export PDF Button - Hidden for now */}
               <button
-                onClick={handlePrint}
-                className="flex items-center gap-2 px-6 py-3 bg-white text-slate-600 border border-slate-200 rounded-full hover:bg-slate-50 hover:border-slate-300 hover:text-slate-800 transition-all shadow-sm hover:shadow-md disabled:opacity-70"
+                onClick={handleExportPDF}
+                className="hidden flex items-center gap-2 px-6 py-3 bg-white text-slate-600 border border-slate-200 rounded-full hover:bg-slate-50 hover:border-slate-300 hover:text-slate-800 transition-all shadow-sm hover:shadow-md disabled:opacity-70"
               >
                 <Download size={18} />
-                <span className="font-semibold">Print Report</span>
+                <span className="font-semibold">Export PDF</span>
+              </button>
+
+              {/* 3. Share Button */}
+              <button
+                onClick={handleShare}
+                className="flex items-center gap-2 px-6 py-3 bg-white text-slate-600 border border-slate-200 rounded-full hover:bg-slate-50 hover:border-slate-300 hover:text-slate-800 transition-all shadow-sm hover:shadow-md disabled:opacity-70"
+              >
+                <Share2 size={18} />
+                <span className="font-semibold">Share Dashboard</span>
               </button>
             </div>
 
@@ -1600,7 +1890,7 @@ export default function App() {
 
             {/* --- VISIBLE CONTENT (Interactive) --- */}
             {activeTab === 'dashboard' && (
-              <div className="space-y-6">
+              <div id="overview-section" className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <MetricCard
                     title="Total Appointments"
@@ -1688,7 +1978,7 @@ export default function App() {
             )}
 
             {activeTab === 'gp' && (
-              <div className="space-y-6">
+              <div id="gp-metrics-section" className="space-y-6">
                 <Card className="h-96 border-2 border-teal-100 shadow-md bg-gradient-to-br from-white to-teal-50/30">
                   <h3 className="font-bold text-slate-800 mb-2 text-lg flex items-center gap-2"><Activity className="text-teal-600" size={24} /> Patients with GP Appointment or Resolved Online Request per Day (%)</h3>
                   <p className="text-sm text-slate-500 mb-4">Percentage of registered patients each working day who either attended a GP appointment or had their online request resolved without needing one.</p>
@@ -1799,7 +2089,7 @@ export default function App() {
 
             {/* NEW ONLINE TAB */}
             {activeTab === 'online' && onlineStats && (
-              <div className="space-y-6">
+              <div id="online-section" className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
                   <Card className="p-4 flex flex-col justify-between">
                     <p className="text-xs font-bold text-slate-400 uppercase">Total Online Requests</p>
@@ -1888,7 +2178,7 @@ export default function App() {
             )}
 
             {activeTab === 'telephony' && (
-              <div className="space-y-6">
+              <div id="telephony-section" className="space-y-6">
                 {!config.useTelephony ? ( // Fixed condition logic
                   <div className="text-center py-20 text-slate-400">
                     <p>Telephony analysis is disabled.</p>
@@ -1972,7 +2262,7 @@ export default function App() {
             )}
 
             {activeTab === 'forecast' && (
-              <div className="max-w-4xl mx-auto space-y-6">
+              <div id="forecast-section" className="max-w-4xl mx-auto space-y-6">
                 <Card className="bg-gradient-to-br from-blue-600 to-indigo-700 text-white border-none">
                   <div className="flex items-start gap-4">
                     <div className="p-3 bg-white/10 rounded-xl">
@@ -2022,220 +2312,6 @@ export default function App() {
               </div>
             )}
 
-            {/* --- HIDDEN PRINT CONTAINER --- */}
-            <div id="pdf-report-container" className="hidden print:block bg-white w-full">
-
-              <div id="pdf-title-page" className="flex flex-col items-center justify-center min-h-screen p-20 text-center bg-slate-50 break-after-page">
-                <img src={logo} className="w-32 h-32 mb-8 rounded-xl shadow-lg" />
-                <h1 className="text-6xl font-bold text-slate-900 mb-4">CAIP Analysis Report</h1>
-                <h2 className="text-4xl text-blue-600 font-medium mb-12">{config.surgeryName || 'Surgery Report'}</h2>
-                <p className="text-slate-500 text-xl">Generated on {new Date().toLocaleDateString()}</p>
-
-                {aiReport && (
-                  <div className="mt-12 text-left bg-white p-8 rounded-2xl shadow-sm border border-slate-200 max-w-4xl mx-auto">
-                    <h3 className="text-2xl font-bold text-indigo-900 mb-4 flex items-center gap-2"><Sparkles className="text-indigo-500" /> CAIP Analysis Summary</h3>
-                    <div className="prose prose-lg max-w-none text-slate-700">
-                      <SimpleMarkdown text={aiReport} />
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div id="pdf-overview-section" className="p-10 space-y-8 break-after-page">
-                <h2 className="text-3xl font-bold text-slate-800 border-b border-slate-200 pb-4 mb-6">1. Practice Overview</h2>
-                <div className="grid grid-cols-3 gap-6">
-                  <MetricCard title="Total Appointments" value={displayedData.reduce((a, b) => a + b.totalAppts, 0).toLocaleString()} icon={Calendar} color="text-blue-600" />
-                  <MetricCard title="Avg Inbound Calls" value={Math.round(displayedData.reduce((a, b) => a + b.inboundReceived, 0) / (selectedMonth === 'All' ? displayedData.length : 1)).toLocaleString()} icon={Phone} color="text-indigo-600" />
-                  <MetricCard title="Avg DNA Rate" value={`${(displayedData.reduce((a, b) => a + b.allDNAPct, 0) / (selectedMonth === 'All' ? displayedData.length : 1)).toFixed(2)}%`} icon={XCircle} color="text-red-500" />
-                </div>
-                <div className="h-96 border border-slate-200 rounded-xl p-4"><Line data={createChartData('Total Appointments', 'totalAppts', NHS_BLUE)} options={pdfChartOptions} /></div>
-
-                <div className="mt-8">
-                  <h3 className="text-xl font-bold text-slate-700 mb-4">Full Staff Breakdown</h3>
-                  <SortableTable
-                    data={aggregatedStaffData}
-                    columns={[
-                      { header: 'Name', accessor: 'name' },
-                      { header: 'Appointments', accessor: 'appts', render: (row) => Math.round(row.appts).toLocaleString() },
-                      { header: unusedHeader, accessor: 'unused', render: (row) => `${Math.round(row.unused).toLocaleString()} (${((row.unused / (row.appts + row.unused || 1)) * 100).toFixed(1)}%)` },
-                      { header: dnaHeader, accessor: 'dna', render: (row) => `${Math.round(row.dna).toLocaleString()} (${((row.dna / (row.appts || 1)) * 100).toFixed(1)}%)` }
-                    ]}
-                    isPrint={true}
-                  />
-                </div>
-
-                <div className="mt-8">
-                  <h3 className="text-xl font-bold text-slate-700 mb-4">Slot Type Breakdown</h3>
-                  <SortableTable
-                    data={aggregatedSlotData}
-                    columns={[
-                      { header: 'Slot Type', accessor: 'name' },
-                      { header: 'Appointments', accessor: 'appts', render: (row) => Math.round(row.appts).toLocaleString() },
-                      { header: unusedHeader, accessor: 'unused', render: (row) => `${Math.round(row.unused).toLocaleString()} (${((row.unused / (row.appts + row.unused || 1)) * 100).toFixed(1)}%)` },
-                      { header: dnaHeader, accessor: 'dna', render: (row) => `${Math.round(row.dna).toLocaleString()} (${((row.dna / (row.appts || 1)) * 100).toFixed(1)}%)` }
-                    ]}
-                    isPrint={true}
-                  />
-                </div>
-
-                <div className="mt-8">
-                  <h3 className="text-xl font-bold text-slate-700 mb-4">Staff & Slot Performance</h3>
-                  <SortableTable
-                    data={aggregatedCombinedData}
-                    columns={[
-                      { header: 'Name', accessor: 'name' },
-                      { header: 'Slot Type', accessor: 'slot', render: (row) => row.slot || '-' },
-                      { header: 'Appointments', accessor: 'appts', render: (row) => Math.round(row.appts).toLocaleString() },
-                      { header: unusedHeader, accessor: 'unused', render: (row) => `${Math.round(row.unused).toLocaleString()} (${((row.unused / (row.appts + row.unused || 1)) * 100).toFixed(1)}%)` },
-                      { header: dnaHeader, accessor: 'dna', render: (row) => `${Math.round(row.dna).toLocaleString()} (${((row.dna / (row.appts || 1)) * 100).toFixed(1)}%)` }
-                    ]}
-                    isPrint={true}
-                  />
-                </div>
-              </div>
-
-              <div id="pdf-gp-section" className="p-10 space-y-8 break-after-page">
-                <h2 className="text-3xl font-bold text-slate-800 border-b border-slate-200 pb-4 mb-6">2. GP Metrics</h2>
-                <div className="h-96 border border-slate-200 rounded-xl p-4"><h3 className="font-bold text-slate-800 mb-2 text-lg">Patients with GP Appointment or Resolved Online Request per Day (%)</h3><Line data={createChartData('GP appointment or online resolve per day (%)', 'gpTriageCapacityPerDayPct', NHS_AQUA, true)} options={pdfGpBandOptions} /></div>
-                <div className="h-96 border border-slate-200 rounded-xl p-4 mt-6"><h3 className="font-bold text-slate-800 mb-2 text-lg">Patients with GP Appointment (%)</h3><Line data={createChartData('GP Appts %', 'gpApptsPerDay', NHS_DARK_BLUE, false)} options={pdfGpBandOptions} /></div>
-                <div className="grid grid-cols-2 gap-6">
-                  <div className="h-80 border border-slate-200 rounded-xl p-4"><Line data={createChartData('Utilisation %', 'gpUtilization', NHS_GREEN)} options={pdfUtilizationOptions} /></div>
-                  <div className="h-80 border border-slate-200 rounded-xl p-4"><Line data={createChartData('GP Conversion Ratio', 'gpConversionRatio', NHS_PURPLE)} options={pdfRatioOptions} /></div>
-                </div>
-                <div className="grid grid-cols-3 gap-6 mt-6">
-                  <div className="h-64 border border-slate-200 rounded-xl p-4"><h3 className="font-bold text-slate-700 mb-2 text-sm uppercase">GP Unused Slots</h3><div className="h-40"><Line data={createChartData('GP Unused %', 'gpUnusedPct', NHS_GREEN)} options={pdfPercentageOptions} /></div></div>
-                  <div className="h-64 border border-slate-200 rounded-xl p-4"><h3 className="font-bold text-slate-700 mb-2 text-sm uppercase">GP DNA Rate</h3><div className="h-40"><Line data={createChartData('GP DNA %', 'gpDNAPct', NHS_RED)} options={pdfPercentageOptions} /></div></div>
-                  <div className="h-64 border border-slate-200 rounded-xl p-4"><h3 className="font-bold text-slate-700 mb-2 text-sm uppercase">GP Appointments</h3><div className="h-40"><Bar data={{ labels: displayedData.map(d => d.month), datasets: [{ label: 'GP Appointments', data: displayedData.map(d => d.gpAppts), backgroundColor: NHS_BLUE }] }} options={pdfChartOptions} /></div></div>
-                </div>
-
-                <div className="mt-8">
-                  <h3 className="text-xl font-bold text-slate-700 mb-4">GP Staff Performance</h3>
-                  <SortableTable
-                    data={aggregatedStaffData.filter(s => s.isGP)}
-                    columns={[
-                      { header: 'GP Name', accessor: 'name' },
-                      { header: 'Appointments', accessor: 'appts', render: (row) => Math.round(row.appts).toLocaleString() },
-                      { header: unusedHeader, accessor: 'unused', render: (row) => `${Math.round(row.unused).toLocaleString()} (${((row.unused / (row.appts + row.unused || 1)) * 100).toFixed(1)}%)` },
-                      { header: dnaHeader, accessor: 'dna', render: (row) => `${Math.round(row.dna).toLocaleString()} (${((row.dna / (row.appts || 1)) * 100).toFixed(1)}%)` }
-                    ]}
-                    isPrint={true}
-                  />
-                </div>
-
-                <div className="mt-8">
-                  <h3 className="text-xl font-bold text-slate-700 mb-4">GP Slot Type Breakdown</h3>
-                  <SortableTable
-                    data={aggregatedSlotData.filter(s => s.hasGPActivity)}
-                    columns={[
-                      { header: 'Slot Type', accessor: 'name' },
-                      { header: 'Appointments', accessor: 'appts', render: (row) => Math.round(row.appts).toLocaleString() },
-                      { header: unusedHeader, accessor: 'unused', render: (row) => `${Math.round(row.unused).toLocaleString()} (${((row.unused / (row.appts + row.unused || 1)) * 100).toFixed(1)}%)` },
-                      { header: dnaHeader, accessor: 'dna', render: (row) => `${Math.round(row.dna).toLocaleString()} (${((row.dna / (row.appts || 1)) * 100).toFixed(1)}%)` }
-                    ]}
-                    isPrint={true}
-                  />
-                </div>
-
-                <div className="mt-8">
-                  <h3 className="text-xl font-bold text-slate-700 mb-4">GP Staff & Slot Performance</h3>
-                  <SortableTable
-                    data={aggregatedCombinedData.filter(s => s.isGP)}
-                    columns={[
-                      { header: 'Name', accessor: 'name' },
-                      { header: 'Slot Type', accessor: 'slot', render: (row) => row.slot || '-' },
-                      { header: 'Appointments', accessor: 'appts', render: (row) => Math.round(row.appts).toLocaleString() },
-                      { header: unusedHeader, accessor: 'unused', render: (row) => `${Math.round(row.unused).toLocaleString()} (${((row.unused / (row.appts + row.unused || 1)) * 100).toFixed(1)}%)` },
-                      { header: dnaHeader, accessor: 'dna', render: (row) => `${Math.round(row.dna).toLocaleString()} (${((row.dna / (row.appts || 1)) * 100).toFixed(1)}%)` }
-                    ]}
-                    isPrint={true}
-                  />
-                </div>
-              </div>
-
-              {config.useOnline && onlineStats && (
-                <div id="pdf-online-section" className="p-10 space-y-8 break-after-page">
-                  <h2 className="text-3xl font-bold text-slate-800 border-b border-slate-200 pb-4 mb-6">3. Online Requests Analysis</h2>
-                  <div className="grid grid-cols-5 gap-4 mb-6">
-                    <Card className="p-4 flex flex-col justify-between"><p className="text-xs font-bold text-slate-400 uppercase">Offered/Booked</p><h3 className="text-2xl font-bold text-blue-600">{onlineStats.totalOfferedOrBooked.toLocaleString()}</h3></Card>
-                    <Card className="p-4 flex flex-col justify-between"><p className="text-xs font-bold text-slate-400 uppercase">Digital Resolve</p><h3 className="text-2xl font-bold text-green-600">{onlineStats.totalResolved.toLocaleString()}</h3></Card>
-                    <Card className="p-4 flex flex-col justify-between"><p className="text-xs font-bold text-slate-400 uppercase">Avg Requests/Mo</p><h3 className="text-2xl font-bold text-indigo-600">{Math.round(displayedData.reduce((a, b) => a + (b.onlineTotal || 0), 0) / (selectedMonth === 'All' ? displayedData.length : 1)).toLocaleString()}</h3></Card>
-                    <Card className="p-4 flex flex-col justify-between"><p className="text-xs font-bold text-slate-400 uppercase">Avg Patient Age</p><h3 className="text-2xl font-bold text-amber-600">{onlineStats.ageCount ? Math.round(onlineStats.totalAge / onlineStats.ageCount) : 0} yrs</h3></Card>
-                    <Card className="p-4 flex flex-col justify-between"><p className="text-xs font-bold text-slate-400 uppercase">Avg Time (Clin vs Admin)</p>
-                      <div className="flex flex-col gap-1">
-                        <div className="flex justify-between text-xs"><span>Clinical:</span> <span className="font-bold text-purple-600">{onlineStats.clinicalDurationCount ? (onlineStats.clinicalDurationTotal / onlineStats.clinicalDurationCount).toFixed(1) : 0}h</span></div>
-                        <div className="flex justify-between text-xs"><span>Admin:</span> <span className="font-bold text-slate-600">{onlineStats.adminDurationCount ? (onlineStats.adminDurationTotal / onlineStats.adminDurationCount).toFixed(1) : 0}h</span></div>
-                      </div>
-                    </Card>
-                  </div>
-                  <div className="grid grid-cols-3 gap-6 h-80">
-                    <div className="border border-slate-200 rounded-xl p-4"><h3 className="font-bold text-slate-700 mb-2 text-center">Request Type</h3><Doughnut data={createDonutData(onlineStats.typeBreakdown, [NHS_BLUE, NHS_AMBER])} options={donutOptions} /></div>
-                    <div className="border border-slate-200 rounded-xl p-4"><h3 className="font-bold text-slate-700 mb-2 text-center">Access Method</h3><Doughnut data={createDonutData(onlineStats.accessMethod, [NHS_GREEN, NHS_PURPLE, NHS_AQUA])} options={donutOptions} /></div>
-                    <div className="border border-slate-200 rounded-xl p-4"><h3 className="font-bold text-slate-700 mb-2 text-center">Patient Sex</h3><Doughnut data={createDonutData(onlineStats.sexSplit, [NHS_BLUE, NHS_PINK])} options={donutOptions} /></div>
-                  </div>
-                  <div className="h-96 border border-slate-200 rounded-xl p-4 mt-8">
-                    <h3 className="font-bold text-slate-800 mb-4">Outcome Breakdown</h3>
-                    <Bar data={{ labels: Object.keys(onlineStats.outcomes), datasets: [{ label: 'Count', data: Object.values(onlineStats.outcomes), backgroundColor: NHS_AQUA, borderRadius: 4 }] }} options={{ ...pdfChartOptions, indexAxis: 'y', scales: { x: { beginAtZero: true } } }} />
-                  </div>
-                </div>
-              )}
-
-              {config.useTelephony && displayedData && displayedData.length > 0 && (
-                <div id="pdf-telephony-section" className="p-10 space-y-8 break-after-page">
-                  <h2 className="text-3xl font-bold text-slate-800 border-b border-slate-200 pb-4 mb-6">4. Telephony Performance</h2>
-                  <div className="grid grid-cols-5 gap-4 mb-6">
-                    {[
-                      { l: 'Inbound Calls', k: 'inboundReceived', c: 'text-blue-600' },
-                      { l: 'Answered Queue', k: 'answeredFromQueue', c: 'text-green-600', suffix: '%' },
-                      { l: 'Abandoned', k: 'abandonedCalls', c: 'text-amber-600', suffix: '%' },
-                      { l: 'Callbacks Success', k: 'callbacksSuccessful', c: 'text-blue-500' },
-                      { l: 'Avg Wait', k: 'avgQueueTimeAnswered', c: 'text-slate-600', fmt: v => `${Math.floor(v / 60)}m ${v % 60}s` }
-                    ].map((m, i) => {
-                      const lastMonth = displayedData[displayedData.length - 1] || {};
-                      const value = lastMonth[m.k] || 0;
-                      return (
-                        <Card key={i} className="p-4 border border-slate-200 shadow-none bg-slate-50">
-                          <p className="text-xs font-bold text-slate-400 uppercase">{m.l}</p>
-                          <p className={`text-xl font-bold ${m.c} mt-1`}>
-                            {m.fmt ? m.fmt(value) : `${value.toLocaleString()}${m.suffix || ''}`}
-                          </p>
-                          <p className="text-[10px] text-slate-400">{selectedMonth === 'All' ? 'Latest Month' : selectedMonth}</p>
-                        </Card>
-                      );
-                    })}
-                  </div>
-                  <div className="grid grid-cols-3 gap-6 h-80">
-                    <div className="border border-slate-200 rounded-xl p-4"><Bar data={{ labels: displayedData.map(d => d.month), datasets: [{ label: 'Answered %', data: displayedData.map(d => 100 - (d.missedFromQueueExRepeatPct || 0)), backgroundColor: NHS_GREEN }, { label: 'Missed %', data: displayedData.map(d => d.missedFromQueueExRepeatPct || 0), backgroundColor: NHS_RED }] }} options={pdfStackedPercentageOptions} /></div>
-                    <div className="border border-slate-200 rounded-xl p-4"><Line data={createChartData('Abandoned %', 'abandonedCalls', NHS_AMBER)} options={pdfPercentageOptions} /></div>
-                    <div className="border border-slate-200 rounded-xl p-4"><Line data={createChartData('Avg Queue Time', 'avgQueueTimeAnswered', NHS_BLUE)} options={pdfTimeOptions} /></div>
-                  </div>
-                  <div className="grid grid-cols-3 gap-6 h-80 mt-6">
-                    <div className="border border-slate-200 rounded-xl p-4"><h3 className="font-bold text-slate-700 mb-2 text-sm">Missed (Unique) %</h3><Line data={createChartData('Missed Unique %', 'missedFromQueueExRepeatPct', NHS_RED)} options={pdfPercentageOptions} /></div>
-                    <div className="border border-slate-200 rounded-xl p-4"><h3 className="font-bold text-slate-700 mb-2 text-sm">Avg Queue Time (Missed)</h3><Line data={createChartData('Time', 'avgQueueTimeMissed', NHS_RED)} options={pdfTimeOptions} /></div>
-                    <div className="border border-slate-200 rounded-xl p-4"><h3 className="font-bold text-slate-700 mb-2 text-sm">Avg Inbound Talk Time</h3><Line data={createChartData('Time', 'avgInboundTalkTime', NHS_GREY)} options={pdfTimeOptions} /></div>
-                  </div>
-                </div>
-              )}
-
-              <div id="pdf-forecast-section" className="p-10 space-y-8 break-after-page">
-                <h2 className="text-3xl font-bold text-slate-800 border-b border-slate-200 pb-4 mb-6">5. Demand Forecast (GP Only)</h2>
-                <div className="bg-blue-50 p-6 rounded-xl border border-blue-100 text-blue-800 mb-6">
-                  <p className="text-lg">This chart estimates the number of extra GP appointments per day required to meet hidden demand from missed calls.</p>
-                </div>
-                <div className="h-96 border border-slate-200 rounded-xl p-4">
-                  <Bar data={{ labels: displayedData.map(d => d.month), datasets: [{ label: 'Shortfall (Slots/Day)', data: displayedData.map(d => d.extraSlotsPerDay), backgroundColor: displayedData.map(d => d.extraSlotsPerDay > 0 ? '#EF4444' : '#10B981') }] }} options={pdfChartOptions} />
-                </div>
-                {forecastData && forecastData.hasData && (
-                  <div>
-                    <h3 className="text-xl font-bold text-slate-700 mb-4 mt-8">Future Trends (Next 2 Months)</h3>
-                    <div className="grid grid-cols-2 gap-6">
-                      <div className="h-80 border border-slate-200 rounded-xl p-4"><Line data={createForecastChartData('Actual Appointments', 'Forecast Trend', forecastData.appts, NHS_BLUE)} options={pdfChartOptions} /></div>
-                      <div className="h-80 border border-slate-200 rounded-xl p-4"><Line data={createForecastChartData('Actual Calls', 'Forecast Trend', forecastData.calls, NHS_PURPLE)} options={pdfChartOptions} /></div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-            </div>
 
           </div>
         )}
@@ -2268,6 +2344,12 @@ export default function App() {
           setShowAIConsent(false);
           runAIAnalysis();
         }}
+      />
+
+      <ShareModal
+        isOpen={shareUrl !== null}
+        onClose={() => setShareUrl(null)}
+        shareUrl={shareUrl}
       />
     </div>
   );
