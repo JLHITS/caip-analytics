@@ -199,11 +199,15 @@ export default function App() {
         // Parse JSON
         const shareData = JSON.parse(decompressed);
 
-        // Restore essential state from shared data (raw data is not included to keep URLs shorter)
+        // Restore all state from shared data
         if (shareData.processedData) setProcessedData(shareData.processedData);
         if (shareData.config) setConfig(shareData.config);
         if (shareData.forecastData) setForecastData(shareData.forecastData);
         if (shareData.aiReport) setAiReport(shareData.aiReport);
+        if (shareData.rawOnlineData) setRawOnlineData(shareData.rawOnlineData);
+        if (shareData.rawStaffData) setRawStaffData(shareData.rawStaffData);
+        if (shareData.rawSlotData) setRawSlotData(shareData.rawSlotData);
+        if (shareData.rawCombinedData) setRawCombinedData(shareData.rawCombinedData);
 
         console.log('✅ Shared dashboard loaded successfully');
         console.log(`📊 Loaded ${shareData.processedData?.length || 0} months of data`);
@@ -1255,13 +1259,17 @@ export default function App() {
   // Share dashboard handler - generates shareable URL with compressed data
   const handleShare = async () => {
     try {
-      // Package only essential data (skip raw data to reduce URL length)
-      // Raw data is only needed for initial processing, not for displaying the dashboard
+      // Package essential data + online data for full dashboard functionality
+      // Excludes large raw appointment data to keep URLs manageable
       const shareData = {
         processedData,    // Aggregated monthly metrics (essential)
         config,           // Surgery name and settings (essential)
         forecastData,     // Demand forecasts (small, essential)
         aiReport,         // AI analysis (optional but valuable)
+        rawOnlineData,    // Online request data (needed for online tab)
+        rawStaffData,     // Staff appointment data (needed for tables)
+        rawSlotData,      // Slot type data (needed for tables)
+        rawCombinedData,  // Combined staff+slot data (needed for tables)
         version: APP_VERSION
       };
 
