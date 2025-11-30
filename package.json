@@ -1,7 +1,7 @@
 {
   "name": "caip-analytics",
   "private": true,
-  "version": "0.0.9",
+  "version": "0.1.9",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,7 +12,10 @@
   "dependencies": {
     "@google/genai": "^1.30.0",
     "chart.js": "^4.5.1",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^3.0.4",
     "lucide-react": "^0.554.0",
+    "lz-string": "^1.5.0",
     "papaparse": "^5.5.3",
     "pdfjs-dist": "^5.4.394",
     "react": "^19.2.0",
