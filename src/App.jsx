@@ -714,7 +714,7 @@ export default function App() {
         // Combines traditional face-to-face appointments with digitally resolved requests
         // Provides true picture of GP capacity including modern triage methods
         const gpTriageCapacityPerDayPct = workingDays > 0 && configToUse.population > 0
-          ? ((gpAppts / workingDays) / configToUse.population * 100)
+          ? (((gpAppts + (onlineClinicalNoAppt || 0)) / workingDays) / configToUse.population * 100)
           : 0;
 
         const gpRatio = t.inboundAnswered > 0 ? (gpAppts / t.inboundAnswered) : 0;
