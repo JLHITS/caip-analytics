@@ -946,13 +946,13 @@ export default function App() {
         },
         {
           key: 'abandonedCalls',
-          title: 'Callback abandoned',
-          description: 'Callbacks that were not connected after being requested',
+          title: 'Calls abandoned at by the patient (NOT MISSED)',
+          description: 'Calls that were abandoned by the caller before being answered when they listen to the IVF messaging. A high % here is not a bad thing and indicates effective call flow.',
           format: 'number'
         },
         {
           key: 'callbacksSuccessful',
-          title: 'Callbacks successful',
+          title: 'Number of Callbacks successful',
           description: 'Callbacks that successfully connected to a patient',
           format: 'number'
         },
@@ -1044,7 +1044,24 @@ export default function App() {
         * Logic:
             * If **Online Requests** are high but **Patients with a GP appointment or resolved online request per day (%)** is low, suggest: "High digital demand is not being fully captured in clinical workload data."
             * If **Booking Conversion** is low, suggest: "High call volume not converting to appts. Review signposting."
-            * If **Utilization** is low (<95%), suggest: "Wasted capacity. Review embargoes."
+            * If **Utilization** is low (<95%), suggest: "Wasted capacity. Review slot types in rotas where slots are going unused. This may look like unused capacity in national data sets."
+            * If **DNA Rate** is high (>7%), suggest: "High DNA rate impacting capacity. Consider reviewing reminder systems."
+            * If **Average Queue Time (missed)** is high (>120s), suggest: "Long wait times leading to missed calls. Review telephony staffing."
+            * If **Extra slots required per day** is positive, suggest: "Consider increasing daily appointment slots by approximately X to meet demand."
+            * If Abandoned Calls % is high (>20%), suggest: "High abandoned call rate. This means your call flow is effective"
+            * If **Patients with a GP appointment or resolved online request per day (%)** is below 1.0%, suggest: "Low GP capacity per patient population. Consider recruitment strategies to increase access."
+            * If Abandoned Calls % is low (<10%), suggest: "Low abandoned call rate. This may indicate your call flow is inneffective and too short"
+            * If **Online Requests per 1,000 patients** is low (<50 per month), suggest: "Low online request volume. Promote digital access channels to patients or open up digital capacity"
+            * If Missed Call Rate (unique) is high (>10%), suggest: "High unique missed call rate. Review telephony call flow and staffing levels at peak times."
+            * If Missed Call Rate (unique) is low (<5%), suggest: "Low unique missed call rate. This may indicate insufficient call queue capacity leading to abandoned calls."
+            * If **GP DNA Rate** is high (>10%), suggest: "High GP DNA rate impacting capacity. Consider targeted interventions for DNA reduction such as SystmOne DNA Probability Report."
+            * If Patients with a GP appointment per day (%) is above 1.6%, suggest: "High GP Capacity per patient population. Consider if this is sustainable long-term and review clinical workforce wellbeing."
+            * If patients with a GP appointment or resolved online request per day (%) is above 2.0%, suggest: "Very high GP capacity per patient population. This may not be sustainable long-term and could indicate over-servicing. Review clinical workforce wellbeing."
+            * If patients with a GP appointment per day (%) is below 1.0%, suggest: "Low GP capacity per patient population. Consider recruitment strategies to increase access."
+            * If telephony metrics show poor performance and Online Access method shows a high number of Practice Initiated Link (>20% of online requests), suggest: "Your staff may do too many online requests for patients. Consider promoting online access channels to reduce telephony demand."
+            * If Patients with a GP appointment or resolved online request per day (%) is between 1.0% and 1.6%, acknowledge this as a reasonable level of access but suggest continuous monitoring to maintain balance between access and workforce wellbeing.
+            * If missed call rate (unique) is between 5% and 10%, acknowledge this as a reasonable performance but suggest continuous monitoring to optimise telephony access.
+
             * Apply additional best-practice logic from NHS UK access improvement guidance when proposing actions.
 
         Keep the tone professional, constructive, and specific to NHS Primary Care. Use British English.
@@ -1946,12 +1963,12 @@ export default function App() {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <Card className="h-80 lg:col-span-1">
                     <h3 className="font-bold text-slate-700 mb-4">Appointment Trends</h3>
-                    <Line data={createChartData('Total Appointments', 'totalAppts', NHS_BLUE)} options={commonOptions} />
+                    <Line data={createChartData(displayedData, 'Total Appointments', 'totalAppts', NHS_BLUE)} options={commonOptions} />
                   </Card>
                   <Card className="h-80">
                     <h3 className="font-bold text-slate-700 mb-2">Online Request Rate</h3>
                     <p className="text-xs text-slate-400 mb-4">Requests per 1000 patients per week</p>
-                    <Line data={createChartData('Requests/1000/wk', 'onlineRequestsPer1000', NHS_AQUA, false)} options={onlineRequestBandOptions} />
+                    <Line data={createChartData(displayedData, 'Requests/1000/wk', 'onlineRequestsPer1000', NHS_AQUA, false)} options={onlineRequestBandOptions} />
                   </Card>
                 </div>
 
@@ -2011,7 +2028,7 @@ export default function App() {
                   <h3 className="font-bold text-slate-800 mb-2 text-lg flex items-center gap-2"><Activity className="text-teal-600" size={24} /> Patients with GP Appointment or Resolved Online Request per Day (%)</h3>
                   <p className="text-sm text-slate-500 mb-4">Percentage of registered patients each working day who either attended a GP appointment or had their online request resolved without needing one.</p>
                   <div className="h-72">
-                    <Line data={createChartData('GP appointment or online resolve per day (%)', 'gpTriageCapacityPerDayPct', NHS_AQUA, false)} options={gpBandOptions} />
+                    <Line data={createChartData(displayedData, 'GP appointment or online resolve per day (%)', 'gpTriageCapacityPerDayPct', NHS_AQUA, false)} options={gpBandOptions} />
                   </div>
                 </Card>
 
@@ -2019,7 +2036,7 @@ export default function App() {
                   <h3 className="font-bold text-slate-800 mb-2 text-lg">Patients with GP Appointment per Day (%)</h3>
                   <p className="text-sm text-slate-500 mb-4">Performance Bands: Red (&lt;0.85%), Amber (0.85-1.10%), Green (1.10-1.30%), Blue (&gt;1.30%)</p>
                   <div className="h-72">
-                    <Line data={createChartData('GP Appts %', 'gpApptsPerDay', NHS_DARK_BLUE, false)} options={gpBandOptions} />
+                    <Line data={createChartData(displayedData, 'GP Appts %', 'gpApptsPerDay', NHS_DARK_BLUE, false)} options={gpBandOptions} />
                   </div>
                 </Card>
 
@@ -2027,12 +2044,12 @@ export default function App() {
                   <Card className="h-80">
                     <h3 className="font-bold text-slate-700 mb-2">GP Capacity Utilisation</h3>
                     <p className="text-xs text-slate-400 mb-4">% of total GP capacity (Appts + Unused) that was used</p>
-                    <Line data={createChartData('Utilisation %', 'gpUtilization', NHS_GREEN)} options={utilizationOptions} />
+                    <Line data={createChartData(displayedData, 'Utilisation %', 'gpUtilization', NHS_GREEN)} options={utilizationOptions} />
                   </Card>
                   <Card className="h-80">
                     <h3 className="font-bold text-slate-700 mb-2">GP Booking Conversion</h3>
                     <p className="text-xs text-slate-400 mb-4">GP Appointments per answered call</p>
-                    <Line data={createChartData('GP Conversion Ratio', 'gpConversionRatio', NHS_PURPLE)} options={ratioOptions} />
+                    <Line data={createChartData(displayedData, 'GP Conversion Ratio', 'gpConversionRatio', NHS_PURPLE)} options={ratioOptions} />
                   </Card>
                 </div>
 
@@ -2041,14 +2058,14 @@ export default function App() {
                     <h3 className="font-bold text-slate-700 mb-2 text-sm uppercase">GP Unused Slots</h3>
                     <p className="text-xs text-slate-400 mb-4">% of total GP slots</p>
                     <div className="h-40">
-                      <Line data={createChartData('GP Unused %', 'gpUnusedPct', NHS_GREEN)} options={percentageOptions} />
+                      <Line data={createChartData(displayedData, 'GP Unused %', 'gpUnusedPct', NHS_GREEN)} options={percentageOptions} />
                     </div>
                   </Card>
                   <Card className="h-64">
                     <h3 className="font-bold text-slate-700 mb-2 text-sm uppercase">GP DNA Rate</h3>
                     <p className="text-xs text-slate-400 mb-4">% of GP appointments</p>
                     <div className="h-40">
-                      <Line data={createChartData('GP DNA %', 'gpDNAPct', NHS_RED)} options={percentageOptions} />
+                      <Line data={createChartData(displayedData, 'GP DNA %', 'gpDNAPct', NHS_RED)} options={percentageOptions} />
                     </div>
                   </Card>
                   <Card className="h-64">
@@ -2172,7 +2189,7 @@ export default function App() {
                 <Card className="h-80">
                   <h3 className="font-bold text-slate-700 mb-2">Online Request Rate</h3>
                   <p className="text-xs text-slate-400 mb-4">Requests per 1000 patients per week</p>
-                  <Line data={createChartData('Requests/1000/wk', 'onlineRequestsPer1000', NHS_AQUA, false)} options={onlineRequestBandOptions} />
+                  <Line data={createChartData(displayedData, 'Requests/1000/wk', 'onlineRequestsPer1000', NHS_AQUA, false)} options={onlineRequestBandOptions} />
                 </Card>
 
                 <Card className="h-96">
