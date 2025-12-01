@@ -182,31 +182,39 @@ const NationalTelephony = () => {
         )}
       </Card>
 
-      {/* National Averages - Always Visible */}
-      <Card className="bg-gradient-to-br from-slate-50 to-white border-slate-300">
-        <h3 className="text-lg font-bold text-slate-800 mb-4">National Averages</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-          <div>
-            <p className="text-xs text-slate-600 uppercase">Answered</p>
-            <p className="text-xl font-bold text-slate-800">{(data.national.answeredPct * 100).toFixed(1)}%</p>
-          </div>
-          <div>
-            <p className="text-xs text-slate-600 uppercase">Abandoned (IVR)</p>
-            <p className="text-xl font-bold text-slate-800">{(data.national.endedDuringIVRPct * 100).toFixed(1)}%</p>
-          </div>
-          <div>
-            <p className="text-xs text-slate-600 uppercase">Missed</p>
-            <p className="text-xl font-bold text-slate-800">{(data.national.missedPct * 100).toFixed(1)}%</p>
-          </div>
-          <div>
-            <p className="text-xs text-slate-600 uppercase">Callback Requested</p>
-            <p className="text-xl font-bold text-slate-800">{(data.national.callbackRequestedPct * 100).toFixed(1)}%</p>
-          </div>
-        </div>
-      </Card>
+      {/* National Averages & Summary Tiles - Only show when practice selected */}
+      {selectedPractice && (() => {
+        // Calculate average inbound calls across all practices
+        const avgInboundCalls = Math.round(
+          data.practices.reduce((sum, p) => sum + p.inboundCalls, 0) / data.practices.length
+        );
 
-      {/* Summary Tiles */}
-      {selectedPractice && (
+        return (
+          <>
+            {/* National Averages */}
+            <Card className="bg-gradient-to-br from-slate-50 to-white border-slate-300">
+              <h3 className="text-lg font-bold text-slate-800 mb-4">National Averages</h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                <div>
+                  <p className="text-xs text-slate-600 uppercase">Total Inbound Calls</p>
+                  <p className="text-xl font-bold text-slate-800">{avgInboundCalls.toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-600 uppercase">Abandoned (IVR)</p>
+                  <p className="text-xl font-bold text-slate-800">{(data.national.endedDuringIVRPct * 100).toFixed(1)}%</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-600 uppercase">Missed</p>
+                  <p className="text-xl font-bold text-slate-800">{(data.national.missedPct * 100).toFixed(1)}%</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-600 uppercase">Callback Requested</p>
+                  <p className="text-xl font-bold text-slate-800">{(data.national.callbackRequestedPct * 100).toFixed(1)}%</p>
+                </div>
+              </div>
+            </Card>
+
+            {/* Summary Tiles */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {/* Total Calls */}
           <Card className="bg-gradient-to-br from-blue-50 to-white border-blue-200">
@@ -214,11 +222,11 @@ const NationalTelephony = () => {
               <div>
                 <p className="text-xs text-slate-600 font-semibold uppercase">Total Inbound Calls</p>
                 <p className="text-3xl font-bold text-slate-800 mt-1">{selectedPractice.inboundCalls.toLocaleString()}</p>
-                <p className="text-xs text-slate-500 mt-1">National: {data.national.inboundCalls.toLocaleString()}</p>
+                <p className="text-xs text-slate-500 mt-1">National Avg: {avgInboundCalls.toLocaleString()}</p>
               </div>
-              {selectedPractice.inboundCalls > data.national.inboundCalls ? (
+              {selectedPractice.inboundCalls > avgInboundCalls ? (
                 <ArrowUp size={20} className="text-slate-600" />
-              ) : selectedPractice.inboundCalls < data.national.inboundCalls ? (
+              ) : selectedPractice.inboundCalls < avgInboundCalls ? (
                 <ArrowDown size={20} className="text-slate-600" />
               ) : null}
             </div>
@@ -298,7 +306,9 @@ const NationalTelephony = () => {
             </div>
           </Card>
         </div>
-      )}
+          </>
+        );
+      })()}
 
       {/* Performance Rankings & Analysis */}
       {selectedPractice && (() => {
