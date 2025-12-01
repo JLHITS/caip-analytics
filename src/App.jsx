@@ -190,6 +190,14 @@ export default function App() {
     }
   }, []);
 
+  // Auto-select tab based on URL path
+  useEffect(() => {
+    const path = window.location.pathname;
+    if (path.includes('/telephony')) {
+      setMainTab('telephony');
+    }
+  }, []);
+
   // Load shared dashboard from URL on mount
   useEffect(() => {
     const loadSharedDashboard = () => {
