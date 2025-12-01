@@ -146,9 +146,9 @@ export default function App() {
 
   const [files, setFiles] = useState({
     appointments: null,
-    dna: null,
-    unused: null,
-    onlineRequests: null,
+    dna: [],
+    unused: [],
+    onlineRequests: [],
     telephony: [],
   });
 
@@ -276,9 +276,9 @@ export default function App() {
 
       const exampleFiles = {
         appointments: apptFile,
-        dna: dnaFile,
-        unused: unusedFile,
-        onlineRequests: onlineFile,
+        dna: [dnaFile],
+        unused: [unusedFile],
+        onlineRequests: [onlineFile],
         telephony: [pdf1, pdf2, pdf3, pdf4, pdf5, pdf6, pdf7, pdf8, pdf9, pdf10, pdf11, pdf12]
       };
 
@@ -301,6 +301,19 @@ export default function App() {
     }
   };
 
+  // Helper function to combine multiple CSV files into one dataset
+  // Parses each file and concatenates all rows together
+  const combineCSVFiles = async (filesArray) => {
+    if (!filesArray || filesArray.length === 0) return [];
+
+    const allRows = [];
+    for (const file of filesArray) {
+      const rows = await parseCSV(file);
+      allRows.push(...rows);
+    }
+    return allRows;
+  };
+
   // Main data processing function
   // Processes uploaded CSV and PDF files to generate dashboard metrics
   const processFiles = async (customFiles = null, customConfig = null) => {
@@ -321,18 +334,18 @@ export default function App() {
         throw new Error('Please upload an Appointments CSV file.');
       }
 
-      // Parse CSV files
+      // Parse CSV files (combine multiple files if provided)
       const apptData = await parseCSV(filesToProcess.appointments);
-      const dnaData = filesToProcess.dna ? await parseCSV(filesToProcess.dna) : [];
-      const unusedData = filesToProcess.unused ? await parseCSV(filesToProcess.unused) : [];
+      const dnaData = await combineCSVFiles(filesToProcess.dna);
+      const unusedData = await combineCSVFiles(filesToProcess.unused);
 
-      const onlineData = (configToUse.useOnline && filesToProcess.onlineRequests) ? await parseCSV(filesToProcess.onlineRequests) : [];
+      const onlineData = (configToUse.useOnline && filesToProcess.onlineRequests?.length > 0) ? await combineCSVFiles(filesToProcess.onlineRequests) : [];
 
       // Validate CSV headers and check for privacy violations
       validateHeaders(apptData, ['Date', 'Day'], 'Appointments CSV');
-      if (filesToProcess.dna) validateHeaders(dnaData, ['Staff', 'Appointment Count'], 'DNA CSV');
-      if (filesToProcess.unused) validateHeaders(unusedData, ['Staff', 'Unused Slots', 'Total Slots'], 'Unused CSV');
-      if (configToUse.useOnline && filesToProcess.onlineRequests) validateHeaders(onlineData, ['Submission started', 'Type', 'Outcome'], 'Online Requests CSV', ['Patient Name', 'Name', 'Patient', 'NHS Number']);
+      if (dnaData.length > 0) validateHeaders(dnaData, ['Staff', 'Appointment Count'], 'DNA CSV');
+      if (unusedData.length > 0) validateHeaders(unusedData, ['Staff', 'Unused Slots', 'Total Slots'], 'Unused CSV');
+      if (onlineData.length > 0) validateHeaders(onlineData, ['Submission started', 'Type', 'Outcome'], 'Online Requests CSV', ['Patient Name', 'Name', 'Patient', 'NHS Number']);
 
       const monthlyMap = {};
       const staffMap = {};
@@ -1357,9 +1370,9 @@ export default function App() {
     });
     setFiles({
       appointments: null,
-      dna: null,
-      unused: null,
-      onlineRequests: null,
+      dna: [],
+      unused: [],
+      onlineRequests: [],
       telephony: [],
     });
     setProcessedData(null);
@@ -1764,6 +1777,7 @@ export default function App() {
 
               <FileInput
                 label="Appointment Extract (CSV) *"
+                helpText="Be sure to use Appointment Reports → Appointment Report Extract Button"
                 accept=".csv"
                 file={files.appointments}
                 onChange={(e) => setFiles({ ...files, appointments: e.target.files[0] })}
@@ -1771,27 +1785,48 @@ export default function App() {
               />
               <FileInput
                 label="DNA Extract (CSV) *"
-                helpText="(Must tick staff name and slot type in SystmOne)"
+                helpText={<>(Must tick <strong>Staff Name</strong> and <strong>Slot Type</strong> in SystmOne) • Multiple files supported (3 months max per file)</>}
                 accept=".csv"
                 file={files.dna}
-                onChange={(e) => setFiles({ ...files, dna: e.target.files[0] })}
-                onRemove={() => setFiles({ ...files, dna: null })}
+                isMulti={true}
+                onChange={(e) => {
+                  if (e.target.files && e.target.files.length > 0) {
+                    setFiles(prev => ({ ...prev, dna: [...prev.dna, ...Array.from(e.target.files)] }));
+                  }
+                }}
+                onRemove={(index) => {
+                  setFiles(prev => ({ ...prev, dna: prev.dna.filter((_, i) => i !== index) }));
+                }}
               />
               <FileInput
                 label="Unused Extract (CSV) *"
-                helpText="(Must tick staff name and slot type in SystmOne)"
+                helpText={<>(Must tick <strong>Staff Name</strong> and <strong>Slot Type</strong> in SystmOne) • Multiple files supported (3 months max per file)</>}
                 accept=".csv"
                 file={files.unused}
-                onChange={(e) => setFiles({ ...files, unused: e.target.files[0] })}
-                onRemove={() => setFiles({ ...files, unused: null })}
+                isMulti={true}
+                onChange={(e) => {
+                  if (e.target.files && e.target.files.length > 0) {
+                    setFiles(prev => ({ ...prev, unused: [...prev.unused, ...Array.from(e.target.files)] }));
+                  }
+                }}
+                onRemove={(index) => {
+                  setFiles(prev => ({ ...prev, unused: prev.unused.filter((_, i) => i !== index) }));
+                }}
               />
               <FileInput
                 label="Online Requests (CSV) - SystmConnect"
-                helpText="Misc Reports -> SystmConnect Report (Remove Patient Name column)"
+                helpText="Misc Reports → SystmConnect Report (Remove Patient Name column) • Multiple files supported (5000 rows max per file)"
                 accept=".csv"
                 file={files.onlineRequests}
-                onChange={(e) => setFiles({ ...files, onlineRequests: e.target.files[0] })}
-                onRemove={() => setFiles({ ...files, onlineRequests: null })}
+                isMulti={true}
+                onChange={(e) => {
+                  if (e.target.files && e.target.files.length > 0) {
+                    setFiles(prev => ({ ...prev, onlineRequests: [...prev.onlineRequests, ...Array.from(e.target.files)] }));
+                  }
+                }}
+                onRemove={(index) => {
+                  setFiles(prev => ({ ...prev, onlineRequests: prev.onlineRequests.filter((_, i) => i !== index) }));
+                }}
                 badge="Accurx Coming Soon"
                 disabled={!config.useOnline}
               />
@@ -2390,7 +2425,7 @@ export default function App() {
           setSelectedMonth('All');
           setAiReport(null);
           setConfig({ ...config, surgeryName: '', population: 10000 });
-          setFiles({ appointments: null, dna: null, unused: null, onlineRequests: null, telephony: [] });
+          setFiles({ appointments: null, dna: [], unused: [], onlineRequests: [], telephony: [] });
           setRawStaffData([]);
           setRawSlotData([]);
           setRawCombinedData([]);
