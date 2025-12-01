@@ -2273,11 +2273,11 @@ export default function App() {
                       </Card>
                       <Card className="h-80">
                         <h3 className="font-bold text-slate-700 mb-4">Abandoned Calls (%)</h3>
-                        <Line data={createChartData('Abandoned %', 'abandonedCalls', NHS_AMBER)} options={percentageOptions} />
+                        <Line data={createChartData(displayedData, 'Abandoned %', 'abandonedCalls', NHS_AMBER)} options={percentageOptions} />
                       </Card>
                       <Card className="h-80">
                         <h3 className="font-bold text-slate-700 mb-4">Missed Call % (Unique)</h3>
-                        <Line data={createChartData('Missed Unique %', 'missedFromQueueExRepeatPct', NHS_RED)} options={percentageOptions} />
+                        <Line data={createChartData(displayedData, 'Missed Unique %', 'missedFromQueueExRepeatPct', NHS_RED)} options={percentageOptions} />
                       </Card>
                     </div>
 
@@ -2285,19 +2285,19 @@ export default function App() {
                       <Card className="h-64">
                         <h3 className="font-bold text-slate-700 mb-2 text-sm uppercase">Avg Queue Time (Answered)</h3>
                         <div className="h-40">
-                          <Line data={createChartData('Time', 'avgQueueTimeAnswered', NHS_BLUE)} options={timeOptions} />
+                          <Line data={createChartData(displayedData, 'Time', 'avgQueueTimeAnswered', NHS_BLUE)} options={timeOptions} />
                         </div>
                       </Card>
                       <Card className="h-64">
                         <h3 className="font-bold text-slate-700 mb-2 text-sm uppercase">Avg Queue Time (Missed)</h3>
                         <div className="h-40">
-                          <Line data={createChartData('Time', 'avgQueueTimeMissed', NHS_RED)} options={timeOptions} />
+                          <Line data={createChartData(displayedData, 'Time', 'avgQueueTimeMissed', NHS_RED)} options={timeOptions} />
                         </div>
                       </Card>
                       <Card className="h-64">
                         <h3 className="font-bold text-slate-700 mb-2 text-sm uppercase">Avg Inbound Talk Time</h3>
                         <div className="h-40">
-                          <Line data={createChartData('Time', 'avgInboundTalkTime', NHS_GREY)} options={timeOptions} />
+                          <Line data={createChartData(displayedData, 'Time', 'avgInboundTalkTime', NHS_GREY)} options={timeOptions} />
                         </div>
                       </Card>
                     </div>
