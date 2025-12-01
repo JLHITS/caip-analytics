@@ -44,6 +44,7 @@ import AIConsentModal from './components/modals/AIConsentModal';
 import ShareModal from './components/modals/ShareModal';
 import BugReportModal from './components/modals/BugReportModal';
 import AboutModal from './components/modals/AboutModal';
+import NationalTelephony from './components/NationalTelephony';
 
 // Utility imports
 import { calculateLinearForecast, getNextMonthNames, isGP } from './utils/calculations';
@@ -160,6 +161,7 @@ export default function App() {
   const [forecastData, setForecastData] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState(null);
+  const [mainTab, setMainTab] = useState('demand'); // 'demand' or 'telephony'
   const [activeTab, setActiveTab] = useState('dashboard');
 
   const [selectedMonth, setSelectedMonth] = useState('All');
@@ -1719,7 +1721,28 @@ export default function App() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 print:hidden">
-        {!processedData && (
+        {/* MAIN TAB NAVIGATION - Always visible */}
+        <div className="flex justify-center mb-8" data-html2canvas-ignore="true">
+          <div className="bg-white p-1.5 rounded-xl shadow-lg border-2 border-slate-200 inline-flex">
+            <button
+              onClick={() => setMainTab('demand')}
+              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-bold transition-all ${mainTab === 'demand' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-800'}`}
+            >
+              <BarChart3 size={20} />
+              Demand & Capacity
+            </button>
+            <button
+              onClick={() => setMainTab('telephony')}
+              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-bold transition-all ${mainTab === 'telephony' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-800'}`}
+            >
+              <Phone size={20} />
+              National Telephony
+            </button>
+          </div>
+        </div>
+
+        {/* DEMAND & CAPACITY TAB */}
+        {mainTab === 'demand' && !processedData && (
           <div className="max-w-2xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="text-center mb-10">
               <div className="flex justify-center mb-4">
@@ -1870,7 +1893,7 @@ export default function App() {
           </div>
         )}
 
-        {processedData && (
+        {mainTab === 'demand' && processedData && (
           <div className="animate-in fade-in duration-700" id="dashboard-content">
             <div className="hidden print:block mb-8 text-center">
               <h1 className="text-3xl font-bold text-slate-900">CAIP Analysis - {config.surgeryName || 'Surgery Report'}</h1>
@@ -2410,8 +2433,12 @@ export default function App() {
               </div>
             )}
 
-
           </div>
+        )}
+
+        {/* NATIONAL TELEPHONY CONTENT */}
+        {mainTab === 'telephony' && (
+          <NationalTelephony />
         )}
       </main>
 

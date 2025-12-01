@@ -9,7 +9,12 @@
       "Bash(git commit:*)",
       "Bash(git push)",
       "Bash(dir:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(node analyze-excel.js:*)",
+      "Bash(node analyze-tables.js:*)",
+      "Bash(node examine-raw.js:*)",
+      "Bash(cat:*)",
+      "Bash(node debug-national.js:*)"
     ],
     "deny": [],
     "ask": []
