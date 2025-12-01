@@ -77,6 +77,9 @@ export function getPerformanceInterpretation(percentile) {
 export function calculatePCNAverages(allPractices) {
   const pcnMap = {};
 
+  // Calculate national missed percentage
+  const nationalMissedPct = getNationalMissedPct(allPractices);
+
   // Group practices by PCN
   allPractices.forEach(practice => {
     // Skip practices with blank/empty PCN codes or names
@@ -107,13 +110,20 @@ export function calculatePCNAverages(allPractices) {
   });
 
   // Calculate averages for each PCN
-  const pcnAverages = Object.values(pcnMap).map(pcn => ({
-    ...pcn,
-    practiceCount: pcn.practices.length,
-    avgMissedPct: pcn.totalInboundCalls > 0 ? pcn.totalMissed / pcn.totalInboundCalls : 0,
-    avgAnsweredPct: pcn.totalInboundCalls > 0 ? pcn.totalAnswered / pcn.totalInboundCalls : 0,
-    avgEndedDuringIVRPct: pcn.totalInboundCalls > 0 ? pcn.totalEndedDuringIVR / pcn.totalInboundCalls : 0,
-  }));
+  const pcnAverages = Object.values(pcnMap).map(pcn => {
+    const avgMissedPct = pcn.totalInboundCalls > 0 ? pcn.totalMissed / pcn.totalInboundCalls : 0;
+    // Calculate calls saved for the PCN as a whole
+    const callsSaved = pcn.totalInboundCalls > 0 ? (nationalMissedPct - avgMissedPct) * pcn.totalInboundCalls : 0;
+
+    return {
+      ...pcn,
+      practiceCount: pcn.practices.length,
+      avgMissedPct,
+      avgAnsweredPct: pcn.totalInboundCalls > 0 ? pcn.totalAnswered / pcn.totalInboundCalls : 0,
+      avgEndedDuringIVRPct: pcn.totalInboundCalls > 0 ? pcn.totalEndedDuringIVR / pcn.totalInboundCalls : 0,
+      callsSaved,
+    };
+  });
 
   // Sort by missed call % (ascending - lower is better)
   return pcnAverages.sort((a, b) => a.avgMissedPct - b.avgMissedPct);
@@ -140,4 +150,46 @@ export function getPCNICBRanking(pcnCode, icbCode, pcnAverages) {
   const percentile = total > 0 ? ((rank / total) * 100).toFixed(1) : 0;
 
   return { rank, total, percentile, pcns: icbPCNs };
+}
+
+/**
+ * Calculate Calls Saved vs National Average
+ * Positive = practice saved more calls than national average would predict
+ * Negative = practice missed more calls than national average would predict
+ * Formula: (National Missed % - Practice Missed %) × Practice Inbound Calls
+ */
+export function calculateCallsSaved(practice, nationalMissedPct) {
+  if (!practice.inboundCalls || practice.inboundCalls === 0) return 0;
+  return (nationalMissedPct - practice.missedPct) * practice.inboundCalls;
+}
+
+/**
+ * Get national missed percentage from all practices
+ */
+export function getNationalMissedPct(allPractices) {
+  const totalMissed = allPractices.reduce((sum, p) => sum + p.missed, 0);
+  const totalCalls = allPractices.reduce((sum, p) => sum + p.inboundCalls, 0);
+  return totalCalls > 0 ? totalMissed / totalCalls : 0;
+}
+
+/**
+ * Get practice ranking based on Calls Saved metric
+ * Higher is better (more calls saved)
+ */
+export function calculateCallsSavedRanking(practice, allPractices) {
+  const nationalMissedPct = getNationalMissedPct(allPractices);
+  const practiceCallsSaved = calculateCallsSaved(practice, nationalMissedPct);
+
+  const practicesWithMetric = allPractices.map(p => ({
+    ...p,
+    callsSaved: calculateCallsSaved(p, nationalMissedPct)
+  }));
+
+  // Sort by metric (descending - higher is better)
+  const sorted = [...practicesWithMetric].sort((a, b) => b.callsSaved - a.callsSaved);
+  const rank = sorted.findIndex(p => p.odsCode === practice.odsCode) + 1;
+  const total = sorted.length;
+  const percentile = ((rank / total) * 100).toFixed(1);
+
+  return { rank, total, percentile, callsSaved: practiceCallsSaved, practices: sorted };
 }

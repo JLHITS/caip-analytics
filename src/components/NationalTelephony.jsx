@@ -1,5 +1,6 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { Search, ArrowUp, ArrowDown, Phone, Trophy, TrendingUp, ExternalLink } from 'lucide-react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
+import { Search, ArrowUp, ArrowDown, Phone, Trophy, TrendingUp, ExternalLink, Info } from 'lucide-react';
 import Card from './ui/Card';
 import { NHS_GREEN, NHS_RED } from '../constants/colors';
 import { parseNationalTelephonyData, getAverageWaitTimeBin, getAverageDurationBin } from '../utils/parseNationalTelephony';
@@ -10,7 +11,10 @@ import {
   getPerformanceInterpretation,
   calculatePCNAverages,
   getPCNNationalRanking,
-  getPCNICBRanking
+  getPCNICBRanking,
+  calculateCallsSaved,
+  getNationalMissedPct,
+  calculateCallsSavedRanking
 } from '../utils/telephonyAnalysis';
 
 // Import the Excel file
@@ -21,6 +25,9 @@ const NationalTelephony = () => {
   const [selectedPractice, setSelectedPractice] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
+  const [showCallsSavedTooltip, setShowCallsSavedTooltip] = useState(false);
+  const [showInterpretationTooltip, setShowInterpretationTooltip] = useState(false);
+  const [showCoveragePopup, setShowCoveragePopup] = useState(false);
 
   // Load and parse Excel file on mount
   useEffect(() => {
@@ -119,12 +126,77 @@ const NationalTelephony = () => {
         </div>
       </Card>
 
+      {/* Coverage Popup Modal */}
+      {showCoveragePopup && createPortal(
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[10000] p-4"
+          onClick={() => setShowCoveragePopup(false)}
+        >
+          <div
+            className="bg-white rounded-lg shadow-2xl max-w-lg w-full p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Info size={24} className="text-blue-600" />
+                <h3 className="text-xl font-bold text-slate-800">Can't find your practice?</h3>
+              </div>
+              <button
+                onClick={() => setShowCoveragePopup(false)}
+                className="text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <span className="text-2xl">&times;</span>
+              </button>
+            </div>
+            <div className="space-y-3 text-sm text-slate-700">
+              <p>
+                This national extract covers <strong>74.7% of GP practices</strong> in England that use cloud-based telephony systems.
+              </p>
+              <p>
+                If you can't find your practice, it may be because:
+              </p>
+              <ul className="list-disc list-inside space-y-1 ml-2">
+                <li>Your practice hasn't migrated to cloud-based telephony yet</li>
+                <li>Your practice opted out of data sharing</li>
+                <li>Your practice's data wasn't available for this month</li>
+              </ul>
+              <p>
+                To check your surgery's participation status, visit the <strong>CBT Participation and Summary Extract</strong>:
+              </p>
+              <a
+                href="https://digital.nhs.uk/data-and-information/publications/statistical/cloud-based-telephony-data-in-general-practice/october-2025"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 font-medium transition-colors"
+              >
+                View NHS England Publication <ExternalLink size={14} />
+              </a>
+            </div>
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={() => setShowCoveragePopup(false)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              >
+                Got it
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
       {/* Practice Search */}
       <Card>
         <div className="relative">
           <div className="flex items-center gap-2 mb-2">
             <Search size={20} className="text-slate-400" />
             <label className="font-semibold text-slate-700">Find Your Practice</label>
+            <button
+              onClick={() => setShowCoveragePopup(true)}
+              className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 transition-colors ml-auto"
+            >
+              <Info size={12} /> Can't find your practice?
+            </button>
           </div>
           <input
             type="text"
@@ -317,14 +389,72 @@ const NationalTelephony = () => {
         const pcnRanking = calculatePCNRanking(selectedPractice, data.practices);
         const interpretation = getPerformanceInterpretation(nationalRanking.percentile);
 
+        // Calculate Calls Saved metrics
+        const nationalMissedPct = getNationalMissedPct(data.practices);
+        const practiceCallsSaved = calculateCallsSaved(selectedPractice, nationalMissedPct);
+        const callsSavedRanking = calculateCallsSavedRanking(selectedPractice, data.practices);
+
         return (
           <>
             {/* Performance Interpretation */}
-            <Card className={`bg-gradient-to-br from-${interpretation.color}-50 to-white border-${interpretation.color}-200`}>
+            <Card className={`bg-gradient-to-br from-${interpretation.color}-50 to-white border-${interpretation.color}-200 ${parseFloat(nationalRanking.percentile) <= 1.0 ? 'ring-4 ring-yellow-400 ring-offset-2' : ''}`}>
               <div className="text-center">
+                {parseFloat(nationalRanking.percentile) <= 1.0 && (
+                  <div className="mb-2 animate-pulse">
+                    <span className="text-4xl">🎉</span>
+                    <span className="text-4xl">🏆</span>
+                    <span className="text-4xl">🎊</span>
+                  </div>
+                )}
                 <div className="text-5xl mb-3">{interpretation.emoji}</div>
-                <h3 className="text-2xl font-bold text-slate-800 mb-2">{interpretation.label}</h3>
-                <p className="text-slate-600 font-medium">{interpretation.description}</p>
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <h3 className="text-2xl font-bold text-slate-800">
+                    {parseFloat(nationalRanking.percentile) <= 1.0 ? '🥇 Top 1% Nationally!' : interpretation.label}
+                  </h3>
+                  <div className="relative inline-block">
+                    <button
+                      onMouseEnter={() => setShowInterpretationTooltip(true)}
+                      onMouseLeave={() => setShowInterpretationTooltip(false)}
+                      className="text-slate-600 hover:text-slate-800 transition-colors"
+                    >
+                      <Info size={18} />
+                    </button>
+                    {showInterpretationTooltip && createPortal(
+                      <div
+                        className="fixed w-72 bg-slate-800 text-white text-xs rounded-lg p-4 shadow-2xl z-[9999] pointer-events-none"
+                        style={{
+                          top: '50%',
+                          left: '50%',
+                          transform: 'translate(-50%, -50%)'
+                        }}
+                      >
+                        <div className="space-y-1">
+                          <p className="font-semibold text-blue-300 mb-2">Performance Criteria (by percentile):</p>
+                          <p><strong>🌟 Excellent:</strong> Top 5%</p>
+                          <p><strong>⭐ Great:</strong> Top 6-10%</p>
+                          <p><strong>👍 Good:</strong> Top 11-25%</p>
+                          <p><strong>✓ Above Average:</strong> 26-50%</p>
+                          <p><strong>⚠ Below Average:</strong> 51-75%</p>
+                          <p><strong>⚠️ Poor:</strong> 76-90%</p>
+                          <p><strong>❌ Very Poor:</strong> 91-95%</p>
+                          <p><strong>🔴 Amongst the Worst:</strong> Bottom 5%</p>
+                          <p className="pt-2 border-t border-slate-600 mt-2">Based on your national ranking for missed call %</p>
+                        </div>
+                      </div>,
+                      document.body
+                    )}
+                  </div>
+                </div>
+                <p className="text-slate-600 font-medium">
+                  {parseFloat(nationalRanking.percentile) <= 1.0
+                    ? '🎯 Congratulations! Your practice is in the top 1% nationally for call handling. Exceptional performance!'
+                    : interpretation.description}
+                </p>
+                {parseFloat(nationalRanking.percentile) <= 1.0 && (
+                  <p className="text-sm text-emerald-600 font-semibold mt-2 animate-pulse">
+                    ✨ Elite tier - Top 1% in the nation ✨
+                  </p>
+                )}
                 <p className="text-sm text-slate-500 mt-2">Based on missed call % performance</p>
               </div>
             </Card>
@@ -525,6 +655,158 @@ const NationalTelephony = () => {
                               </tr>
                             );
                           })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </Card>
+
+                  {/* Section Divider: Volume-Weighted Impact Metrics */}
+                  <Card className="bg-gradient-to-r from-teal-100 via-indigo-100 to-violet-100 border-2 border-teal-400">
+                    <div className="text-center py-2">
+                      <h2 className="text-xl font-bold text-slate-800">📊 Volume-Weighted Impact Metrics</h2>
+                      <p className="text-sm text-slate-600 mt-1">Accounting for practice size and patient volume</p>
+                    </div>
+                  </Card>
+
+                  {/* Calls Saved vs National Average - Volume-Weighted Impact */}
+                  <Card className="bg-gradient-to-br from-teal-50 to-white border-teal-400 border-2">
+                    <div className="text-center">
+                      <p className="text-xs text-teal-700 font-semibold uppercase tracking-wide mb-2">💼 Volume-Weighted Impact Metric</p>
+                      <div className="flex items-center justify-center gap-2 mb-1">
+                        <h3 className="text-2xl font-bold text-slate-800">Calls Saved vs National Average</h3>
+                        <div className="relative inline-block">
+                          <button
+                            onMouseEnter={() => setShowCallsSavedTooltip(true)}
+                            onMouseLeave={() => setShowCallsSavedTooltip(false)}
+                            className="text-teal-600 hover:text-teal-800 transition-colors"
+                          >
+                            <Info size={20} />
+                          </button>
+                          {showCallsSavedTooltip && createPortal(
+                            <div
+                              className="fixed w-80 bg-slate-800 text-white text-xs rounded-lg p-4 shadow-2xl z-[9999] pointer-events-none"
+                              style={{
+                                top: '50%',
+                                left: '50%',
+                                transform: 'translate(-50%, -50%)'
+                              }}
+                            >
+                              <div className="space-y-2">
+                                <p className="font-semibold text-teal-300">How This Metric Works:</p>
+                                <p><strong>Formula:</strong> (National Missed % - Your Missed %) × Your Total Calls</p>
+                                <p><strong>Positive value:</strong> You saved more calls than the national average would predict for your call volume.</p>
+                                <p><strong>Negative value:</strong> You missed more calls than the national average would predict.</p>
+                                <p className="pt-2 border-t border-slate-600"><strong>Why volume-weighted?</strong> This metric accounts for practice size. A large practice with good performance has more patient impact than a small practice with the same percentage.</p>
+                              </div>
+                            </div>,
+                            document.body
+                          )}
+                        </div>
+                      </div>
+                      <div className="mt-4">
+                        <p className={`text-5xl font-bold ${practiceCallsSaved >= 0 ? 'text-teal-600' : 'text-red-600'}`}>
+                          {practiceCallsSaved >= 0 ? '+' : ''}{Math.round(practiceCallsSaved).toLocaleString()}
+                        </p>
+                        <p className="text-sm text-slate-600 mt-2">
+                          {practiceCallsSaved >= 0 ? 'calls saved compared to national average' : 'additional calls missed vs national average'}
+                        </p>
+                      </div>
+                      <div className="mt-4 pt-4 border-t border-teal-200">
+                        <p className="text-sm text-slate-600">
+                          <strong>National Rank:</strong> #{callsSavedRanking.rank.toLocaleString()} of {callsSavedRanking.total.toLocaleString()} practices
+                        </p>
+                        <p className="text-xs text-slate-500 mt-1">
+                          Higher is better • Accounts for practice call volume
+                        </p>
+                      </div>
+                    </div>
+                  </Card>
+
+                  {/* Top 20 Practices - Calls Saved */}
+                  <Card className="bg-gradient-to-br from-indigo-50 to-white border-indigo-200">
+                    <h3 className="text-lg font-bold text-indigo-900 mb-4">🏆 Top 20 Practices by Impact (Calls Saved)</h3>
+                    <p className="text-xs text-indigo-600 mb-3">Volume-weighted metric - practices with highest positive impact</p>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-indigo-100 border-b-2 border-indigo-300">
+                          <tr>
+                            <th className="text-left p-3 font-semibold text-indigo-900">Rank</th>
+                            <th className="text-left p-3 font-semibold text-indigo-900">Practice</th>
+                            <th className="text-left p-3 font-semibold text-indigo-900">PCN</th>
+                            <th className="text-right p-3 font-semibold text-indigo-900">Calls Saved</th>
+                            <th className="text-right p-3 font-semibold text-indigo-900">Total Calls</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {callsSavedRanking.practices.slice(0, 20).map((practice, idx) => {
+                            const isSelected = practice.odsCode === selectedPractice.odsCode;
+                            return (
+                              <tr
+                                key={practice.odsCode}
+                                className={`border-b border-indigo-100 ${isSelected ? 'bg-indigo-200 font-semibold' : 'hover:bg-indigo-50'}`}
+                              >
+                                <td className="p-3">{idx + 1}</td>
+                                <td className="p-3">
+                                  <div className="font-medium">{practice.gpName}</div>
+                                  <div className="text-xs text-slate-500">{practice.odsCode}</div>
+                                </td>
+                                <td className="p-3 text-slate-600 text-xs">{practice.pcnName}</td>
+                                <td className="p-3 text-right font-bold">
+                                  <span className={practice.callsSaved >= 0 ? 'text-teal-600' : 'text-red-600'}>
+                                    {practice.callsSaved >= 0 ? '+' : ''}{Math.round(practice.callsSaved).toLocaleString()}
+                                  </span>
+                                </td>
+                                <td className="p-3 text-right text-slate-600">{practice.inboundCalls.toLocaleString()}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </Card>
+
+                  {/* Top 20 PCNs - Calls Saved */}
+                  <Card className="bg-gradient-to-br from-violet-50 to-white border-violet-200">
+                    <h3 className="text-lg font-bold text-violet-900 mb-4">🏆 Top 20 PCNs by Impact (Calls Saved)</h3>
+                    <p className="text-xs text-violet-600 mb-3">Volume-weighted metric - PCNs with highest positive impact (excluding single-practice PCNs)</p>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-violet-100 border-b-2 border-violet-300">
+                          <tr>
+                            <th className="text-left p-3 font-semibold text-violet-900">Rank</th>
+                            <th className="text-left p-3 font-semibold text-violet-900">PCN</th>
+                            <th className="text-left p-3 font-semibold text-violet-900">ICB</th>
+                            <th className="text-right p-3 font-semibold text-violet-900">Calls Saved</th>
+                            <th className="text-right p-3 font-semibold text-violet-900">Practices</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {pcnAverages
+                            .filter(pcn => pcn.practiceCount > 1)
+                            .sort((a, b) => b.callsSaved - a.callsSaved)
+                            .slice(0, 20)
+                            .map((pcn, idx) => {
+                              const isUserPCN = pcn.pcnCode === selectedPractice.pcnCode;
+                              return (
+                                <tr
+                                  key={pcn.pcnCode}
+                                  className={`border-b border-violet-100 ${isUserPCN ? 'bg-violet-200 font-semibold' : 'hover:bg-violet-50'}`}
+                                >
+                                  <td className="p-3">{idx + 1}</td>
+                                  <td className="p-3">
+                                    <div className="font-medium">{pcn.pcnName}</div>
+                                    <div className="text-xs text-slate-500">{pcn.pcnCode}</div>
+                                  </td>
+                                  <td className="p-3 text-slate-600">{pcn.icbName}</td>
+                                  <td className="p-3 text-right font-bold">
+                                    <span className={pcn.callsSaved >= 0 ? 'text-teal-600' : 'text-red-600'}>
+                                      {pcn.callsSaved >= 0 ? '+' : ''}{Math.round(pcn.callsSaved).toLocaleString()}
+                                    </span>
+                                  </td>
+                                  <td className="p-3 text-right text-slate-600">{pcn.practiceCount}</td>
+                                </tr>
+                              );
+                            })}
                         </tbody>
                       </table>
                     </div>
