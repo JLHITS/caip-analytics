@@ -188,6 +188,9 @@ export default function App() {
     } else {
       link.href = logo;
     }
+
+    // Scroll to top on mount to ensure tab menu is visible
+    window.scrollTo(0, 0);
   }, []);
 
   // Auto-select tab based on URL path

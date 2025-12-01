@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Search, ArrowUp, ArrowDown, Phone, Trophy, TrendingUp } from 'lucide-react';
+import { Search, ArrowUp, ArrowDown, Phone, Trophy, TrendingUp, ExternalLink } from 'lucide-react';
 import Card from './ui/Card';
 import { NHS_GREEN, NHS_RED } from '../constants/colors';
 import { parseNationalTelephonyData, getAverageWaitTimeBin, getAverageDurationBin } from '../utils/parseNationalTelephony';
@@ -108,6 +108,14 @@ const NationalTelephony = () => {
         <div className="text-center">
           <p className="text-sm text-slate-500 uppercase tracking-wide">NHS England Data Extract</p>
           <h2 className="text-2xl font-bold text-slate-800 mt-1">{data.dataMonth}</h2>
+          <a
+            href="https://digital.nhs.uk/data-and-information/publications/statistical/cloud-based-telephony-data-in-general-practice"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 mt-2 transition-colors"
+          >
+            📊 View Data Source <ExternalLink size={12} />
+          </a>
         </div>
       </Card>
 
@@ -128,7 +136,7 @@ const NationalTelephony = () => {
 
           {/* Search Results Dropdown - Only show when searching, hide after selection */}
           {searchTerm && !selectedPractice && filteredPractices.length > 0 && (
-            <div className="absolute z-10 w-full mt-2 bg-white border border-slate-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+            <div className="absolute z-50 w-full mt-2 bg-white border border-slate-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
               {filteredPractices.map((practice) => (
                 <button
                   key={practice.odsCode}
@@ -148,7 +156,7 @@ const NationalTelephony = () => {
           )}
 
           {searchTerm && !selectedPractice && filteredPractices.length === 0 && (
-            <div className="absolute z-10 w-full mt-2 bg-white border border-slate-200 rounded-lg shadow-lg p-4">
+            <div className="absolute z-50 w-full mt-2 bg-white border border-slate-200 rounded-lg shadow-lg p-4">
               <p className="text-sm text-slate-500">No practices found matching "{searchTerm}"</p>
             </div>
           )}
@@ -200,16 +208,19 @@ const NationalTelephony = () => {
       {/* Summary Tiles */}
       {selectedPractice && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {/* Answered Calls */}
-          <Card className="bg-gradient-to-br from-green-50 to-white border-green-200">
+          {/* Total Calls */}
+          <Card className="bg-gradient-to-br from-blue-50 to-white border-blue-200">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-xs text-slate-600 font-semibold uppercase">Answered Calls</p>
-                <p className="text-3xl font-bold text-slate-800 mt-1">{(selectedPractice.answeredPct * 100).toFixed(1)}%</p>
-                <p className="text-sm text-slate-600 mt-1">{selectedPractice.answered.toLocaleString()} calls</p>
-                <p className="text-xs text-slate-500 mt-1">National: {(data.national.answeredPct * 100).toFixed(1)}%</p>
+                <p className="text-xs text-slate-600 font-semibold uppercase">Total Inbound Calls</p>
+                <p className="text-3xl font-bold text-slate-800 mt-1">{selectedPractice.inboundCalls.toLocaleString()}</p>
+                <p className="text-xs text-slate-500 mt-1">National: {data.national.inboundCalls.toLocaleString()}</p>
               </div>
-              {getComparisonArrow(selectedPractice.answeredPct, data.national.answeredPct)}
+              {selectedPractice.inboundCalls > data.national.inboundCalls ? (
+                <ArrowUp size={20} className="text-slate-600" />
+              ) : selectedPractice.inboundCalls < data.national.inboundCalls ? (
+                <ArrowDown size={20} className="text-slate-600" />
+              ) : null}
             </div>
           </Card>
 
