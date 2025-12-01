@@ -42,6 +42,8 @@ import DataProcessingModal from './components/modals/DataProcessingModal';
 import ResetConfirmationModal from './components/modals/ResetConfirmationModal';
 import AIConsentModal from './components/modals/AIConsentModal';
 import ShareModal from './components/modals/ShareModal';
+import BugReportModal from './components/modals/BugReportModal';
+import AboutModal from './components/modals/AboutModal';
 
 // Utility imports
 import { calculateLinearForecast, getNextMonthNames, isGP } from './utils/calculations';
@@ -168,6 +170,8 @@ export default function App() {
   const [showProcessingInfo, setShowProcessingInfo] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showAIConsent, setShowAIConsent] = useState(false);
+  const [showBugReport, setShowBugReport] = useState(false);
+  const [showAbout, setShowAbout] = useState(false);
   const [shareUrl, setShareUrl] = useState(null);
 
   // Set document title and favicon on mount
@@ -1627,13 +1631,27 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
             <button
               onClick={() => setShowProcessingInfo(true)}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:text-blue-600 transition-all shadow-sm"
+              className="p-1.5 text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:border-blue-300 transition-all"
+              title="Data Processing"
             >
-              <Info size={16} />
-              <span className="hidden sm:inline">How it works</span>
+              <Activity size={16} className="text-blue-500" />
+            </button>
+            <button
+              onClick={() => setShowBugReport(true)}
+              className="p-1.5 text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:border-amber-300 transition-all"
+              title="Report a Bug"
+            >
+              <AlertTriangle size={16} className="text-amber-500" />
+            </button>
+            <button
+              onClick={() => setShowAbout(true)}
+              className="p-1.5 text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:border-purple-300 transition-all"
+              title="About CAIP.app"
+            >
+              <HelpCircle size={16} className="text-purple-500" />
             </button>
             <div className="h-8 w-px bg-slate-200 mx-2 hidden sm:block"></div>
             <div className="hidden lg:flex items-center gap-3 bg-white dark:bg-slate-700 px-4 py-2 rounded-full border border-slate-200 dark:border-slate-600 shadow-sm">
@@ -2395,6 +2413,17 @@ export default function App() {
         isOpen={shareUrl !== null}
         onClose={() => setShareUrl(null)}
         shareUrl={shareUrl}
+      />
+
+      <BugReportModal
+        isOpen={showBugReport}
+        onClose={() => setShowBugReport(false)}
+      />
+
+      <AboutModal
+        isOpen={showAbout}
+        onClose={() => setShowAbout(false)}
+        onOpenBugReport={() => setShowBugReport(true)}
       />
     </div>
   );
