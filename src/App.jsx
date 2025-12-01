@@ -1963,12 +1963,12 @@ export default function App() {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <Card className="h-80 lg:col-span-1">
                     <h3 className="font-bold text-slate-700 mb-4">Appointment Trends</h3>
-                    <Line data={createChartData(displayedData, 'Total Appointments', 'totalAppts', NHS_BLUE)} options={commonOptions} />
+                    <Line data={createChartData('Total Appointments', 'totalAppts', NHS_BLUE)} options={commonOptions} />
                   </Card>
                   <Card className="h-80">
                     <h3 className="font-bold text-slate-700 mb-2">Online Request Rate</h3>
                     <p className="text-xs text-slate-400 mb-4">Requests per 1000 patients per week</p>
-                    <Line data={createChartData(displayedData, 'Requests/1000/wk', 'onlineRequestsPer1000', NHS_AQUA, false)} options={onlineRequestBandOptions} />
+                    <Line data={createChartData('Requests/1000/wk', 'onlineRequestsPer1000', NHS_AQUA, false)} options={onlineRequestBandOptions} />
                   </Card>
                 </div>
 
@@ -2028,7 +2028,7 @@ export default function App() {
                   <h3 className="font-bold text-slate-800 mb-2 text-lg flex items-center gap-2"><Activity className="text-teal-600" size={24} /> Patients with GP Appointment or Resolved Online Request per Day (%)</h3>
                   <p className="text-sm text-slate-500 mb-4">Percentage of registered patients each working day who either attended a GP appointment or had their online request resolved without needing one.</p>
                   <div className="h-72">
-                    <Line data={createChartData(displayedData, 'GP appointment or online resolve per day (%)', 'gpTriageCapacityPerDayPct', NHS_AQUA, false)} options={gpBandOptions} />
+                    <Line data={createChartData('GP appointment or online resolve per day (%)', 'gpTriageCapacityPerDayPct', NHS_AQUA, false)} options={gpBandOptions} />
                   </div>
                 </Card>
 
@@ -2036,7 +2036,7 @@ export default function App() {
                   <h3 className="font-bold text-slate-800 mb-2 text-lg">Patients with GP Appointment per Day (%)</h3>
                   <p className="text-sm text-slate-500 mb-4">Performance Bands: Red (&lt;0.85%), Amber (0.85-1.10%), Green (1.10-1.30%), Blue (&gt;1.30%)</p>
                   <div className="h-72">
-                    <Line data={createChartData(displayedData, 'GP Appts %', 'gpApptsPerDay', NHS_DARK_BLUE, false)} options={gpBandOptions} />
+                    <Line data={createChartData('GP Appts %', 'gpApptsPerDay', NHS_DARK_BLUE, false)} options={gpBandOptions} />
                   </div>
                 </Card>
 
@@ -2044,12 +2044,12 @@ export default function App() {
                   <Card className="h-80">
                     <h3 className="font-bold text-slate-700 mb-2">GP Capacity Utilisation</h3>
                     <p className="text-xs text-slate-400 mb-4">% of total GP capacity (Appts + Unused) that was used</p>
-                    <Line data={createChartData(displayedData, 'Utilisation %', 'gpUtilization', NHS_GREEN)} options={utilizationOptions} />
+                    <Line data={createChartData('Utilisation %', 'gpUtilization', NHS_GREEN)} options={utilizationOptions} />
                   </Card>
                   <Card className="h-80">
                     <h3 className="font-bold text-slate-700 mb-2">GP Booking Conversion</h3>
                     <p className="text-xs text-slate-400 mb-4">GP Appointments per answered call</p>
-                    <Line data={createChartData(displayedData, 'GP Conversion Ratio', 'gpConversionRatio', NHS_PURPLE)} options={ratioOptions} />
+                    <Line data={createChartData('GP Conversion Ratio', 'gpConversionRatio', NHS_PURPLE)} options={ratioOptions} />
                   </Card>
                 </div>
 
@@ -2058,14 +2058,14 @@ export default function App() {
                     <h3 className="font-bold text-slate-700 mb-2 text-sm uppercase">GP Unused Slots</h3>
                     <p className="text-xs text-slate-400 mb-4">% of total GP slots</p>
                     <div className="h-40">
-                      <Line data={createChartData(displayedData, 'GP Unused %', 'gpUnusedPct', NHS_GREEN)} options={percentageOptions} />
+                      <Line data={createChartData('GP Unused %', 'gpUnusedPct', NHS_GREEN)} options={percentageOptions} />
                     </div>
                   </Card>
                   <Card className="h-64">
                     <h3 className="font-bold text-slate-700 mb-2 text-sm uppercase">GP DNA Rate</h3>
                     <p className="text-xs text-slate-400 mb-4">% of GP appointments</p>
                     <div className="h-40">
-                      <Line data={createChartData(displayedData, 'GP DNA %', 'gpDNAPct', NHS_RED)} options={percentageOptions} />
+                      <Line data={createChartData('GP DNA %', 'gpDNAPct', NHS_RED)} options={percentageOptions} />
                     </div>
                   </Card>
                   <Card className="h-64">
@@ -2189,7 +2189,7 @@ export default function App() {
                 <Card className="h-80">
                   <h3 className="font-bold text-slate-700 mb-2">Online Request Rate</h3>
                   <p className="text-xs text-slate-400 mb-4">Requests per 1000 patients per week</p>
-                  <Line data={createChartData(displayedData, 'Requests/1000/wk', 'onlineRequestsPer1000', NHS_AQUA, false)} options={onlineRequestBandOptions} />
+                  <Line data={createChartData('Requests/1000/wk', 'onlineRequestsPer1000', NHS_AQUA, false)} options={onlineRequestBandOptions} />
                 </Card>
 
                 <Card className="h-96">
