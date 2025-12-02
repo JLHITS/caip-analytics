@@ -14,7 +14,10 @@
       "Bash(node analyze-tables.js:*)",
       "Bash(node examine-raw.js:*)",
       "Bash(cat:*)",
-      "Bash(node debug-national.js:*)"
+      "Bash(node debug-national.js:*)",
+      "Bash(node debug-rushcliffe.js:*)",
+      "Bash(git restore:*)",
+      "Bash(taskkill:*)"
     ],
     "deny": [],
     "ask": []

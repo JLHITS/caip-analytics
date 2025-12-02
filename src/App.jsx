@@ -1906,10 +1906,16 @@ export default function App() {
 
         {mainTab === 'demand' && processedData && (
           <div className="animate-in fade-in duration-700" id="dashboard-content">
-            <div className="hidden print:block mb-8 text-center">
-              <h1 className="text-3xl font-bold text-slate-900">CAIP Analysis - {config.surgeryName || 'Surgery Report'}</h1>
-              <p className="text-slate-500">Generated on {new Date().toLocaleDateString()}</p>
-            </div>
+            {/* Practice Header - Visible on screen and print */}
+            {config.surgeryName && (
+              <Card className="mb-6 text-center bg-gradient-to-br from-blue-50 to-white border-blue-100">
+                <h1 className="text-3xl font-bold text-slate-900 mb-2">{config.surgeryName}</h1>
+                <p className="text-sm text-slate-500">
+                  Practice Population: <span className="font-semibold text-slate-700">{config.population?.toLocaleString()}</span>
+                </p>
+                <p className="text-xs text-slate-400 mt-2 print:block">Generated on {new Date().toLocaleDateString()}</p>
+              </Card>
+            )}
 
             {aiReport && (
               <Card className="mb-8 bg-gradient-to-br from-indigo-50 to-white border-indigo-100 animate-in slide-in-from-top-4 duration-500 shadow-md">
