@@ -2454,9 +2454,9 @@ export default function App() {
         )}
 
         {/* NATIONAL TELEPHONY CONTENT */}
-        {mainTab === 'telephony' && (
+        <div className={mainTab === 'telephony' ? '' : 'hidden'}>
           <NationalTelephony />
-        )}
+        </div>
       </main>
 
       <DataProcessingModal isOpen={showProcessingInfo} onClose={() => setShowProcessingInfo(false)} />

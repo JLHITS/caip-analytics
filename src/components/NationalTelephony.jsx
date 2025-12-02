@@ -820,7 +820,7 @@ const NationalTelephony = () => {
 
       {/* No Selection State */}
       {!selectedPractice && (
-        <div className="text-center py-12 text-slate-400">
+        <div className="text-center py-12 text-slate-400 relative -z-10">
           <Phone size={48} className="mx-auto mb-4 opacity-50" />
           <p>Search for and select your practice to view telephony metrics</p>
         </div>
