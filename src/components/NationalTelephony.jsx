@@ -16,6 +16,8 @@ import {
   getNationalMissedPct,
   calculateCallsSavedRanking
 } from '../utils/telephonyAnalysis';
+import { db } from '../firebase/config';
+import { doc, getDoc, setDoc, updateDoc, increment } from 'firebase/firestore';
 
 // Import the Excel file
 import telephonyFile from '../assets/Cloud Based Telephony Publication Summary October 2025_v2.xlsx?url';
@@ -28,6 +30,65 @@ const NationalTelephony = () => {
   const [showCallsSavedTooltip, setShowCallsSavedTooltip] = useState(false);
   const [showInterpretationTooltip, setShowInterpretationTooltip] = useState(false);
   const [showCoveragePopup, setShowCoveragePopup] = useState(false);
+  const [usageStats, setUsageStats] = useState({ totalChecks: 176, recentPractices: [] });
+
+  // Load global usage stats from Firestore on mount
+  useEffect(() => {
+    const loadStats = async () => {
+      try {
+        const statsRef = doc(db, 'telephonyStats', 'global');
+        const statsDoc = await getDoc(statsRef);
+
+        if (statsDoc.exists()) {
+          setUsageStats(statsDoc.data());
+        } else {
+          const initialStats = { totalChecks: 176, recentPractices: [] };
+          await setDoc(statsRef, initialStats);
+          setUsageStats(initialStats);
+        }
+      } catch (error) {
+        console.error('Error loading stats:', error);
+      }
+    };
+    loadStats();
+  }, []);
+
+  // Track practice selection and update global stats
+  useEffect(() => {
+    if (selectedPractice) {
+      const updateStats = async () => {
+        try {
+          const statsRef = doc(db, 'telephonyStats', 'global');
+          const statsDoc = await getDoc(statsRef);
+
+          if (statsDoc.exists()) {
+            const currentStats = statsDoc.data();
+            const newRecentPractices = [
+              {
+                name: selectedPractice.gpName,
+                odsCode: selectedPractice.odsCode,
+                timestamp: new Date().toISOString()
+              },
+              ...currentStats.recentPractices.filter(p => p.odsCode !== selectedPractice.odsCode)
+            ].slice(0, 5);
+
+            await updateDoc(statsRef, {
+              totalChecks: increment(1),
+              recentPractices: newRecentPractices
+            });
+
+            setUsageStats({
+              totalChecks: currentStats.totalChecks + 1,
+              recentPractices: newRecentPractices
+            });
+          }
+        } catch (error) {
+          console.error('Error updating stats:', error);
+        }
+      };
+      updateStats();
+    }
+  }, [selectedPractice]);
 
   // Load and parse Excel file on mount
   useEffect(() => {
@@ -123,6 +184,42 @@ const NationalTelephony = () => {
           >
             📊 View Data Source <ExternalLink size={12} />
           </a>
+        </div>
+      </Card>
+
+      {/* Usage Statistics */}
+      <Card className="bg-gradient-to-br from-indigo-50 to-white border-indigo-100">
+        <div className="flex flex-col md:flex-row gap-6">
+          <div className="flex-shrink-0">
+            <p className="text-xs text-indigo-600 font-semibold uppercase tracking-wide mb-1">Times Used</p>
+            <p className="text-3xl font-bold text-indigo-900">{usageStats.totalChecks.toLocaleString()}</p>
+            <p className="text-xs text-slate-500 mt-1">practices viewed</p>
+          </div>
+          <div className="flex-1 border-t md:border-t-0 md:border-l border-indigo-200 pt-4 md:pt-0 md:pl-6">
+            <p className="text-xs text-indigo-600 font-semibold uppercase tracking-wide mb-2">Recent Practices</p>
+            {usageStats.recentPractices.length > 0 ? (
+              <div className="space-y-1">
+                {usageStats.recentPractices.map((practice, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => {
+                      const foundPractice = data?.practices.find(p => p.odsCode === practice.odsCode);
+                      if (foundPractice) {
+                        setSelectedPractice(foundPractice);
+                        setSearchTerm('');
+                      }
+                    }}
+                    className="flex items-center justify-between text-sm w-full hover:bg-indigo-100 rounded px-2 py-1 transition-colors text-left"
+                  >
+                    <span className="text-slate-700 font-medium truncate">{practice.name}</span>
+                    <span className="text-slate-400 text-xs ml-2">{practice.odsCode}</span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-400 italic">No practices checked yet</p>
+            )}
+          </div>
         </div>
       </Card>
 
