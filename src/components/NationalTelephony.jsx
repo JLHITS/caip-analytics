@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, ArrowUp, ArrowDown, Phone, Trophy, TrendingUp, ExternalLink, Info } from 'lucide-react';
+import { Search, ArrowUp, ArrowDown, Phone, Trophy, TrendingUp, ExternalLink, Info, Star, ChevronDown, ChevronUp } from 'lucide-react';
 import Card from './ui/Card';
 import { NHS_GREEN, NHS_RED } from '../constants/colors';
 import { parseNationalTelephonyData, getAverageWaitTimeBin, getAverageDurationBin } from '../utils/parseNationalTelephony';
@@ -31,6 +31,16 @@ const NationalTelephony = () => {
   const [showInterpretationTooltip, setShowInterpretationTooltip] = useState(false);
   const [showCoveragePopup, setShowCoveragePopup] = useState(false);
   const [usageStats, setUsageStats] = useState({ totalChecks: 176, recentPractices: [] });
+  const [bookmarkedPractices, setBookmarkedPractices] = useState([]);
+  const [showBookmarks, setShowBookmarks] = useState(true);
+
+  // Load bookmarks from localStorage on mount
+  useEffect(() => {
+    const savedBookmarks = localStorage.getItem('practiceBookmarks');
+    if (savedBookmarks) {
+      setBookmarkedPractices(JSON.parse(savedBookmarks));
+    }
+  }, []);
 
   // Load global usage stats from Firestore on mount
   useEffect(() => {
@@ -52,6 +62,31 @@ const NationalTelephony = () => {
     };
     loadStats();
   }, []);
+
+  // Toggle bookmark for a practice
+  const toggleBookmark = (practice) => {
+    const isBookmarked = bookmarkedPractices.some(p => p.odsCode === practice.odsCode);
+    let newBookmarks;
+
+    if (isBookmarked) {
+      newBookmarks = bookmarkedPractices.filter(p => p.odsCode !== practice.odsCode);
+    } else {
+      newBookmarks = [...bookmarkedPractices, {
+        odsCode: practice.odsCode,
+        name: practice.gpName,
+        pcnName: practice.pcnName,
+        timestamp: new Date().toISOString()
+      }];
+    }
+
+    setBookmarkedPractices(newBookmarks);
+    localStorage.setItem('practiceBookmarks', JSON.stringify(newBookmarks));
+  };
+
+  // Check if a practice is bookmarked
+  const isBookmarked = (odsCode) => {
+    return bookmarkedPractices.some(p => p.odsCode === odsCode);
+  };
 
   // Track practice selection and update global stats
   useEffect(() => {
@@ -118,13 +153,14 @@ const NationalTelephony = () => {
     loadData();
   }, []);
 
-  // Filter practices based on search
+  // Filter practices based on search (including PCN name search)
   const filteredPractices = useMemo(() => {
     if (!data || !searchTerm) return [];
     const term = searchTerm.toLowerCase();
     return data.practices.filter(p =>
       p.gpName.toLowerCase().includes(term) ||
-      p.odsCode.toLowerCase().includes(term)
+      p.odsCode.toLowerCase().includes(term) ||
+      p.pcnName.toLowerCase().includes(term)
     ).slice(0, 10); // Limit to 10 results
   }, [data, searchTerm]);
 
@@ -223,6 +259,59 @@ const NationalTelephony = () => {
         </div>
       </Card>
 
+      {/* Bookmarked Practices */}
+      {bookmarkedPractices.length > 0 && (
+        <Card className="bg-gradient-to-br from-amber-50 to-white border-amber-200">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Star size={20} className="text-amber-600 fill-amber-600" />
+              <h3 className="font-bold text-slate-800">Your Bookmarked Practices</h3>
+              <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
+                {bookmarkedPractices.length}
+              </span>
+            </div>
+            <button
+              onClick={() => setShowBookmarks(!showBookmarks)}
+              className="text-slate-400 hover:text-slate-600 transition-colors"
+            >
+              {showBookmarks ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+            </button>
+          </div>
+          {showBookmarks && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+              {bookmarkedPractices.map((bookmark) => (
+                <button
+                  key={bookmark.odsCode}
+                  onClick={() => {
+                    const foundPractice = data?.practices.find(p => p.odsCode === bookmark.odsCode);
+                    if (foundPractice) {
+                      setSelectedPractice(foundPractice);
+                      setSearchTerm('');
+                    }
+                  }}
+                  className="flex items-center justify-between p-3 bg-white border border-amber-200 rounded-lg hover:bg-amber-50 hover:border-amber-300 transition-all text-left group"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-800 truncate">{bookmark.name}</p>
+                    <p className="text-xs text-slate-500 truncate">{bookmark.odsCode} • {bookmark.pcnName}</p>
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const foundPractice = data?.practices.find(p => p.odsCode === bookmark.odsCode);
+                      if (foundPractice) toggleBookmark(foundPractice);
+                    }}
+                    className="ml-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <Star size={16} className="text-amber-600 fill-amber-600 hover:text-amber-700" />
+                  </button>
+                </button>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
+
       {/* Coverage Popup Modal */}
       {showCoveragePopup && createPortal(
         <div
@@ -307,19 +396,36 @@ const NationalTelephony = () => {
           {searchTerm && !selectedPractice && filteredPractices.length > 0 && (
             <div className="absolute z-50 w-full mt-2 bg-white border border-slate-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
               {filteredPractices.map((practice) => (
-                <button
+                <div
                   key={practice.odsCode}
-                  onClick={() => {
-                    setSelectedPractice(practice);
-                    setSearchTerm('');
-                  }}
-                  className="w-full px-4 py-3 text-left hover:bg-blue-50 border-b border-slate-100 last:border-b-0 transition-colors"
+                  className="flex items-center gap-3 px-4 py-3 hover:bg-blue-50 border-b border-slate-100 last:border-b-0 transition-colors group"
                 >
-                  <div className="font-medium text-slate-800">{practice.gpName}</div>
-                  <div className="text-xs text-slate-500 mt-1">
-                    {practice.odsCode} • {practice.pcnName} • {practice.icbName}
-                  </div>
-                </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleBookmark(practice);
+                    }}
+                    className="flex-shrink-0 p-1 rounded hover:bg-amber-100 transition-colors"
+                    title={isBookmarked(practice.odsCode) ? "Remove bookmark" : "Bookmark this practice"}
+                  >
+                    <Star
+                      size={20}
+                      className={isBookmarked(practice.odsCode) ? "text-amber-500 fill-amber-500" : "text-slate-300 hover:text-amber-500"}
+                    />
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSelectedPractice(practice);
+                      setSearchTerm('');
+                    }}
+                    className="flex-1 text-left min-w-0"
+                  >
+                    <div className="font-medium text-slate-800 truncate">{practice.gpName}</div>
+                    <div className="text-xs text-slate-500 truncate mt-1">
+                      {practice.odsCode} • {practice.pcnName} • {practice.icbName}
+                    </div>
+                  </button>
+                </div>
               ))}
             </div>
           )}
