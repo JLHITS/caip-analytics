@@ -272,7 +272,7 @@ const NationalTelephony = () => {
             </div>
             <button
               onClick={() => setShowBookmarks(!showBookmarks)}
-              className="text-slate-400 hover:text-slate-600 transition-colors"
+              className="text-slate-400 hover:text-slate-600 transition-colors p-3"
             >
               {showBookmarks ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
             </button>
@@ -301,7 +301,7 @@ const NationalTelephony = () => {
                       const foundPractice = data?.practices.find(p => p.odsCode === bookmark.odsCode);
                       if (foundPractice) toggleBookmark(foundPractice);
                     }}
-                    className="ml-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="ml-2 p-3 opacity-0 group-hover:opacity-100 transition-opacity"
                   >
                     <Star size={16} className="text-amber-600 fill-amber-600 hover:text-amber-700" />
                   </button>
@@ -319,7 +319,7 @@ const NationalTelephony = () => {
           onClick={() => setShowCoveragePopup(false)}
         >
           <div
-            className="bg-white rounded-lg shadow-2xl max-w-lg w-full p-6"
+            className="bg-white rounded-lg shadow-2xl max-w-full sm:max-w-lg w-full p-4 sm:p-6 max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between mb-4">
@@ -329,7 +329,7 @@ const NationalTelephony = () => {
               </div>
               <button
                 onClick={() => setShowCoveragePopup(false)}
-                className="text-slate-400 hover:text-slate-600 transition-colors"
+                className="text-slate-400 hover:text-slate-600 transition-colors p-3"
               >
                 <span className="text-2xl">&times;</span>
               </button>
@@ -394,7 +394,7 @@ const NationalTelephony = () => {
 
           {/* Search Results Dropdown - Only show when searching, hide after selection */}
           {searchTerm && !selectedPractice && filteredPractices.length > 0 && (
-            <div className="absolute z-50 w-full mt-2 bg-white border border-slate-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+            <div className="absolute z-50 w-full mt-2 bg-white border border-slate-200 rounded-lg shadow-lg max-h-[50vh] sm:max-h-64 overflow-y-auto">
               {filteredPractices.map((practice) => (
                 <div
                   key={practice.odsCode}
@@ -405,7 +405,7 @@ const NationalTelephony = () => {
                       e.stopPropagation();
                       toggleBookmark(practice);
                     }}
-                    className="flex-shrink-0 p-1 rounded hover:bg-amber-100 transition-colors"
+                    className="flex-shrink-0 p-3 rounded hover:bg-amber-100 transition-colors"
                     title={isBookmarked(practice.odsCode) ? "Remove bookmark" : "Bookmark this practice"}
                   >
                     <Star
@@ -618,13 +618,13 @@ const NationalTelephony = () => {
                     <button
                       onMouseEnter={() => setShowInterpretationTooltip(true)}
                       onMouseLeave={() => setShowInterpretationTooltip(false)}
-                      className="text-slate-600 hover:text-slate-800 transition-colors"
+                      className="text-slate-600 hover:text-slate-800 transition-colors p-3"
                     >
                       <Info size={18} />
                     </button>
                     {showInterpretationTooltip && createPortal(
                       <div
-                        className="fixed w-72 bg-slate-800 text-white text-xs rounded-lg p-4 shadow-2xl z-[9999] pointer-events-none"
+                        className="fixed w-[90vw] sm:w-72 max-w-md bg-slate-800 text-white text-xs rounded-lg p-4 shadow-2xl z-[9999] pointer-events-none"
                         style={{
                           top: '50%',
                           left: '50%',
@@ -712,8 +712,10 @@ const NationalTelephony = () => {
               <h3 className="text-lg font-bold text-slate-800 mb-4">
                 {pcnRanking.pcnName} - Practice Performance
               </h3>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+              <div className="overflow-x-auto -mx-4 sm:mx-0">
+                <div className="inline-block min-w-full align-middle">
+                  <div className="overflow-hidden sm:rounded-lg">
+                    <table className="min-w-full text-sm">
                   <thead className="bg-slate-100 border-b-2 border-slate-200">
                     <tr>
                       <th className="text-left p-3 font-semibold text-slate-700">Rank</th>
@@ -746,8 +748,10 @@ const NationalTelephony = () => {
                         </tr>
                       );
                     })}
-                  </tbody>
-                </table>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
             </Card>
 
@@ -784,8 +788,10 @@ const NationalTelephony = () => {
                   <Card>
                     <h3 className="text-lg font-bold text-slate-800 mb-4">Top 10 PCNs Nationally (Missed Calls %)</h3>
                     <p className="text-xs text-slate-500 mb-3">Excluding single-practice PCNs</p>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
+                    <div className="overflow-x-auto -mx-4 sm:mx-0">
+                      <div className="inline-block min-w-full align-middle">
+                        <div className="overflow-hidden sm:rounded-lg">
+                          <table className="min-w-full text-sm">
                         <thead className="bg-slate-100 border-b-2 border-slate-200">
                           <tr>
                             <th className="text-left p-3 font-semibold text-slate-700">Rank</th>
@@ -817,7 +823,9 @@ const NationalTelephony = () => {
                             );
                           })}
                         </tbody>
-                      </table>
+                          </table>
+                        </div>
+                      </div>
                     </div>
                   </Card>
 
@@ -826,8 +834,10 @@ const NationalTelephony = () => {
                     <h3 className="text-lg font-bold text-slate-800 mb-4">
                       PCN Performance in {selectedPractice.icbName}
                     </h3>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
+                    <div className="overflow-x-auto -mx-4 sm:mx-0">
+                      <div className="inline-block min-w-full align-middle">
+                        <div className="overflow-hidden sm:rounded-lg">
+                          <table className="min-w-full text-sm">
                         <thead className="bg-slate-100 border-b-2 border-slate-200">
                           <tr>
                             <th className="text-left p-3 font-semibold text-slate-700">Rank</th>
@@ -859,7 +869,9 @@ const NationalTelephony = () => {
                             );
                           })}
                         </tbody>
-                      </table>
+                          </table>
+                        </div>
+                      </div>
                     </div>
                   </Card>
 
@@ -881,13 +893,13 @@ const NationalTelephony = () => {
                           <button
                             onMouseEnter={() => setShowCallsSavedTooltip(true)}
                             onMouseLeave={() => setShowCallsSavedTooltip(false)}
-                            className="text-teal-600 hover:text-teal-800 transition-colors"
+                            className="text-teal-600 hover:text-teal-800 transition-colors p-3"
                           >
                             <Info size={20} />
                           </button>
                           {showCallsSavedTooltip && createPortal(
                             <div
-                              className="fixed w-80 bg-slate-800 text-white text-xs rounded-lg p-4 shadow-2xl z-[9999] pointer-events-none"
+                              className="fixed w-[90vw] sm:w-80 max-w-md bg-slate-800 text-white text-xs rounded-lg p-4 shadow-2xl z-[9999] pointer-events-none"
                               style={{
                                 top: '50%',
                                 left: '50%',
@@ -929,8 +941,10 @@ const NationalTelephony = () => {
                   <Card className="bg-gradient-to-br from-indigo-50 to-white border-indigo-200">
                     <h3 className="text-lg font-bold text-indigo-900 mb-4">🏆 Top 20 Practices by Impact (Calls Saved)</h3>
                     <p className="text-xs text-indigo-600 mb-3">Volume-weighted metric - practices with highest positive impact</p>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
+                    <div className="overflow-x-auto -mx-4 sm:mx-0">
+                      <div className="inline-block min-w-full align-middle">
+                        <div className="overflow-hidden sm:rounded-lg">
+                          <table className="min-w-full text-sm">
                         <thead className="bg-indigo-100 border-b-2 border-indigo-300">
                           <tr>
                             <th className="text-left p-3 font-semibold text-indigo-900">Rank</th>
@@ -964,7 +978,9 @@ const NationalTelephony = () => {
                             );
                           })}
                         </tbody>
-                      </table>
+                          </table>
+                        </div>
+                      </div>
                     </div>
                   </Card>
 
@@ -972,8 +988,10 @@ const NationalTelephony = () => {
                   <Card className="bg-gradient-to-br from-violet-50 to-white border-violet-200">
                     <h3 className="text-lg font-bold text-violet-900 mb-4">🏆 Top 20 PCNs by Impact (Calls Saved)</h3>
                     <p className="text-xs text-violet-600 mb-3">Volume-weighted metric - PCNs with highest positive impact (excluding single-practice PCNs)</p>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
+                    <div className="overflow-x-auto -mx-4 sm:mx-0">
+                      <div className="inline-block min-w-full align-middle">
+                        <div className="overflow-hidden sm:rounded-lg">
+                          <table className="min-w-full text-sm">
                         <thead className="bg-violet-100 border-b-2 border-violet-300">
                           <tr>
                             <th className="text-left p-3 font-semibold text-violet-900">Rank</th>
@@ -1011,7 +1029,9 @@ const NationalTelephony = () => {
                               );
                             })}
                         </tbody>
-                      </table>
+                          </table>
+                        </div>
+                      </div>
                     </div>
                   </Card>
                 </>
