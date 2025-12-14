@@ -1690,17 +1690,6 @@ export default function App() {
               </a>
             </div>
 
-            {!processedData && (
-              <button
-                onClick={loadExampleData}
-                disabled={isProcessing}
-                className="flex items-center gap-2 px-3 py-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-full transition-all text-sm font-medium"
-              >
-                {isProcessing ? <Loader2 size={14} className="animate-spin" /> : <PlayCircle size={14} />}
-                See Example
-              </button>
-            )}
-
             {processedData && (
               <div className="flex items-center gap-4 text-sm">
                 <div className="relative group">
@@ -1751,6 +1740,20 @@ export default function App() {
             </button>
           </div>
         </div>
+
+        {/* See Example Button - Only on Demand & Capacity tab */}
+        {mainTab === 'demand' && !processedData && (
+          <div className="flex justify-center mb-6" data-html2canvas-ignore="true">
+            <button
+              onClick={loadExampleData}
+              disabled={isProcessing}
+              className="flex items-center gap-2 px-4 py-2 text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-all font-medium shadow-sm hover:shadow"
+            >
+              {isProcessing ? <Loader2 size={16} className="animate-spin" /> : <PlayCircle size={16} />}
+              See Example
+            </button>
+          </div>
+        )}
 
         {/* DEMAND & CAPACITY TAB */}
         {mainTab === 'demand' && !processedData && (
