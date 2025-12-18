@@ -17,7 +17,8 @@
       "Bash(node debug-national.js:*)",
       "Bash(node debug-rushcliffe.js:*)",
       "Bash(git restore:*)",
-      "Bash(taskkill:*)"
+      "Bash(taskkill:*)",
+      "Bash(node -e:*)"
     ],
     "deny": [],
     "ask": []

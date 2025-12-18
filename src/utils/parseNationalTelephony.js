@@ -219,9 +219,28 @@ export function parseNationalTelephonyData(fileBuffer) {
     missedWaitData: table5Data[practice.odsCode] || null,
   }));
 
+  // Data corrections for known mapping errors in NHS England source data
+  const DATA_CORRECTIONS = {
+    'C82040': {
+      icbCode: 'QT1',
+      icbName: 'NHS NOTTINGHAM AND NOTTINGHAMSHIRE INTEGRATED CARE BOARD'
+    }
+  };
+
+  // Apply corrections
+  const correctedPractices = enrichedPractices.map(practice => {
+    if (DATA_CORRECTIONS[practice.odsCode]) {
+      return {
+        ...practice,
+        ...DATA_CORRECTIONS[practice.odsCode]
+      };
+    }
+    return practice;
+  });
+
   return {
     dataMonth,
-    practices: enrichedPractices,
+    practices: correctedPractices,
     national: {
       ...nationalData,
       waitTimeData: table4National,
