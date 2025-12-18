@@ -681,9 +681,20 @@ const NationalTelephony = () => {
                 <p className="text-3xl font-bold text-slate-800 mt-1">{selectedPractice.inboundCalls.toLocaleString()}</p>
                 <p className="text-xs text-slate-500 mt-1">National Avg: {avgInboundCalls.toLocaleString()}</p>
                 {compareWithPrevious && prevPractice && (
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    {previousMonth?.split(' ')[0]}: {prevPractice.inboundCalls.toLocaleString()}
-                  </p>
+                  <>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      {previousMonth?.split(' ')[0]}: {prevPractice.inboundCalls.toLocaleString()}
+                    </p>
+                    {selectedPractice.inboundCalls !== prevPractice.inboundCalls && (
+                      <div className="flex items-center gap-1 text-xs mt-1 text-blue-600">
+                        {selectedPractice.inboundCalls > prevPractice.inboundCalls ? (
+                          <><TrendingUp size={14} /><span>↑ {(selectedPractice.inboundCalls - prevPractice.inboundCalls).toLocaleString()} vs {previousMonth?.split(' ')[0]}</span></>
+                        ) : (
+                          <><TrendingDown size={14} /><span>↓ {(prevPractice.inboundCalls - selectedPractice.inboundCalls).toLocaleString()} vs {previousMonth?.split(' ')[0]}</span></>
+                        )}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
               {selectedPractice.inboundCalls > avgInboundCalls ? (
