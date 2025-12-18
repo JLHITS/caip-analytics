@@ -69,9 +69,25 @@ const NationalTelephony = () => {
   const [showBookmarks, setShowBookmarks] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState('November 2025');
   const [compareWithPrevious, setCompareWithPrevious] = useState(true);
+  const [activeTab, setActiveTab] = useState('overview');
+
+  // Tab definitions
+  const TABS = [
+    { id: 'overview', label: 'Overview', icon: '📊' },
+    { id: 'trends', label: 'Trends', icon: '📈' },
+    { id: 'leaderboards', label: 'Leaderboards', icon: '🏆' },
+    { id: 'impact', label: 'Impact Metrics', icon: '💼' }
+  ];
 
   // Get current data based on selected month
   const data = allMonthsData[selectedMonth] || null;
+
+  // Switch away from Trends tab if comparison is disabled
+  useEffect(() => {
+    if (!compareWithPrevious && activeTab === 'trends') {
+      setActiveTab('overview');
+    }
+  }, [compareWithPrevious, activeTab]);
 
   // Get previous month data for comparison
   const previousMonth = useMemo(() => {
@@ -619,8 +635,35 @@ const NationalTelephony = () => {
         )}
       </Card>
 
-      {/* National Averages & Summary Tiles - Only show when practice selected */}
-      {selectedPractice && (() => {
+      {/* Tab Navigation - Only show when practice selected */}
+      {selectedPractice && (
+        <div className="bg-white rounded-lg border border-slate-200 p-1 flex flex-wrap gap-1">
+          {TABS.map(tab => {
+            const isDisabled = tab.id === 'trends' && !compareWithPrevious;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => !isDisabled && setActiveTab(tab.id)}
+                disabled={isDisabled}
+                className={`flex-1 min-w-[120px] px-4 py-2.5 rounded-md text-sm font-medium transition-all ${
+                  isDisabled
+                    ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                    : activeTab === tab.id
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800'
+                }`}
+                title={isDisabled ? 'Enable "Compare with previous months" to view trends' : ''}
+              >
+                <span className="mr-1.5">{tab.icon}</span>
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* OVERVIEW TAB - National Averages & Summary Tiles */}
+      {selectedPractice && activeTab === 'overview' && (() => {
         // Calculate average inbound calls across all practices
         const avgInboundCalls = Math.round(
           data.practices.reduce((sum, p) => sum + p.inboundCalls, 0) / data.practices.length
@@ -844,6 +887,9 @@ const NationalTelephony = () => {
 
         return (
           <>
+            {/* OVERVIEW TAB - Performance Interpretation & Rankings */}
+            {activeTab === 'overview' && (
+              <>
             {/* Performance Interpretation */}
             <Card className={`bg-gradient-to-br from-${interpretation.color}-50 to-white border-${interpretation.color}-200 ${parseFloat(nationalRanking.percentile) <= 1.0 ? 'ring-4 ring-yellow-400 ring-offset-2' : ''}`}>
               <div className="text-center">
@@ -961,7 +1007,12 @@ const NationalTelephony = () => {
                 </div>
               </Card>
             </div>
+              </>
+            )}
 
+            {/* TRENDS TAB - Charts & Improvements */}
+            {activeTab === 'trends' && (
+              <>
             {/* Monthly Trends Charts - Only show when comparison enabled and data exists */}
             {compareWithPrevious && previousData && selectedPractice && (
               <Card>
@@ -1109,6 +1160,63 @@ const NationalTelephony = () => {
               </Card>
             )}
 
+            {/* Top 10 Most Improved by Calls Saved */}
+            {compareWithPrevious && previousData && mostImprovedByCallsSaved.length > 0 && (
+              <Card className="bg-gradient-to-br from-emerald-50 to-white border-emerald-200">
+                <h3 className="text-lg font-bold text-emerald-900 mb-4">📈 Top 10 Most Improved Practices (Standardised Metric)</h3>
+                <p className="text-sm text-slate-500 mb-4">Practices with the biggest improvement in Calls Saved from {previousMonth} to {selectedMonth}</p>
+                <div className="overflow-x-auto -mx-4 sm:mx-0">
+                  <div className="inline-block min-w-full align-middle">
+                    <div className="overflow-hidden sm:rounded-lg">
+                      <table className="min-w-full text-sm">
+                        <thead className="bg-emerald-100 border-b-2 border-emerald-200">
+                          <tr>
+                            <th className="text-left p-3 font-semibold text-emerald-900">Rank</th>
+                            <th className="text-left p-3 font-semibold text-emerald-900">Practice</th>
+                            <th className="text-left p-3 font-semibold text-emerald-900">PCN</th>
+                            <th className="text-right p-3 font-semibold text-emerald-900">{previousMonth?.split(' ')[0]}</th>
+                            <th className="text-right p-3 font-semibold text-emerald-900">{selectedMonth?.split(' ')[0]}</th>
+                            <th className="text-right p-3 font-semibold text-emerald-900">Improvement</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {mostImprovedByCallsSaved.map((practice, idx) => (
+                            <tr key={practice.odsCode} className="border-b border-emerald-100 hover:bg-emerald-50">
+                              <td className="p-3 font-medium">{idx + 1}</td>
+                              <td className="p-3">
+                                <div className="font-medium">{practice.gpName}</div>
+                                <div className="text-xs text-slate-500">{practice.odsCode}</div>
+                              </td>
+                              <td className="p-3 text-slate-600 text-xs">{practice.pcnName}</td>
+                              <td className="p-3 text-right text-slate-500">
+                                {practice.prevCallsSaved >= 0 ? '+' : ''}{Math.round(practice.prevCallsSaved).toLocaleString()}
+                              </td>
+                              <td className="p-3 text-right">
+                                <span className={practice.currentCallsSaved >= 0 ? 'text-teal-600' : 'text-red-600'}>
+                                  {practice.currentCallsSaved >= 0 ? '+' : ''}{Math.round(practice.currentCallsSaved).toLocaleString()}
+                                </span>
+                              </td>
+                              <td className="p-3 text-right">
+                                <span className="text-emerald-600 font-bold flex items-center justify-end gap-1">
+                                  <TrendingUp size={14} />
+                                  +{Math.round(practice.improvement).toLocaleString()}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            )}
+              </>
+            )}
+
+            {/* LEADERBOARDS TAB - PCN Tables */}
+            {activeTab === 'leaderboards' && (
+              <>
             {/* PCN League Table */}
             <Card>
               <h3 className="text-lg font-bold text-slate-800 mb-4">
@@ -1276,7 +1384,20 @@ const NationalTelephony = () => {
                       </div>
                     </div>
                   </Card>
+                </>
+              );
+            })()}
+              </>
+            )}
 
+            {/* IMPACT METRICS TAB - Volume-Weighted Metrics */}
+            {activeTab === 'impact' && (() => {
+              const pcnAverages = calculatePCNAverages(data.practices);
+              const nationalMissedPct = getNationalMissedPct(data.practices);
+              const practiceCallsSaved = calculateCallsSaved(selectedPractice, nationalMissedPct);
+              const callsSavedRanking = calculateCallsSavedRanking(selectedPractice, data.practices);
+              return (
+                <>
                   {/* Section Divider: Volume-Weighted Impact Metrics */}
                   <Card className="bg-gradient-to-r from-teal-100 via-indigo-100 to-violet-100 border-2 border-teal-400">
                     <div className="text-center py-2">
@@ -1436,58 +1557,6 @@ const NationalTelephony = () => {
                       </div>
                     </div>
                   </Card>
-
-                  {/* Top 10 Most Improved by Calls Saved */}
-                  {compareWithPrevious && previousData && mostImprovedByCallsSaved.length > 0 && (
-                    <Card className="bg-gradient-to-br from-emerald-50 to-white border-emerald-200">
-                      <h3 className="text-lg font-bold text-emerald-900 mb-4">📈 Top 10 Most Improved Practices (Standardised Metric)</h3>
-                      <p className="text-sm text-slate-500 mb-4">Practices with the biggest improvement in Calls Saved from {previousMonth} to {selectedMonth}</p>
-                      <div className="overflow-x-auto -mx-4 sm:mx-0">
-                        <div className="inline-block min-w-full align-middle">
-                          <div className="overflow-hidden sm:rounded-lg">
-                            <table className="min-w-full text-sm">
-                              <thead className="bg-emerald-100 border-b-2 border-emerald-200">
-                                <tr>
-                                  <th className="text-left p-3 font-semibold text-emerald-900">Rank</th>
-                                  <th className="text-left p-3 font-semibold text-emerald-900">Practice</th>
-                                  <th className="text-left p-3 font-semibold text-emerald-900">PCN</th>
-                                  <th className="text-right p-3 font-semibold text-emerald-900">{previousMonth?.split(' ')[0]}</th>
-                                  <th className="text-right p-3 font-semibold text-emerald-900">{selectedMonth?.split(' ')[0]}</th>
-                                  <th className="text-right p-3 font-semibold text-emerald-900">Improvement</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {mostImprovedByCallsSaved.map((practice, idx) => (
-                                  <tr key={practice.odsCode} className="border-b border-emerald-100 hover:bg-emerald-50">
-                                    <td className="p-3 font-medium">{idx + 1}</td>
-                                    <td className="p-3">
-                                      <div className="font-medium">{practice.gpName}</div>
-                                      <div className="text-xs text-slate-500">{practice.odsCode}</div>
-                                    </td>
-                                    <td className="p-3 text-slate-600 text-xs">{practice.pcnName}</td>
-                                    <td className="p-3 text-right text-slate-500">
-                                      {practice.prevCallsSaved >= 0 ? '+' : ''}{Math.round(practice.prevCallsSaved).toLocaleString()}
-                                    </td>
-                                    <td className="p-3 text-right">
-                                      <span className={practice.currentCallsSaved >= 0 ? 'text-teal-600' : 'text-red-600'}>
-                                        {practice.currentCallsSaved >= 0 ? '+' : ''}{Math.round(practice.currentCallsSaved).toLocaleString()}
-                                      </span>
-                                    </td>
-                                    <td className="p-3 text-right">
-                                      <span className="text-emerald-600 font-bold flex items-center justify-end gap-1">
-                                        <TrendingUp size={14} />
-                                        +{Math.round(practice.improvement).toLocaleString()}
-                                      </span>
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        </div>
-                      </div>
-                    </Card>
-                  )}
                 </>
               );
             })()}
