@@ -19,8 +19,15 @@ import {
 import { db } from '../firebase/config';
 import { doc, getDoc, setDoc, updateDoc, increment } from 'firebase/firestore';
 
-// Import the Excel file
-import telephonyFile from '../assets/Cloud Based Telephony Publication Summary October 2025_v2.xlsx?url';
+// Import the Excel files
+import octData from '../assets/Cloud Based Telephony Publication Summary October 2025_v2.xlsx?url';
+import novData from '../assets/Cloud Based Telephony Publication Summary November 2025.xlsx?url';
+
+// Month data mapping
+const MONTH_DATA = {
+  'November 2025': novData,
+  'October 2025': octData
+};
 
 const NationalTelephony = () => {
   const [data, setData] = useState(null);
@@ -33,6 +40,7 @@ const NationalTelephony = () => {
   const [usageStats, setUsageStats] = useState({ totalChecks: 176, recentPractices: [] });
   const [bookmarkedPractices, setBookmarkedPractices] = useState([]);
   const [showBookmarks, setShowBookmarks] = useState(true);
+  const [selectedMonth, setSelectedMonth] = useState('November 2025');
 
   // Load bookmarks from localStorage on mount
   useEffect(() => {
@@ -125,10 +133,13 @@ const NationalTelephony = () => {
     }
   }, [selectedPractice]);
 
-  // Load and parse Excel file on mount
+  // Load and parse Excel file when month changes
   useEffect(() => {
     const loadData = async () => {
       try {
+        setLoading(true);
+        // Get the file for the selected month
+        const telephonyFile = MONTH_DATA[selectedMonth];
         // Add cache-busting parameter to force fresh load
         const cacheBuster = `?v=${Date.now()}`;
         const response = await fetch(telephonyFile + cacheBuster);
@@ -137,6 +148,7 @@ const NationalTelephony = () => {
 
         // DEBUG: Log the parsed national data
         console.log('=== PARSED NATIONAL DATA ===');
+        console.log('Month:', selectedMonth);
         console.log('National object:', parsedData.national);
         console.log('Answered %:', parsedData.national?.answeredPct, '→', (parsedData.national?.answeredPct * 100).toFixed(1) + '%');
         console.log('Abandoned %:', parsedData.national?.endedDuringIVRPct, '→', (parsedData.national?.endedDuringIVRPct * 100).toFixed(1) + '%');
@@ -151,7 +163,7 @@ const NationalTelephony = () => {
       }
     };
     loadData();
-  }, []);
+  }, [selectedMonth]);
 
   // Filter practices based on search (including PCN name search)
   const filteredPractices = useMemo(() => {
@@ -212,11 +224,33 @@ const NationalTelephony = () => {
         <div className="text-center">
           <p className="text-sm text-slate-500 uppercase tracking-wide">NHS England Data Extract</p>
           <h2 className="text-2xl font-bold text-slate-800 mt-1">{data.dataMonth}</h2>
+
+          {/* Month Selector */}
+          <div className="mt-3 flex items-center justify-center gap-2">
+            <label htmlFor="month-select" className="text-sm text-slate-600 font-medium">
+              Select Month:
+            </label>
+            <select
+              id="month-select"
+              value={selectedMonth}
+              onChange={(e) => {
+                setSelectedMonth(e.target.value);
+                setSelectedPractice(null);
+                setSearchTerm('');
+              }}
+              className="px-3 py-1.5 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+            >
+              {Object.keys(MONTH_DATA).map(month => (
+                <option key={month} value={month}>{month}</option>
+              ))}
+            </select>
+          </div>
+
           <a
             href="https://digital.nhs.uk/data-and-information/publications/statistical/cloud-based-telephony-data-in-general-practice"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 mt-2 transition-colors"
+            className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 mt-3 transition-colors"
           >
             📊 View Data Source <ExternalLink size={12} />
           </a>
