@@ -28,6 +28,7 @@ import {
   getNationalMissedPct,
   calculateCallsSavedRanking
 } from '../utils/telephonyAnalysis';
+import { parsePopulationData, calculatePer1000, getWorkloadInterpretation } from '../utils/parsePopulationData';
 import { db } from '../firebase/config';
 import { doc, getDoc, setDoc, updateDoc, increment } from 'firebase/firestore';
 
@@ -47,10 +48,14 @@ ChartJS.register(
 import octData from '../assets/Cloud Based Telephony Publication Summary October 2025_v2.xlsx?url';
 import novData from '../assets/Cloud Based Telephony Publication Summary November 2025.xlsx?url';
 
+// Import population CSV files
+import octPopData from '../assets/PracPopOct.csv?url';
+import novPopData from '../assets/PracPopNov.csv?url';
+
 // Month data mapping - ordered from oldest to newest for charts
 const MONTH_DATA = {
-  'November 2025': novData,
-  'October 2025': octData
+  'November 2025': { telephony: novData, population: novPopData },
+  'October 2025': { telephony: octData, population: octPopData }
 };
 
 // Ordered months for charts (oldest first)
@@ -76,6 +81,7 @@ const NationalTelephony = () => {
     { id: 'overview', label: 'Overview', icon: '📊' },
     { id: 'trends', label: 'Trends', icon: '📈' },
     { id: 'leaderboards', label: 'Leaderboards', icon: '🏆' },
+    { id: 'per1000', label: 'Per 1000 Pts', icon: '👥' },
     { id: 'impact', label: 'Impact Metrics', icon: '💼' }
   ];
 
@@ -345,31 +351,40 @@ const NationalTelephony = () => {
     }
   }, [selectedPractice]);
 
-  // Load and parse all Excel files on mount
+  // Load and parse all Excel files and population data on mount
   useEffect(() => {
     const loadAllData = async () => {
       try {
         setLoading(true);
         const allData = {};
 
-        // Load all months in parallel
-        const loadPromises = Object.entries(MONTH_DATA).map(async ([month, fileUrl]) => {
+        // Load all months in parallel (telephony + population)
+        const loadPromises = Object.entries(MONTH_DATA).map(async ([month, { telephony, population }]) => {
           const cacheBuster = `?v=${Date.now()}`;
-          const response = await fetch(fileUrl + cacheBuster);
+
+          // Load telephony data
+          const response = await fetch(telephony + cacheBuster);
           const arrayBuffer = await response.arrayBuffer();
           const parsedData = parseNationalTelephonyData(arrayBuffer);
-          return { month, data: parsedData };
+
+          // Load population data
+          const populationMap = await parsePopulationData(population + cacheBuster);
+
+          return { month, data: parsedData, populationMap };
         });
 
         const results = await Promise.all(loadPromises);
-        results.forEach(({ month, data }) => {
-          allData[month] = data;
+        results.forEach(({ month, data, populationMap }) => {
+          allData[month] = {
+            ...data,
+            populationMap
+          };
         });
 
         // DEBUG: Log the parsed national data
         console.log('=== ALL MONTHS DATA LOADED ===');
         Object.entries(allData).forEach(([month, parsedData]) => {
-          console.log(`${month}: ${parsedData.practices?.length} practices, Missed %: ${(parsedData.national?.missedPct * 100).toFixed(1)}%`);
+          console.log(`${month}: ${parsedData.practices?.length} practices, ${Object.keys(parsedData.populationMap || {}).length} population records`);
         });
 
         setAllMonthsData(allData);
@@ -1607,8 +1622,291 @@ const NationalTelephony = () => {
                 </>
               );
             })()}
+
+            {/* National Practice Leaderboard - Per 1000 Patients */}
+            {(() => {
+              const populationMap = data.populationMap || {};
+              const practicesWithPop = data.practices
+                .filter(p => populationMap[p.odsCode] > 0)
+                .map(p => ({
+                  ...p,
+                  population: populationMap[p.odsCode],
+                  missedPer1000: calculatePer1000(p.missed, populationMap[p.odsCode]),
+                }))
+                .filter(p => p.missedPer1000 !== null)
+                .sort((a, b) => a.missedPer1000 - b.missedPer1000);
+
+              return (
+                <Card className="bg-gradient-to-br from-violet-50 to-white border-violet-200">
+                  <h3 className="text-lg font-bold text-violet-900 mb-4">👥 Top 20 Practices Nationally (Per 1000 Patients)</h3>
+                  <p className="text-sm text-slate-500 mb-4">Standardized by patient list size - lowest missed calls per 1000 registered patients</p>
+                  <div className="overflow-x-auto -mx-4 sm:mx-0">
+                    <div className="inline-block min-w-full align-middle">
+                      <div className="overflow-hidden sm:rounded-lg">
+                        <table className="min-w-full text-sm">
+                          <thead className="bg-violet-100 border-b-2 border-violet-200">
+                            <tr>
+                              <th className="text-left p-3 font-semibold text-violet-900">Rank</th>
+                              <th className="text-left p-3 font-semibold text-violet-900">Practice</th>
+                              <th className="text-left p-3 font-semibold text-violet-900">PCN</th>
+                              <th className="text-right p-3 font-semibold text-violet-900">List Size</th>
+                              <th className="text-right p-3 font-semibold text-violet-900">Missed/1000</th>
+                              <th className="text-right p-3 font-semibold text-violet-900">Missed %</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {practicesWithPop.slice(0, 20).map((practice, idx) => {
+                              const isSelected = practice.odsCode === selectedPractice.odsCode;
+                              return (
+                                <tr key={practice.odsCode} className={`border-b border-violet-100 ${isSelected ? 'bg-violet-200 font-semibold' : 'hover:bg-violet-50'}`}>
+                                  <td className="p-3 font-medium">{idx + 1}</td>
+                                  <td className="p-3">
+                                    <div className="font-medium">{practice.gpName}</div>
+                                    <div className="text-xs text-slate-500">{practice.odsCode}</div>
+                                  </td>
+                                  <td className="p-3 text-slate-600 text-xs">{practice.pcnName}</td>
+                                  <td className="p-3 text-right">{practice.population.toLocaleString()}</td>
+                                  <td className="p-3 text-right text-violet-600 font-medium">{practice.missedPer1000.toFixed(1)}</td>
+                                  <td className="p-3 text-right">{(practice.missedPct * 100).toFixed(1)}%</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+              );
+            })()}
               </>
             )}
+
+            {/* PER 1000 PATIENTS TAB */}
+            {activeTab === 'per1000' && (() => {
+              const populationMap = data.populationMap || {};
+              const practicePopulation = populationMap[selectedPractice.odsCode];
+
+              // Calculate per 1000 metrics for selected practice
+              const practicePer1000 = practicePopulation ? {
+                inboundCalls: calculatePer1000(selectedPractice.inboundCalls, practicePopulation),
+                missed: calculatePer1000(selectedPractice.missed, practicePopulation),
+                answered: calculatePer1000(selectedPractice.answered, practicePopulation),
+                callbackRequested: calculatePer1000(selectedPractice.callbackRequested, practicePopulation),
+              } : null;
+
+              // Calculate national averages per 1000
+              const practicesWithPop = data.practices.filter(p => populationMap[p.odsCode] > 0);
+              const totalNationalCalls = practicesWithPop.reduce((sum, p) => sum + p.inboundCalls, 0);
+              const totalNationalPop = practicesWithPop.reduce((sum, p) => sum + (populationMap[p.odsCode] || 0), 0);
+              const totalNationalMissed = practicesWithPop.reduce((sum, p) => sum + p.missed, 0);
+              const totalNationalAnswered = practicesWithPop.reduce((sum, p) => sum + p.answered, 0);
+
+              const nationalPer1000 = {
+                inboundCalls: calculatePer1000(totalNationalCalls, totalNationalPop),
+                missed: calculatePer1000(totalNationalMissed, totalNationalPop),
+                answered: calculatePer1000(totalNationalAnswered, totalNationalPop),
+              };
+
+              // Get workload interpretation
+              const workloadInterpretation = practicePer1000 && nationalPer1000.inboundCalls
+                ? getWorkloadInterpretation(practicePer1000.inboundCalls, nationalPer1000.inboundCalls)
+                : null;
+
+              // Calculate rankings per 1000
+              const practicesPer1000Ranked = practicesWithPop
+                .map(p => ({
+                  ...p,
+                  population: populationMap[p.odsCode],
+                  callsPer1000: calculatePer1000(p.inboundCalls, populationMap[p.odsCode]),
+                  missedPer1000: calculatePer1000(p.missed, populationMap[p.odsCode]),
+                  answeredPer1000: calculatePer1000(p.answered, populationMap[p.odsCode]),
+                }))
+                .filter(p => p.callsPer1000 !== null);
+
+              // Sort by missed per 1000 (lowest = best)
+              const rankedByMissedPer1000 = [...practicesPer1000Ranked].sort((a, b) => a.missedPer1000 - b.missedPer1000);
+              const practiceRankMissed = rankedByMissedPer1000.findIndex(p => p.odsCode === selectedPractice.odsCode) + 1;
+
+              // Sort by calls per 1000 (for demand ranking)
+              const rankedByCallsPer1000 = [...practicesPer1000Ranked].sort((a, b) => b.callsPer1000 - a.callsPer1000);
+
+              // Top 20 best performers (lowest missed per 1000)
+              const top20BestPer1000 = rankedByMissedPer1000.slice(0, 20);
+
+              // Top 20 highest demand (most calls per 1000)
+              const top20HighestDemand = rankedByCallsPer1000.slice(0, 20);
+
+              return (
+                <>
+                  {/* No Population Data Warning */}
+                  {!practicePopulation && (
+                    <Card className="bg-amber-50 border-amber-300">
+                      <div className="flex items-center gap-3">
+                        <Info size={24} className="text-amber-600" />
+                        <div>
+                          <h3 className="font-bold text-amber-800">Population Data Not Available</h3>
+                          <p className="text-sm text-amber-700">List size data is not available for {selectedPractice.gpName}. This practice may not be included in the GP practice patient list publication.</p>
+                        </div>
+                      </div>
+                    </Card>
+                  )}
+
+                  {/* Practice Population & Per 1000 Summary */}
+                  {practicePopulation && practicePer1000 && (
+                    <>
+                      {/* Workload Interpretation */}
+                      {workloadInterpretation && (
+                        <Card className={`bg-gradient-to-br from-${workloadInterpretation.color}-50 to-white border-${workloadInterpretation.color}-200`}>
+                          <div className="text-center">
+                            <div className="text-4xl mb-2">{workloadInterpretation.emoji}</div>
+                            <h3 className="text-2xl font-bold text-slate-800">{workloadInterpretation.label}</h3>
+                            <p className="text-slate-600 mt-2">{workloadInterpretation.description}</p>
+                            <p className="text-sm text-slate-500 mt-2">Based on calls per 1000 patients compared to national average</p>
+                          </div>
+                        </Card>
+                      )}
+
+                      {/* Summary Tiles */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        {/* List Size */}
+                        <Card className="bg-gradient-to-br from-purple-50 to-white border-purple-200">
+                          <p className="text-xs text-slate-600 font-semibold uppercase">Patient List Size</p>
+                          <p className="text-3xl font-bold text-purple-700 mt-1">{practicePopulation.toLocaleString()}</p>
+                          <p className="text-xs text-slate-500 mt-1">registered patients</p>
+                        </Card>
+
+                        {/* Calls per 1000 */}
+                        <Card className="bg-gradient-to-br from-blue-50 to-white border-blue-200">
+                          <p className="text-xs text-slate-600 font-semibold uppercase">Inbound Calls / 1000 pts</p>
+                          <p className="text-3xl font-bold text-blue-700 mt-1">{practicePer1000.inboundCalls.toFixed(1)}</p>
+                          <p className="text-xs text-slate-500 mt-1">National: {nationalPer1000.inboundCalls?.toFixed(1) || 'N/A'}</p>
+                        </Card>
+
+                        {/* Missed per 1000 */}
+                        <Card className="bg-gradient-to-br from-red-50 to-white border-red-200">
+                          <p className="text-xs text-slate-600 font-semibold uppercase">Missed Calls / 1000 pts</p>
+                          <p className="text-3xl font-bold text-red-700 mt-1">{practicePer1000.missed.toFixed(1)}</p>
+                          <p className="text-xs text-slate-500 mt-1">National: {nationalPer1000.missed?.toFixed(1) || 'N/A'}</p>
+                        </Card>
+
+                        {/* Answered per 1000 */}
+                        <Card className="bg-gradient-to-br from-green-50 to-white border-green-200">
+                          <p className="text-xs text-slate-600 font-semibold uppercase">Answered Calls / 1000 pts</p>
+                          <p className="text-3xl font-bold text-green-700 mt-1">{practicePer1000.answered.toFixed(1)}</p>
+                          <p className="text-xs text-slate-500 mt-1">National: {nationalPer1000.answered?.toFixed(1) || 'N/A'}</p>
+                        </Card>
+                      </div>
+
+                      {/* Per 1000 Ranking */}
+                      <Card className="bg-gradient-to-br from-indigo-50 to-white border-indigo-200">
+                        <h3 className="text-lg font-bold text-indigo-900 mb-3">📊 Your Per 1000 Patients Ranking</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="text-center p-4 bg-white rounded-lg border border-indigo-100">
+                            <p className="text-xs text-slate-600 uppercase mb-1">National Ranking (Missed/1000)</p>
+                            <p className="text-3xl font-bold text-indigo-700">
+                              #{practiceRankMissed} <span className="text-sm text-slate-500">/ {rankedByMissedPer1000.length.toLocaleString()}</span>
+                            </p>
+                            <p className="text-xs text-slate-500 mt-1">Lower missed per 1000 = better</p>
+                          </div>
+                          <div className="text-center p-4 bg-white rounded-lg border border-indigo-100">
+                            <p className="text-xs text-slate-600 uppercase mb-1">Demand Ranking (Calls/1000)</p>
+                            <p className="text-3xl font-bold text-indigo-700">
+                              #{rankedByCallsPer1000.findIndex(p => p.odsCode === selectedPractice.odsCode) + 1} <span className="text-sm text-slate-500">/ {rankedByCallsPer1000.length.toLocaleString()}</span>
+                            </p>
+                            <p className="text-xs text-slate-500 mt-1">Higher = more calls relative to list size</p>
+                          </div>
+                        </div>
+                      </Card>
+                    </>
+                  )}
+
+                  {/* Top 20 Best Performers (Lowest Missed per 1000) */}
+                  <Card>
+                    <h3 className="text-lg font-bold text-slate-800 mb-4">🏆 Top 20 Practices (Lowest Missed Calls per 1000 Patients)</h3>
+                    <p className="text-sm text-slate-500 mb-4">Practices with the fewest missed calls relative to their patient list size</p>
+                    <div className="overflow-x-auto -mx-4 sm:mx-0">
+                      <div className="inline-block min-w-full align-middle">
+                        <div className="overflow-hidden sm:rounded-lg">
+                          <table className="min-w-full text-sm">
+                            <thead className="bg-slate-100 border-b-2 border-slate-200">
+                              <tr>
+                                <th className="text-left p-3 font-semibold text-slate-700">Rank</th>
+                                <th className="text-left p-3 font-semibold text-slate-700">Practice</th>
+                                <th className="text-left p-3 font-semibold text-slate-700">PCN</th>
+                                <th className="text-right p-3 font-semibold text-slate-700">List Size</th>
+                                <th className="text-right p-3 font-semibold text-slate-700">Missed/1000</th>
+                                <th className="text-right p-3 font-semibold text-slate-700">Calls/1000</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {top20BestPer1000.map((practice, idx) => {
+                                const isSelected = practice.odsCode === selectedPractice.odsCode;
+                                return (
+                                  <tr key={practice.odsCode} className={`border-b border-slate-100 ${isSelected ? 'bg-blue-100 font-semibold' : 'hover:bg-slate-50'}`}>
+                                    <td className="p-3 font-medium">{idx + 1}</td>
+                                    <td className="p-3">
+                                      <div className="font-medium">{practice.gpName}</div>
+                                      <div className="text-xs text-slate-500">{practice.odsCode}</div>
+                                    </td>
+                                    <td className="p-3 text-slate-600 text-xs">{practice.pcnName}</td>
+                                    <td className="p-3 text-right">{practice.population.toLocaleString()}</td>
+                                    <td className="p-3 text-right text-green-600 font-medium">{practice.missedPer1000.toFixed(1)}</td>
+                                    <td className="p-3 text-right">{practice.callsPer1000.toFixed(1)}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+
+                  {/* Top 20 Highest Demand (Most Calls per 1000) */}
+                  <Card className="bg-gradient-to-br from-orange-50 to-white border-orange-200">
+                    <h3 className="text-lg font-bold text-orange-900 mb-4">🔥 Top 20 Highest Demand Practices (Calls per 1000 Patients)</h3>
+                    <p className="text-sm text-slate-500 mb-4">Practices receiving the most calls relative to their patient list size</p>
+                    <div className="overflow-x-auto -mx-4 sm:mx-0">
+                      <div className="inline-block min-w-full align-middle">
+                        <div className="overflow-hidden sm:rounded-lg">
+                          <table className="min-w-full text-sm">
+                            <thead className="bg-orange-100 border-b-2 border-orange-200">
+                              <tr>
+                                <th className="text-left p-3 font-semibold text-orange-900">Rank</th>
+                                <th className="text-left p-3 font-semibold text-orange-900">Practice</th>
+                                <th className="text-left p-3 font-semibold text-orange-900">PCN</th>
+                                <th className="text-right p-3 font-semibold text-orange-900">List Size</th>
+                                <th className="text-right p-3 font-semibold text-orange-900">Calls/1000</th>
+                                <th className="text-right p-3 font-semibold text-orange-900">Missed %</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {top20HighestDemand.map((practice, idx) => {
+                                const isSelected = practice.odsCode === selectedPractice.odsCode;
+                                return (
+                                  <tr key={practice.odsCode} className={`border-b border-orange-100 ${isSelected ? 'bg-orange-200 font-semibold' : 'hover:bg-orange-50'}`}>
+                                    <td className="p-3 font-medium">{idx + 1}</td>
+                                    <td className="p-3">
+                                      <div className="font-medium">{practice.gpName}</div>
+                                      <div className="text-xs text-slate-500">{practice.odsCode}</div>
+                                    </td>
+                                    <td className="p-3 text-slate-600 text-xs">{practice.pcnName}</td>
+                                    <td className="p-3 text-right">{practice.population.toLocaleString()}</td>
+                                    <td className="p-3 text-right text-orange-600 font-bold">{practice.callsPer1000.toFixed(1)}</td>
+                                    <td className="p-3 text-right">{(practice.missedPct * 100).toFixed(1)}%</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                </>
+              );
+            })()}
 
             {/* IMPACT METRICS TAB - Volume-Weighted Metrics */}
             {activeTab === 'impact' && (() => {
