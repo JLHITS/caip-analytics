@@ -1,6 +1,18 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, ArrowUp, ArrowDown, Phone, Trophy, TrendingUp, ExternalLink, Info, Star, ChevronDown, ChevronUp } from 'lucide-react';
+import { Search, ArrowUp, ArrowDown, Phone, Trophy, TrendingUp, ExternalLink, Info, Star, ChevronDown, ChevronUp, TrendingDown, Minus } from 'lucide-react';
+import { Line, Bar } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+} from 'chart.js';
 import Card from './ui/Card';
 import { NHS_GREEN, NHS_RED } from '../constants/colors';
 import { parseNationalTelephonyData, getAverageWaitTimeBin, getAverageDurationBin } from '../utils/parseNationalTelephony';
@@ -19,18 +31,33 @@ import {
 import { db } from '../firebase/config';
 import { doc, getDoc, setDoc, updateDoc, increment } from 'firebase/firestore';
 
+// Register Chart.js components
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend
+);
+
 // Import the Excel files
 import octData from '../assets/Cloud Based Telephony Publication Summary October 2025_v2.xlsx?url';
 import novData from '../assets/Cloud Based Telephony Publication Summary November 2025.xlsx?url';
 
-// Month data mapping
+// Month data mapping - ordered from oldest to newest for charts
 const MONTH_DATA = {
   'November 2025': novData,
   'October 2025': octData
 };
 
+// Ordered months for charts (oldest first)
+const MONTHS_ORDERED = ['October 2025', 'November 2025'];
+
 const NationalTelephony = () => {
-  const [data, setData] = useState(null);
+  const [allMonthsData, setAllMonthsData] = useState({}); // Store all months data
   const [selectedPractice, setSelectedPractice] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
@@ -41,6 +68,89 @@ const NationalTelephony = () => {
   const [bookmarkedPractices, setBookmarkedPractices] = useState([]);
   const [showBookmarks, setShowBookmarks] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState('November 2025');
+  const [compareWithPrevious, setCompareWithPrevious] = useState(true);
+
+  // Get current data based on selected month
+  const data = allMonthsData[selectedMonth] || null;
+
+  // Get previous month data for comparison
+  const previousMonth = useMemo(() => {
+    const currentIndex = MONTHS_ORDERED.indexOf(selectedMonth);
+    if (currentIndex > 0) {
+      return MONTHS_ORDERED[currentIndex - 1];
+    }
+    return null;
+  }, [selectedMonth]);
+
+  const previousData = previousMonth ? allMonthsData[previousMonth] : null;
+
+  // Helper function to get practice data from previous month
+  const getPreviousPracticeData = (odsCode) => {
+    if (!previousData) return null;
+    return previousData.practices.find(p => p.odsCode === odsCode);
+  };
+
+  // Helper function to calculate metric change
+  const getMetricChange = (currentValue, previousValue, lowerIsBetter = false) => {
+    if (previousValue === undefined || previousValue === null) return null;
+    const change = currentValue - previousValue;
+    const improved = lowerIsBetter ? change < 0 : change > 0;
+    const worsened = lowerIsBetter ? change > 0 : change < 0;
+    return { change, improved, worsened, noChange: change === 0 };
+  };
+
+  // Calculate top 10 most improved practices by missed call %
+  const mostImprovedByMissedPct = useMemo(() => {
+    if (!data || !previousData) return [];
+
+    const improvements = data.practices.map(practice => {
+      const prevPractice = previousData.practices.find(p => p.odsCode === practice.odsCode);
+      if (!prevPractice) return null;
+
+      const currentMissedPct = practice.missedPct * 100;
+      const prevMissedPct = prevPractice.missedPct * 100;
+      const improvement = prevMissedPct - currentMissedPct; // Positive = improved
+
+      return {
+        ...practice,
+        currentMissedPct,
+        prevMissedPct,
+        improvement
+      };
+    }).filter(p => p !== null && p.improvement > 0);
+
+    return improvements
+      .sort((a, b) => b.improvement - a.improvement)
+      .slice(0, 10);
+  }, [data, previousData]);
+
+  // Calculate top 10 most improved by standardised metric (calls saved)
+  const mostImprovedByCallsSaved = useMemo(() => {
+    if (!data || !previousData) return [];
+
+    const currentNationalMissedPct = getNationalMissedPct(data.practices);
+    const prevNationalMissedPct = getNationalMissedPct(previousData.practices);
+
+    const improvements = data.practices.map(practice => {
+      const prevPractice = previousData.practices.find(p => p.odsCode === practice.odsCode);
+      if (!prevPractice) return null;
+
+      const currentCallsSaved = calculateCallsSaved(practice, currentNationalMissedPct);
+      const prevCallsSaved = calculateCallsSaved(prevPractice, prevNationalMissedPct);
+      const improvement = currentCallsSaved - prevCallsSaved;
+
+      return {
+        ...practice,
+        currentCallsSaved,
+        prevCallsSaved,
+        improvement
+      };
+    }).filter(p => p !== null && p.improvement > 0);
+
+    return improvements
+      .sort((a, b) => b.improvement - a.improvement)
+      .slice(0, 10);
+  }, [data, previousData]);
 
   // Load bookmarks from localStorage on mount
   useEffect(() => {
@@ -133,37 +243,42 @@ const NationalTelephony = () => {
     }
   }, [selectedPractice]);
 
-  // Load and parse Excel file when month changes
+  // Load and parse all Excel files on mount
   useEffect(() => {
-    const loadData = async () => {
+    const loadAllData = async () => {
       try {
         setLoading(true);
-        // Get the file for the selected month
-        const telephonyFile = MONTH_DATA[selectedMonth];
-        // Add cache-busting parameter to force fresh load
-        const cacheBuster = `?v=${Date.now()}`;
-        const response = await fetch(telephonyFile + cacheBuster);
-        const arrayBuffer = await response.arrayBuffer();
-        const parsedData = parseNationalTelephonyData(arrayBuffer);
+        const allData = {};
+
+        // Load all months in parallel
+        const loadPromises = Object.entries(MONTH_DATA).map(async ([month, fileUrl]) => {
+          const cacheBuster = `?v=${Date.now()}`;
+          const response = await fetch(fileUrl + cacheBuster);
+          const arrayBuffer = await response.arrayBuffer();
+          const parsedData = parseNationalTelephonyData(arrayBuffer);
+          return { month, data: parsedData };
+        });
+
+        const results = await Promise.all(loadPromises);
+        results.forEach(({ month, data }) => {
+          allData[month] = data;
+        });
 
         // DEBUG: Log the parsed national data
-        console.log('=== PARSED NATIONAL DATA ===');
-        console.log('Month:', selectedMonth);
-        console.log('National object:', parsedData.national);
-        console.log('Answered %:', parsedData.national?.answeredPct, '→', (parsedData.national?.answeredPct * 100).toFixed(1) + '%');
-        console.log('Abandoned %:', parsedData.national?.endedDuringIVRPct, '→', (parsedData.national?.endedDuringIVRPct * 100).toFixed(1) + '%');
-        console.log('Missed %:', parsedData.national?.missedPct, '→', (parsedData.national?.missedPct * 100).toFixed(1) + '%');
-        console.log('Practices count:', parsedData.practices?.length);
+        console.log('=== ALL MONTHS DATA LOADED ===');
+        Object.entries(allData).forEach(([month, parsedData]) => {
+          console.log(`${month}: ${parsedData.practices?.length} practices, Missed %: ${(parsedData.national?.missedPct * 100).toFixed(1)}%`);
+        });
 
-        setData(parsedData);
+        setAllMonthsData(allData);
         setLoading(false);
       } catch (error) {
         console.error('Error loading telephony data:', error);
         setLoading(false);
       }
     };
-    loadData();
-  }, [selectedMonth]);
+    loadAllData();
+  }, []);
 
   // Filter practices based on search (including PCN name search)
   const filteredPractices = useMemo(() => {
@@ -226,24 +341,37 @@ const NationalTelephony = () => {
           <h2 className="text-2xl font-bold text-slate-800 mt-1">{data.dataMonth}</h2>
 
           {/* Month Selector */}
-          <div className="mt-3 flex items-center justify-center gap-2">
-            <label htmlFor="month-select" className="text-sm text-slate-600 font-medium">
-              Select Month:
+          <div className="mt-3 flex flex-col sm:flex-row items-center justify-center gap-3">
+            <div className="flex items-center gap-2">
+              <label htmlFor="month-select" className="text-sm text-slate-600 font-medium">
+                Select Month:
+              </label>
+              <select
+                id="month-select"
+                value={selectedMonth}
+                onChange={(e) => {
+                  setSelectedMonth(e.target.value);
+                  setSelectedPractice(null);
+                  setSearchTerm('');
+                }}
+                className="px-3 py-1.5 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+              >
+                {Object.keys(MONTH_DATA).map(month => (
+                  <option key={month} value={month}>{month}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Compare with previous months checkbox */}
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={compareWithPrevious}
+                onChange={(e) => setCompareWithPrevious(e.target.checked)}
+                className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
+              />
+              <span className="text-sm text-slate-600 font-medium">Compare with previous months</span>
             </label>
-            <select
-              id="month-select"
-              value={selectedMonth}
-              onChange={(e) => {
-                setSelectedMonth(e.target.value);
-                setSelectedPractice(null);
-                setSearchTerm('');
-              }}
-              className="px-3 py-1.5 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-            >
-              {Object.keys(MONTH_DATA).map(month => (
-                <option key={month} value={month}>{month}</option>
-              ))}
-            </select>
           </div>
 
           <a
@@ -498,6 +626,26 @@ const NationalTelephony = () => {
           data.practices.reduce((sum, p) => sum + p.inboundCalls, 0) / data.practices.length
         );
 
+        // Get previous month practice data for comparison
+        const prevPractice = compareWithPrevious ? getPreviousPracticeData(selectedPractice.odsCode) : null;
+
+        // Helper to render month-over-month change indicator
+        const renderChangeIndicator = (currentValue, previousValue, lowerIsBetter = false, isPercentage = false) => {
+          if (!compareWithPrevious || !prevPractice || previousValue === undefined) return null;
+          const change = getMetricChange(currentValue, previousValue, lowerIsBetter);
+          if (!change || change.noChange) return null;
+
+          const changeValue = Math.abs(change.change);
+          const displayValue = isPercentage ? `${(changeValue * 100).toFixed(1)}%` : changeValue.toLocaleString();
+
+          return (
+            <div className={`flex items-center gap-1 text-xs mt-1 ${change.improved ? 'text-green-600' : 'text-red-600'}`}>
+              {change.improved ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+              <span>{change.improved ? '↓' : '↑'} {displayValue} vs {previousMonth?.split(' ')[0]}</span>
+            </div>
+          );
+        };
+
         return (
           <>
             {/* National Averages */}
@@ -532,6 +680,11 @@ const NationalTelephony = () => {
                 <p className="text-xs text-slate-600 font-semibold uppercase">Total Inbound Calls</p>
                 <p className="text-3xl font-bold text-slate-800 mt-1">{selectedPractice.inboundCalls.toLocaleString()}</p>
                 <p className="text-xs text-slate-500 mt-1">National Avg: {avgInboundCalls.toLocaleString()}</p>
+                {compareWithPrevious && prevPractice && (
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    {previousMonth?.split(' ')[0]}: {prevPractice.inboundCalls.toLocaleString()}
+                  </p>
+                )}
               </div>
               {selectedPractice.inboundCalls > avgInboundCalls ? (
                 <ArrowUp size={20} className="text-slate-600" />
@@ -541,13 +694,14 @@ const NationalTelephony = () => {
             </div>
           </Card>
 
-          {/* Abandoned Calls (Ended during IVR) - No arrow */}
+          {/* Abandoned Calls (Ended during IVR) */}
           <Card className="bg-gradient-to-br from-amber-50 to-white border-amber-200">
             <div>
               <p className="text-xs text-slate-600 font-semibold uppercase">Abandoned Calls (IVR)</p>
               <p className="text-3xl font-bold text-slate-800 mt-1">{(selectedPractice.endedDuringIVRPct * 100).toFixed(1)}%</p>
               <p className="text-sm text-slate-600 mt-1">{selectedPractice.endedDuringIVR.toLocaleString()} calls</p>
               <p className="text-xs text-slate-500 mt-1">National: {(data.national.endedDuringIVRPct * 100).toFixed(1)}%</p>
+              {renderChangeIndicator(selectedPractice.endedDuringIVRPct, prevPractice?.endedDuringIVRPct, true, true)}
             </div>
           </Card>
 
@@ -559,6 +713,7 @@ const NationalTelephony = () => {
                 <p className="text-3xl font-bold text-slate-800 mt-1">{(selectedPractice.missedPct * 100).toFixed(1)}%</p>
                 <p className="text-sm text-slate-600 mt-1">{selectedPractice.missed.toLocaleString()} calls</p>
                 <p className="text-xs text-slate-500 mt-1">National: {(data.national.missedPct * 100).toFixed(1)}%</p>
+                {renderChangeIndicator(selectedPractice.missedPct, prevPractice?.missedPct, true, true)}
               </div>
               {getComparisonArrow(selectedPractice.missedPct, data.national.missedPct, true)}
             </div>
@@ -631,6 +786,51 @@ const NationalTelephony = () => {
         const practiceCallsSaved = calculateCallsSaved(selectedPractice, nationalMissedPct);
         const callsSavedRanking = calculateCallsSavedRanking(selectedPractice, data.practices);
 
+        // Calculate previous month interpretation for comparison
+        const prevPractice = compareWithPrevious ? getPreviousPracticeData(selectedPractice.odsCode) : null;
+        let prevInterpretation = null;
+        let performanceChange = null;
+
+        if (prevPractice && previousData) {
+          const prevRanking = calculateNationalRanking(prevPractice, previousData.practices);
+          prevInterpretation = getPerformanceInterpretation(prevRanking.percentile);
+
+          // Determine change (lower percentile is better)
+          const currentPercentile = parseFloat(nationalRanking.percentile);
+          const prevPercentile = parseFloat(prevRanking.percentile);
+
+          if (currentPercentile < prevPercentile) {
+            performanceChange = 'improved';
+          } else if (currentPercentile > prevPercentile) {
+            performanceChange = 'worsened';
+          } else {
+            performanceChange = 'same';
+          }
+        }
+
+        // Generate comparison message
+        const getComparisonMessage = () => {
+          if (!compareWithPrevious || !prevInterpretation) return null;
+
+          if (performanceChange === 'same') {
+            return { emoji: '➡️', message: `You remain ${interpretation.label} compared to last month!`, color: 'blue' };
+          } else if (performanceChange === 'improved') {
+            if (interpretation.label === prevInterpretation.label) {
+              return { emoji: '📈', message: `You remain ${interpretation.label} but improved your ranking!`, color: 'green' };
+            } else {
+              return { emoji: '🚀', message: `You have improved to ${interpretation.label}!`, color: 'green' };
+            }
+          } else {
+            if (interpretation.label === prevInterpretation.label) {
+              return { emoji: '📉', message: `You remain ${interpretation.label} but dropped in ranking.`, color: 'amber' };
+            } else {
+              return { emoji: '⚠️', message: `You have dropped to ${interpretation.label}.`, color: 'red' };
+            }
+          }
+        };
+
+        const comparisonMessage = getComparisonMessage();
+
         return (
           <>
             {/* Performance Interpretation */}
@@ -687,6 +887,16 @@ const NationalTelephony = () => {
                     ? '🎯 Congratulations! Your practice is in the top 1% nationally for call handling. Exceptional performance!'
                     : interpretation.description}
                 </p>
+
+                {/* Month-over-month comparison message */}
+                {comparisonMessage && (
+                  <div className={`mt-3 p-2 rounded-lg bg-${comparisonMessage.color}-100 border border-${comparisonMessage.color}-200`}>
+                    <p className={`text-sm font-semibold text-${comparisonMessage.color}-700`}>
+                      {comparisonMessage.emoji} {comparisonMessage.message}
+                    </p>
+                  </div>
+                )}
+
                 {parseFloat(nationalRanking.percentile) <= 1.0 && (
                   <p className="text-sm text-emerald-600 font-semibold mt-2 animate-pulse">
                     ✨ Elite tier - Top 1% in the nation ✨
@@ -740,6 +950,153 @@ const NationalTelephony = () => {
                 </div>
               </Card>
             </div>
+
+            {/* Monthly Trends Charts - Only show when comparison enabled and data exists */}
+            {compareWithPrevious && previousData && selectedPractice && (
+              <Card>
+                <h3 className="text-lg font-bold text-slate-800 mb-4">📊 Your Practice's Monthly Trends</h3>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Bar Chart - Missed Calls Volume */}
+                  <div>
+                    <h4 className="text-sm font-semibold text-slate-600 mb-3 text-center">Missed Calls (Volume)</h4>
+                    <div className="h-64">
+                      <Bar
+                        data={{
+                          labels: MONTHS_ORDERED.map(m => m.split(' ')[0]),
+                          datasets: [{
+                            label: 'Missed Calls',
+                            data: MONTHS_ORDERED.map(month => {
+                              const monthData = allMonthsData[month];
+                              if (!monthData) return 0;
+                              const practice = monthData.practices.find(p => p.odsCode === selectedPractice.odsCode);
+                              return practice ? practice.missed : 0;
+                            }),
+                            backgroundColor: 'rgba(239, 68, 68, 0.7)',
+                            borderColor: 'rgb(239, 68, 68)',
+                            borderWidth: 1
+                          }]
+                        }}
+                        options={{
+                          responsive: true,
+                          maintainAspectRatio: false,
+                          plugins: {
+                            legend: { display: false }
+                          },
+                          scales: {
+                            y: {
+                              beginAtZero: true,
+                              title: { display: true, text: 'Number of Calls' }
+                            }
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Line Chart - Missed Call % */}
+                  <div>
+                    <h4 className="text-sm font-semibold text-slate-600 mb-3 text-center">Missed Call %</h4>
+                    <div className="h-64">
+                      <Line
+                        data={{
+                          labels: MONTHS_ORDERED.map(m => m.split(' ')[0]),
+                          datasets: [
+                            {
+                              label: 'Your Practice',
+                              data: MONTHS_ORDERED.map(month => {
+                                const monthData = allMonthsData[month];
+                                if (!monthData) return null;
+                                const practice = monthData.practices.find(p => p.odsCode === selectedPractice.odsCode);
+                                return practice ? (practice.missedPct * 100).toFixed(1) : null;
+                              }),
+                              borderColor: 'rgb(59, 130, 246)',
+                              backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                              borderWidth: 2,
+                              fill: true,
+                              tension: 0.3
+                            },
+                            {
+                              label: 'National Average',
+                              data: MONTHS_ORDERED.map(month => {
+                                const monthData = allMonthsData[month];
+                                return monthData ? (monthData.national.missedPct * 100).toFixed(1) : null;
+                              }),
+                              borderColor: 'rgb(156, 163, 175)',
+                              borderWidth: 2,
+                              borderDash: [5, 5],
+                              fill: false,
+                              tension: 0.3
+                            }
+                          ]
+                        }}
+                        options={{
+                          responsive: true,
+                          maintainAspectRatio: false,
+                          plugins: {
+                            legend: {
+                              position: 'bottom',
+                              labels: { usePointStyle: true, padding: 15 }
+                            }
+                          },
+                          scales: {
+                            y: {
+                              beginAtZero: true,
+                              title: { display: true, text: 'Missed %' }
+                            }
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            )}
+
+            {/* Most Improved Practices Table */}
+            {compareWithPrevious && previousData && mostImprovedByMissedPct.length > 0 && (
+              <Card>
+                <h3 className="text-lg font-bold text-slate-800 mb-4">🏆 Top 10 Most Improved Practices (Missed Call %)</h3>
+                <p className="text-sm text-slate-500 mb-4">Practices with the biggest reduction in missed call % from {previousMonth} to {selectedMonth}</p>
+                <div className="overflow-x-auto -mx-4 sm:mx-0">
+                  <div className="inline-block min-w-full align-middle">
+                    <div className="overflow-hidden sm:rounded-lg">
+                      <table className="min-w-full text-sm">
+                        <thead className="bg-slate-100 border-b-2 border-slate-200">
+                          <tr>
+                            <th className="text-left p-3 font-semibold text-slate-700">Rank</th>
+                            <th className="text-left p-3 font-semibold text-slate-700">Practice</th>
+                            <th className="text-left p-3 font-semibold text-slate-700">PCN</th>
+                            <th className="text-right p-3 font-semibold text-slate-700">{previousMonth?.split(' ')[0]}</th>
+                            <th className="text-right p-3 font-semibold text-slate-700">{selectedMonth?.split(' ')[0]}</th>
+                            <th className="text-right p-3 font-semibold text-slate-700">Improvement</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {mostImprovedByMissedPct.map((practice, idx) => (
+                            <tr key={practice.odsCode} className="border-b border-slate-100 hover:bg-slate-50">
+                              <td className="p-3 font-medium">{idx + 1}</td>
+                              <td className="p-3">
+                                <div className="font-medium">{practice.gpName}</div>
+                                <div className="text-xs text-slate-500">{practice.odsCode}</div>
+                              </td>
+                              <td className="p-3 text-slate-600 text-xs">{practice.pcnName}</td>
+                              <td className="p-3 text-right text-slate-500">{practice.prevMissedPct.toFixed(1)}%</td>
+                              <td className="p-3 text-right">{practice.currentMissedPct.toFixed(1)}%</td>
+                              <td className="p-3 text-right">
+                                <span className="text-green-600 font-bold flex items-center justify-end gap-1">
+                                  <TrendingDown size={14} />
+                                  -{practice.improvement.toFixed(1)}%
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            )}
 
             {/* PCN League Table */}
             <Card>
@@ -1068,6 +1425,58 @@ const NationalTelephony = () => {
                       </div>
                     </div>
                   </Card>
+
+                  {/* Top 10 Most Improved by Calls Saved */}
+                  {compareWithPrevious && previousData && mostImprovedByCallsSaved.length > 0 && (
+                    <Card className="bg-gradient-to-br from-emerald-50 to-white border-emerald-200">
+                      <h3 className="text-lg font-bold text-emerald-900 mb-4">📈 Top 10 Most Improved Practices (Standardised Metric)</h3>
+                      <p className="text-sm text-slate-500 mb-4">Practices with the biggest improvement in Calls Saved from {previousMonth} to {selectedMonth}</p>
+                      <div className="overflow-x-auto -mx-4 sm:mx-0">
+                        <div className="inline-block min-w-full align-middle">
+                          <div className="overflow-hidden sm:rounded-lg">
+                            <table className="min-w-full text-sm">
+                              <thead className="bg-emerald-100 border-b-2 border-emerald-200">
+                                <tr>
+                                  <th className="text-left p-3 font-semibold text-emerald-900">Rank</th>
+                                  <th className="text-left p-3 font-semibold text-emerald-900">Practice</th>
+                                  <th className="text-left p-3 font-semibold text-emerald-900">PCN</th>
+                                  <th className="text-right p-3 font-semibold text-emerald-900">{previousMonth?.split(' ')[0]}</th>
+                                  <th className="text-right p-3 font-semibold text-emerald-900">{selectedMonth?.split(' ')[0]}</th>
+                                  <th className="text-right p-3 font-semibold text-emerald-900">Improvement</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {mostImprovedByCallsSaved.map((practice, idx) => (
+                                  <tr key={practice.odsCode} className="border-b border-emerald-100 hover:bg-emerald-50">
+                                    <td className="p-3 font-medium">{idx + 1}</td>
+                                    <td className="p-3">
+                                      <div className="font-medium">{practice.gpName}</div>
+                                      <div className="text-xs text-slate-500">{practice.odsCode}</div>
+                                    </td>
+                                    <td className="p-3 text-slate-600 text-xs">{practice.pcnName}</td>
+                                    <td className="p-3 text-right text-slate-500">
+                                      {practice.prevCallsSaved >= 0 ? '+' : ''}{Math.round(practice.prevCallsSaved).toLocaleString()}
+                                    </td>
+                                    <td className="p-3 text-right">
+                                      <span className={practice.currentCallsSaved >= 0 ? 'text-teal-600' : 'text-red-600'}>
+                                        {practice.currentCallsSaved >= 0 ? '+' : ''}{Math.round(practice.currentCallsSaved).toLocaleString()}
+                                      </span>
+                                    </td>
+                                    <td className="p-3 text-right">
+                                      <span className="text-emerald-600 font-bold flex items-center justify-end gap-1">
+                                        <TrendingUp size={14} />
+                                        +{Math.round(practice.improvement).toLocaleString()}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </div>
+                    </Card>
+                  )}
                 </>
               );
             })()}
