@@ -491,14 +491,24 @@ const NationalTelephony = () => {
             </label>
           </div>
 
-          <a
-            href="https://digital.nhs.uk/data-and-information/publications/statistical/cloud-based-telephony-data-in-general-practice"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 mt-3 transition-colors"
-          >
-            📊 View Data Source <ExternalLink size={12} />
-          </a>
+          <div className="flex flex-wrap justify-center gap-4 mt-3">
+            <a
+              href="https://digital.nhs.uk/data-and-information/publications/statistical/cloud-based-telephony-data-in-general-practice"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 transition-colors"
+            >
+              📞 Telephony Data <ExternalLink size={12} />
+            </a>
+            <a
+              href="https://digital.nhs.uk/data-and-information/publications/statistical/patients-registered-at-a-gp-practice"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 transition-colors"
+            >
+              👥 Patient List Sizes <ExternalLink size={12} />
+            </a>
+          </div>
         </div>
       </Card>
 
@@ -1784,16 +1794,24 @@ const NationalTelephony = () => {
                         </Card>
 
                         {/* Missed per 1000 */}
-                        <Card className="bg-gradient-to-br from-red-50 to-white border-red-200">
+                        <Card className="bg-gradient-to-br from-slate-50 to-white border-slate-200">
                           <p className="text-xs text-slate-600 font-semibold uppercase">Missed Calls / 1000 pts</p>
-                          <p className="text-3xl font-bold text-red-700 mt-1">{practicePer1000.missed.toFixed(1)}</p>
+                          <p className={`text-3xl font-bold mt-1 ${
+                            practicePer1000.missed < nationalPer1000.missed ? 'text-green-600' :
+                            practicePer1000.missed > nationalPer1000.missed ? 'text-red-600' :
+                            'text-slate-800'
+                          }`}>{practicePer1000.missed.toFixed(1)}</p>
                           <p className="text-xs text-slate-500 mt-1">National: {nationalPer1000.missed?.toFixed(1) || 'N/A'}</p>
                         </Card>
 
                         {/* Answered per 1000 */}
-                        <Card className="bg-gradient-to-br from-green-50 to-white border-green-200">
+                        <Card className="bg-gradient-to-br from-slate-50 to-white border-slate-200">
                           <p className="text-xs text-slate-600 font-semibold uppercase">Answered Calls / 1000 pts</p>
-                          <p className="text-3xl font-bold text-green-700 mt-1">{practicePer1000.answered.toFixed(1)}</p>
+                          <p className={`text-3xl font-bold mt-1 ${
+                            practicePer1000.answered > nationalPer1000.answered ? 'text-green-600' :
+                            practicePer1000.answered < nationalPer1000.answered ? 'text-red-600' :
+                            'text-slate-800'
+                          }`}>{practicePer1000.answered.toFixed(1)}</p>
                           <p className="text-xs text-slate-500 mt-1">National: {nationalPer1000.answered?.toFixed(1) || 'N/A'}</p>
                         </Card>
                       </div>
@@ -1807,7 +1825,7 @@ const NationalTelephony = () => {
                             <p className="text-3xl font-bold text-indigo-700">
                               #{practiceRankMissed} <span className="text-sm text-slate-500">/ {rankedByMissedPer1000.length.toLocaleString()}</span>
                             </p>
-                            <p className="text-xs text-slate-500 mt-1">Lower missed per 1000 = better</p>
+                            <p className="text-xs text-slate-500 mt-1">Rank 1 = fewest missed calls per patient</p>
                           </div>
                           <div className="text-center p-4 bg-white rounded-lg border border-indigo-100">
                             <p className="text-xs text-slate-600 uppercase mb-1">Demand Ranking (Calls/1000)</p>
@@ -1904,6 +1922,81 @@ const NationalTelephony = () => {
                       </div>
                     </div>
                   </Card>
+
+                  {/* Best PCNs per 1000 Patients */}
+                  {(() => {
+                    // Calculate PCN averages per 1000 patients
+                    const pcnPer1000Data = {};
+
+                    practicesPer1000Ranked.forEach(practice => {
+                      if (!pcnPer1000Data[practice.pcnCode]) {
+                        pcnPer1000Data[practice.pcnCode] = {
+                          pcnCode: practice.pcnCode,
+                          pcnName: practice.pcnName,
+                          icbName: practice.icbName,
+                          totalMissed: 0,
+                          totalPopulation: 0,
+                          practiceCount: 0
+                        };
+                      }
+                      pcnPer1000Data[practice.pcnCode].totalMissed += practice.missed;
+                      pcnPer1000Data[practice.pcnCode].totalPopulation += practice.population;
+                      pcnPer1000Data[practice.pcnCode].practiceCount += 1;
+                    });
+
+                    const pcnsPer1000 = Object.values(pcnPer1000Data)
+                      .filter(pcn => pcn.practiceCount > 1 && pcn.totalPopulation > 0)
+                      .map(pcn => ({
+                        ...pcn,
+                        missedPer1000: (pcn.totalMissed / pcn.totalPopulation) * 1000
+                      }))
+                      .sort((a, b) => a.missedPer1000 - b.missedPer1000);
+
+                    const isUserPCNInTop = pcnsPer1000.slice(0, 20).some(pcn => pcn.pcnCode === selectedPractice.pcnCode);
+
+                    return (
+                      <Card className="bg-gradient-to-br from-cyan-50 to-white border-cyan-200">
+                        <h3 className="text-lg font-bold text-cyan-900 mb-4">🏆 Top 20 PCNs (Lowest Missed Calls per 1000 Patients)</h3>
+                        <p className="text-sm text-slate-500 mb-4">PCNs with the best performance when standardized by patient population (multi-practice PCNs only)</p>
+                        <div className="overflow-x-auto -mx-4 sm:mx-0">
+                          <div className="inline-block min-w-full align-middle">
+                            <div className="overflow-hidden sm:rounded-lg">
+                              <table className="min-w-full text-sm">
+                                <thead className="bg-cyan-100 border-b-2 border-cyan-200">
+                                  <tr>
+                                    <th className="text-left p-3 font-semibold text-cyan-900">Rank</th>
+                                    <th className="text-left p-3 font-semibold text-cyan-900">PCN</th>
+                                    <th className="text-left p-3 font-semibold text-cyan-900">ICB</th>
+                                    <th className="text-right p-3 font-semibold text-cyan-900">Total Patients</th>
+                                    <th className="text-right p-3 font-semibold text-cyan-900">Missed/1000</th>
+                                    <th className="text-right p-3 font-semibold text-cyan-900">Practices</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {pcnsPer1000.slice(0, 20).map((pcn, idx) => {
+                                    const isUserPCN = pcn.pcnCode === selectedPractice.pcnCode;
+                                    return (
+                                      <tr key={pcn.pcnCode} className={`border-b border-cyan-100 ${isUserPCN ? 'bg-cyan-200 font-semibold' : 'hover:bg-cyan-50'}`}>
+                                        <td className="p-3 font-medium">{idx + 1}</td>
+                                        <td className="p-3">
+                                          <div className="font-medium">{pcn.pcnName}</div>
+                                          <div className="text-xs text-slate-500">{pcn.pcnCode}</div>
+                                        </td>
+                                        <td className="p-3 text-slate-600 text-xs">{pcn.icbName}</td>
+                                        <td className="p-3 text-right">{pcn.totalPopulation.toLocaleString()}</td>
+                                        <td className="p-3 text-right text-cyan-600 font-medium">{pcn.missedPer1000.toFixed(1)}</td>
+                                        <td className="p-3 text-right">{pcn.practiceCount}</td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        </div>
+                      </Card>
+                    );
+                  })()}
                 </>
               );
             })()}
