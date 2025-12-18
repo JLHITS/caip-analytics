@@ -168,6 +168,92 @@ const NationalTelephony = () => {
       .slice(0, 10);
   }, [data, previousData]);
 
+  // Calculate consistency metrics for all practices across all months
+  const consistencyData = useMemo(() => {
+    if (Object.keys(allMonthsData).length < 2) return { consistent: [], volatile: [], practiceScores: {} };
+
+    // Build a map of practice performance across all months
+    const practicePerformance = {};
+
+    MONTHS_ORDERED.forEach(month => {
+      const monthData = allMonthsData[month];
+      if (!monthData) return;
+
+      monthData.practices.forEach(practice => {
+        if (!practicePerformance[practice.odsCode]) {
+          practicePerformance[practice.odsCode] = {
+            odsCode: practice.odsCode,
+            gpName: practice.gpName,
+            pcnName: practice.pcnName,
+            icbName: practice.icbName,
+            monthlyData: []
+          };
+        }
+        practicePerformance[practice.odsCode].monthlyData.push({
+          month,
+          missedPct: practice.missedPct * 100,
+          inboundCalls: practice.inboundCalls
+        });
+      });
+    });
+
+    // Calculate standard deviation for each practice
+    const practicesWithVariance = Object.values(practicePerformance)
+      .filter(p => p.monthlyData.length >= 2) // Only include practices with data in multiple months
+      .map(practice => {
+        const missedPcts = practice.monthlyData.map(d => d.missedPct);
+        const avgMissedPct = missedPcts.reduce((a, b) => a + b, 0) / missedPcts.length;
+
+        // Calculate standard deviation
+        const squaredDiffs = missedPcts.map(pct => Math.pow(pct - avgMissedPct, 2));
+        const avgSquaredDiff = squaredDiffs.reduce((a, b) => a + b, 0) / squaredDiffs.length;
+        const stdDev = Math.sqrt(avgSquaredDiff);
+
+        // Calculate the range (max - min)
+        const range = Math.max(...missedPcts) - Math.min(...missedPcts);
+
+        // Get latest and previous values
+        const latestPct = practice.monthlyData[practice.monthlyData.length - 1].missedPct;
+        const prevPct = practice.monthlyData[practice.monthlyData.length - 2]?.missedPct;
+
+        return {
+          ...practice,
+          avgMissedPct,
+          stdDev,
+          range,
+          latestPct,
+          prevPct,
+          monthCount: practice.monthlyData.length,
+          // Consistency score: lower stdDev = higher score (inverse relationship)
+          // Normalized to 0-100 scale where 100 = perfectly consistent
+          consistencyScore: Math.max(0, 100 - (stdDev * 10))
+        };
+      });
+
+    // Sort by standard deviation (lowest = most consistent)
+    const consistent = [...practicesWithVariance]
+      .sort((a, b) => a.stdDev - b.stdDev)
+      .slice(0, 10);
+
+    // Sort by standard deviation (highest = most volatile)
+    const volatile = [...practicesWithVariance]
+      .sort((a, b) => b.stdDev - a.stdDev)
+      .slice(0, 10);
+
+    // Create a lookup map for individual practice scores
+    const practiceScores = {};
+    practicesWithVariance.forEach(p => {
+      practiceScores[p.odsCode] = {
+        stdDev: p.stdDev,
+        range: p.range,
+        consistencyScore: p.consistencyScore,
+        avgMissedPct: p.avgMissedPct
+      };
+    });
+
+    return { consistent, volatile, practiceScores };
+  }, [allMonthsData]);
+
   // Load bookmarks from localStorage on mount
   useEffect(() => {
     const savedBookmarks = localStorage.getItem('practiceBookmarks');
@@ -1210,6 +1296,140 @@ const NationalTelephony = () => {
                   </div>
                 </div>
               </Card>
+            )}
+
+            {/* Consistency Tracking Section */}
+            {consistencyData.consistent.length > 0 && (
+              <>
+                {/* Your Practice's Consistency */}
+                {consistencyData.practiceScores[selectedPractice.odsCode] && (
+                  <Card className="bg-gradient-to-br from-sky-50 to-white border-sky-200">
+                    <h3 className="text-lg font-bold text-sky-900 mb-3">📊 Your Practice's Consistency</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                      <div>
+                        <p className="text-xs text-slate-600 uppercase">Consistency Score</p>
+                        <p className="text-2xl font-bold text-sky-700">
+                          {consistencyData.practiceScores[selectedPractice.odsCode].consistencyScore.toFixed(0)}
+                          <span className="text-sm text-slate-500">/100</span>
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-600 uppercase">Variation (Std Dev)</p>
+                        <p className="text-2xl font-bold text-slate-800">
+                          ±{consistencyData.practiceScores[selectedPractice.odsCode].stdDev.toFixed(2)}%
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-600 uppercase">Range (High-Low)</p>
+                        <p className="text-2xl font-bold text-slate-800">
+                          {consistencyData.practiceScores[selectedPractice.odsCode].range.toFixed(1)}%
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-600 uppercase">Avg Missed %</p>
+                        <p className="text-2xl font-bold text-slate-800">
+                          {consistencyData.practiceScores[selectedPractice.odsCode].avgMissedPct.toFixed(1)}%
+                        </p>
+                      </div>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-3 text-center">
+                      Higher consistency score = more stable performance across months
+                    </p>
+                  </Card>
+                )}
+
+                {/* Most Consistent Performers */}
+                <Card className="bg-gradient-to-br from-sky-50 to-white border-sky-200">
+                  <h3 className="text-lg font-bold text-sky-900 mb-4">🎯 Top 10 Most Consistent Performers</h3>
+                  <p className="text-sm text-slate-500 mb-4">Practices with the most stable missed call % across all months (lowest variation)</p>
+                  <div className="overflow-x-auto -mx-4 sm:mx-0">
+                    <div className="inline-block min-w-full align-middle">
+                      <div className="overflow-hidden sm:rounded-lg">
+                        <table className="min-w-full text-sm">
+                          <thead className="bg-sky-100 border-b-2 border-sky-200">
+                            <tr>
+                              <th className="text-left p-3 font-semibold text-sky-900">Rank</th>
+                              <th className="text-left p-3 font-semibold text-sky-900">Practice</th>
+                              <th className="text-left p-3 font-semibold text-sky-900">PCN</th>
+                              <th className="text-right p-3 font-semibold text-sky-900">Avg Missed %</th>
+                              <th className="text-right p-3 font-semibold text-sky-900">Variation</th>
+                              <th className="text-right p-3 font-semibold text-sky-900">Score</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {consistencyData.consistent.map((practice, idx) => {
+                              const isSelected = practice.odsCode === selectedPractice.odsCode;
+                              return (
+                                <tr key={practice.odsCode} className={`border-b border-sky-100 ${isSelected ? 'bg-sky-200 font-semibold' : 'hover:bg-sky-50'}`}>
+                                  <td className="p-3 font-medium">{idx + 1}</td>
+                                  <td className="p-3">
+                                    <div className="font-medium">{practice.gpName}</div>
+                                    <div className="text-xs text-slate-500">{practice.odsCode}</div>
+                                  </td>
+                                  <td className="p-3 text-slate-600 text-xs">{practice.pcnName}</td>
+                                  <td className="p-3 text-right">{practice.avgMissedPct.toFixed(1)}%</td>
+                                  <td className="p-3 text-right text-sky-600 font-medium">±{practice.stdDev.toFixed(2)}%</td>
+                                  <td className="p-3 text-right">
+                                    <span className="bg-sky-100 text-sky-800 px-2 py-1 rounded-full text-xs font-bold">
+                                      {practice.consistencyScore.toFixed(0)}
+                                    </span>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+
+                {/* Most Volatile Performers */}
+                <Card className="bg-gradient-to-br from-orange-50 to-white border-orange-200">
+                  <h3 className="text-lg font-bold text-orange-900 mb-4">⚡ Top 10 Most Volatile Performers</h3>
+                  <p className="text-sm text-slate-500 mb-4">Practices with the biggest swings in missed call % between months (highest variation)</p>
+                  <div className="overflow-x-auto -mx-4 sm:mx-0">
+                    <div className="inline-block min-w-full align-middle">
+                      <div className="overflow-hidden sm:rounded-lg">
+                        <table className="min-w-full text-sm">
+                          <thead className="bg-orange-100 border-b-2 border-orange-200">
+                            <tr>
+                              <th className="text-left p-3 font-semibold text-orange-900">Rank</th>
+                              <th className="text-left p-3 font-semibold text-orange-900">Practice</th>
+                              <th className="text-left p-3 font-semibold text-orange-900">PCN</th>
+                              <th className="text-right p-3 font-semibold text-orange-900">Avg Missed %</th>
+                              <th className="text-right p-3 font-semibold text-orange-900">Variation</th>
+                              <th className="text-right p-3 font-semibold text-orange-900">Range</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {consistencyData.volatile.map((practice, idx) => {
+                              const isSelected = practice.odsCode === selectedPractice.odsCode;
+                              return (
+                                <tr key={practice.odsCode} className={`border-b border-orange-100 ${isSelected ? 'bg-orange-200 font-semibold' : 'hover:bg-orange-50'}`}>
+                                  <td className="p-3 font-medium">{idx + 1}</td>
+                                  <td className="p-3">
+                                    <div className="font-medium">{practice.gpName}</div>
+                                    <div className="text-xs text-slate-500">{practice.odsCode}</div>
+                                  </td>
+                                  <td className="p-3 text-slate-600 text-xs">{practice.pcnName}</td>
+                                  <td className="p-3 text-right">{practice.avgMissedPct.toFixed(1)}%</td>
+                                  <td className="p-3 text-right text-orange-600 font-medium">±{practice.stdDev.toFixed(2)}%</td>
+                                  <td className="p-3 text-right">
+                                    <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded-full text-xs font-bold">
+                                      {practice.range.toFixed(1)}%
+                                    </span>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+              </>
             )}
               </>
             )}
