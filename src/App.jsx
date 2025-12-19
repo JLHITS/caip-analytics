@@ -1843,7 +1843,12 @@ export default function App() {
               className={`flex items-center gap-2 px-6 py-3 rounded-lg font-bold transition-all ${mainTab === 'demand' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-800'}`}
             >
               <BarChart3 size={20} />
-              Demand & Capacity
+              <span className="flex items-center gap-2">
+                Demand & Capacity
+                <span className={`text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full font-bold ${mainTab === 'demand' ? 'bg-white/20 text-white' : 'bg-blue-100 text-blue-700'}`}>
+                  Beta
+                </span>
+              </span>
             </button>
             <button
               onClick={() => setMainTab('telephony')}
