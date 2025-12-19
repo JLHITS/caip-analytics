@@ -98,20 +98,54 @@ const MONTHS_ORDERED = [
   'September 2025', 'October 2025', 'November 2025'
 ];
 
-const NationalOnlineConsultations = () => {
+const NationalOnlineConsultations = ({ sharedPractice, setSharedPractice, sharedBookmarks, updateSharedBookmarks }) => {
   const [allMonthsData, setAllMonthsData] = useState({});
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedPractice, setSelectedPractice] = useState(null);
   const [selectedMonth, setSelectedMonth] = useState('November 2025');
   const [compareWithPrevious, setCompareWithPrevious] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
-  const [bookmarkedPractices, setBookmarkedPractices] = useState([]);
   const [showBookmarks, setShowBookmarks] = useState(false);
   const [showInterpretationTooltip, setShowInterpretationTooltip] = useState(false);
   const [showCoveragePopup, setShowCoveragePopup] = useState(false);
   const [usageStats, setUsageStats] = useState({ totalChecks: 0, recentPractices: [] });
   const searchRef = useRef(null);
+
+  // Use shared state for practice and bookmarks
+  const bookmarkedPractices = sharedBookmarks;
+  const setBookmarkedPractices = updateSharedBookmarks;
+
+  // Local selected practice - synced with shared state
+  const [selectedPractice, setSelectedPracticeLocal] = useState(null);
+
+  // Sync local practice with shared state when data loads or shared practice changes
+  useEffect(() => {
+    if (sharedPractice && allMonthsData[selectedMonth]) {
+      const practice = allMonthsData[selectedMonth].practices.find(
+        p => p.odsCode === sharedPractice.odsCode
+      );
+      if (practice) {
+        setSelectedPracticeLocal(practice);
+      }
+    }
+  }, [sharedPractice, allMonthsData, selectedMonth]);
+
+  // Update shared state when local practice is selected
+  const setSelectedPractice = (practice) => {
+    setSelectedPracticeLocal(practice);
+    if (practice) {
+      setSharedPractice({
+        odsCode: practice.odsCode,
+        gpName: practice.gpName,
+        pcnCode: practice.pcnCode,
+        pcnName: practice.pcnName,
+        icbCode: practice.icbCode,
+        icbName: practice.icbName
+      });
+    } else {
+      setSharedPractice(null);
+    }
+  };
 
   // Tab definitions
   const TABS = [
@@ -199,14 +233,6 @@ const NationalOnlineConsultations = () => {
     loadAllData();
   }, []);
 
-  // Load bookmarks from localStorage
-  useEffect(() => {
-    const savedBookmarks = localStorage.getItem('ocPracticeBookmarks');
-    if (savedBookmarks) {
-      setBookmarkedPractices(JSON.parse(savedBookmarks));
-    }
-  }, []);
-
   // Filter practices based on search
   const filteredPractices = useMemo(() => {
     if (!data || !searchTerm) return [];
@@ -255,22 +281,24 @@ const NationalOnlineConsultations = () => {
 
   // Toggle bookmark
   const toggleBookmark = (practice) => {
-    const isBookmarked = bookmarkedPractices.some(p => p.odsCode === practice.odsCode);
+    const isAlreadyBookmarked = bookmarkedPractices.some(p => p.odsCode === practice.odsCode);
     let newBookmarks;
 
-    if (isBookmarked) {
+    if (isAlreadyBookmarked) {
       newBookmarks = bookmarkedPractices.filter(p => p.odsCode !== practice.odsCode);
     } else {
       newBookmarks = [...bookmarkedPractices, {
         odsCode: practice.odsCode,
         name: practice.gpName,
+        pcnCode: practice.pcnCode,
         pcnName: practice.pcnName,
+        icbCode: practice.icbCode,
+        icbName: practice.icbName,
         timestamp: new Date().toISOString()
       }];
     }
 
     setBookmarkedPractices(newBookmarks);
-    localStorage.setItem('ocPracticeBookmarks', JSON.stringify(newBookmarks));
   };
 
   const isBookmarked = (odsCode) => {

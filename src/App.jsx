@@ -162,8 +162,30 @@ export default function App() {
   const [forecastData, setForecastData] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState(null);
-  const [mainTab, setMainTab] = useState('demand'); // 'demand' or 'telephony'
+  const [mainTab, setMainTab] = useState('demand'); // 'demand', 'telephony', or 'online-consultations'
   const [activeTab, setActiveTab] = useState('dashboard');
+
+  // Shared state between National Telephony and Online Consultations
+  const [sharedPractice, setSharedPractice] = useState(null);
+  const [sharedBookmarks, setSharedBookmarks] = useState([]);
+
+  // Load shared bookmarks from localStorage
+  useEffect(() => {
+    const savedBookmarks = localStorage.getItem('sharedPracticeBookmarks');
+    if (savedBookmarks) {
+      try {
+        setSharedBookmarks(JSON.parse(savedBookmarks));
+      } catch (e) {
+        console.error('Failed to load shared bookmarks:', e);
+      }
+    }
+  }, []);
+
+  // Save shared bookmarks to localStorage
+  const updateSharedBookmarks = (newBookmarks) => {
+    setSharedBookmarks(newBookmarks);
+    localStorage.setItem('sharedPracticeBookmarks', JSON.stringify(newBookmarks));
+  };
 
   const [selectedMonth, setSelectedMonth] = useState('All');
   const [aiReport, setAiReport] = useState(null);
@@ -2466,12 +2488,22 @@ export default function App() {
 
         {/* NATIONAL TELEPHONY CONTENT */}
         <div className={mainTab === 'telephony' ? '' : 'hidden'}>
-          <NationalTelephony />
+          <NationalTelephony
+            sharedPractice={sharedPractice}
+            setSharedPractice={setSharedPractice}
+            sharedBookmarks={sharedBookmarks}
+            updateSharedBookmarks={updateSharedBookmarks}
+          />
         </div>
 
         {/* NATIONAL ONLINE CONSULTATIONS CONTENT */}
         <div className={mainTab === 'online-consultations' ? '' : 'hidden'}>
-          <NationalOnlineConsultations />
+          <NationalOnlineConsultations
+            sharedPractice={sharedPractice}
+            setSharedPractice={setSharedPractice}
+            sharedBookmarks={sharedBookmarks}
+            updateSharedBookmarks={updateSharedBookmarks}
+          />
         </div>
       </main>
 

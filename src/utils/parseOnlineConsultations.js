@@ -24,6 +24,11 @@ export function parseOnlineConsultationsData(fileBuffer) {
   }
 
   // Headers are at row 11 (index 11), data starts at row 12
+  const headerRow = table2Raw[11] || [];
+  // Check if file has participation column (older files from 2024 don't have it)
+  const hasParticipationColumn = headerRow.length > 18 &&
+    String(headerRow[18] || '').toLowerCase().includes('participation');
+
   const practices = [];
   let nationalTotals = {
     totalSubmissions: 0,
@@ -50,7 +55,8 @@ export function parseOnlineConsultationsData(fileBuffer) {
     const otherSubmissions = Number(row[15]) || 0;
     const listSize = Number(row[16]) || 0;
     const ratePer1000 = Number(row[17]) || 0;
-    const participation = Number(row[18]) || 0;
+    // For older files without participation column, assume all practices with data are participating
+    const participation = hasParticipationColumn ? (Number(row[18]) || 0) : (submissions > 0 ? 1 : 0);
 
     const practiceData = {
       odsCode,

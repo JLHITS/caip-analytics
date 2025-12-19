@@ -61,20 +61,54 @@ const MONTH_DATA = {
 // Ordered months for charts (oldest first)
 const MONTHS_ORDERED = ['October 2025', 'November 2025'];
 
-const NationalTelephony = () => {
+const NationalTelephony = ({ sharedPractice, setSharedPractice, sharedBookmarks, updateSharedBookmarks }) => {
   const [allMonthsData, setAllMonthsData] = useState({}); // Store all months data
-  const [selectedPractice, setSelectedPractice] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [showCallsSavedTooltip, setShowCallsSavedTooltip] = useState(false);
   const [showInterpretationTooltip, setShowInterpretationTooltip] = useState(false);
   const [showCoveragePopup, setShowCoveragePopup] = useState(false);
   const [usageStats, setUsageStats] = useState({ totalChecks: 176, recentPractices: [] });
-  const [bookmarkedPractices, setBookmarkedPractices] = useState([]);
   const [showBookmarks, setShowBookmarks] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState('November 2025');
   const [compareWithPrevious, setCompareWithPrevious] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
+
+  // Use shared state for practice and bookmarks
+  const bookmarkedPractices = sharedBookmarks;
+  const setBookmarkedPractices = updateSharedBookmarks;
+
+  // Local selected practice - synced with shared state
+  const [selectedPractice, setSelectedPracticeLocal] = useState(null);
+
+  // Sync local practice with shared state when data loads or shared practice changes
+  useEffect(() => {
+    if (sharedPractice && allMonthsData[selectedMonth]) {
+      const practice = allMonthsData[selectedMonth].practices.find(
+        p => p.odsCode === sharedPractice.odsCode
+      );
+      if (practice) {
+        setSelectedPracticeLocal(practice);
+      }
+    }
+  }, [sharedPractice, allMonthsData, selectedMonth]);
+
+  // Update shared state when local practice is selected
+  const setSelectedPractice = (practice) => {
+    setSelectedPracticeLocal(practice);
+    if (practice) {
+      setSharedPractice({
+        odsCode: practice.odsCode,
+        gpName: practice.gpName,
+        pcnCode: practice.pcnCode,
+        pcnName: practice.pcnName,
+        icbCode: practice.icbCode,
+        icbName: practice.icbName
+      });
+    } else {
+      setSharedPractice(null);
+    }
+  };
 
   // Tab definitions
   const TABS = [
@@ -260,14 +294,6 @@ const NationalTelephony = () => {
     return { consistent, volatile, practiceScores };
   }, [allMonthsData]);
 
-  // Load bookmarks from localStorage on mount
-  useEffect(() => {
-    const savedBookmarks = localStorage.getItem('practiceBookmarks');
-    if (savedBookmarks) {
-      setBookmarkedPractices(JSON.parse(savedBookmarks));
-    }
-  }, []);
-
   // Load global usage stats from Firestore on mount
   useEffect(() => {
     const loadStats = async () => {
@@ -291,22 +317,24 @@ const NationalTelephony = () => {
 
   // Toggle bookmark for a practice
   const toggleBookmark = (practice) => {
-    const isBookmarked = bookmarkedPractices.some(p => p.odsCode === practice.odsCode);
+    const isAlreadyBookmarked = bookmarkedPractices.some(p => p.odsCode === practice.odsCode);
     let newBookmarks;
 
-    if (isBookmarked) {
+    if (isAlreadyBookmarked) {
       newBookmarks = bookmarkedPractices.filter(p => p.odsCode !== practice.odsCode);
     } else {
       newBookmarks = [...bookmarkedPractices, {
         odsCode: practice.odsCode,
         name: practice.gpName,
+        pcnCode: practice.pcnCode,
         pcnName: practice.pcnName,
+        icbCode: practice.icbCode,
+        icbName: practice.icbName,
         timestamp: new Date().toISOString()
       }];
     }
 
     setBookmarkedPractices(newBookmarks);
-    localStorage.setItem('practiceBookmarks', JSON.stringify(newBookmarks));
   };
 
   // Check if a practice is bookmarked
@@ -451,27 +479,32 @@ const NationalTelephony = () => {
 
   return (
     <div className="space-y-6">
-      {/* Month Header */}
-      <Card>
+      {/* Header */}
+      <Card className="bg-gradient-to-r from-blue-600 to-cyan-600 text-white">
         <div className="text-center">
-          <p className="text-sm text-slate-500 uppercase tracking-wide">NHS England Data Extract</p>
-          <h2 className="text-2xl font-bold text-slate-800 mt-1">{data.dataMonth}</h2>
+          <h2 className="text-2xl font-bold flex items-center justify-center gap-2">
+            <Phone size={28} />
+            National Telephony
+          </h2>
+          <p className="text-sm text-blue-100 mt-1">
+            {data.practices.length.toLocaleString()} practices | {data.national.totalInbound?.toLocaleString() || 0} total inbound calls
+          </p>
+        </div>
+      </Card>
 
-          {/* Month Selector */}
-          <div className="mt-3 flex flex-col sm:flex-row items-center justify-center gap-3">
+      {/* Month Selection Card */}
+      <Card>
+        <div className="text-center space-y-3">
+          <div className="flex flex-wrap items-center justify-center gap-4">
             <div className="flex items-center gap-2">
-              <label htmlFor="month-select" className="text-sm text-slate-600 font-medium">
-                Select Month:
-              </label>
+              <label className="text-sm font-medium text-slate-600">Month:</label>
               <select
-                id="month-select"
                 value={selectedMonth}
                 onChange={(e) => {
                   setSelectedMonth(e.target.value);
-                  setSelectedPractice(null);
                   setSearchTerm('');
                 }}
-                className="px-3 py-1.5 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                className="px-3 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
                 {Object.keys(MONTH_DATA).map(month => (
                   <option key={month} value={month}>{month}</option>
@@ -479,7 +512,6 @@ const NationalTelephony = () => {
               </select>
             </div>
 
-            {/* Compare with previous months checkbox */}
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
@@ -491,7 +523,7 @@ const NationalTelephony = () => {
             </label>
           </div>
 
-          <div className="flex flex-wrap justify-center gap-4 mt-3">
+          <div className="flex flex-wrap justify-center gap-4">
             <a
               href="https://digital.nhs.uk/data-and-information/publications/statistical/cloud-based-telephony-data-in-general-practice"
               target="_blank"
