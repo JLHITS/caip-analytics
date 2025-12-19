@@ -310,6 +310,8 @@ export default function App() {
     const path = window.location.pathname;
     if (path.includes('/telephony')) {
       setMainTab('telephony');
+    } else if (path.includes('/oc')) {
+      setMainTab('online-consultations');
     }
   }, []);
 
