@@ -337,6 +337,7 @@ const NationalOnlineConsultations = ({
       .filter(p => p.monthlyData.length >= 3)
       .map(practice => {
         const rates = practice.monthlyData.map(d => d.ratePer1000);
+        const totalSubmissions = practice.monthlyData.reduce((sum, d) => sum + (d.submissions || 0), 0);
         const avgRate = rates.reduce((a, b) => a + b, 0) / rates.length;
 
         const squaredDiffs = rates.map(r => Math.pow(r - avgRate, 2));
@@ -350,10 +351,13 @@ const NationalOnlineConsultations = ({
           avgRate,
           stdDev,
           range,
+          totalSubmissions,
           monthCount: practice.monthlyData.length,
           consistencyScore: Math.max(0, 100 - (stdDev * 2))
         };
-      });
+      })
+      // Exclude practices with no activity (all months zero -> std dev 0 but not meaningful)
+      .filter(practice => practice.totalSubmissions > 0);
 
     const consistent = [...practicesWithVariance]
       .sort((a, b) => a.stdDev - b.stdDev)
