@@ -65,7 +65,10 @@ export function parseOnlineConsultationsData(fileBuffer) {
     const listSize = Number(row[16]) || 0;
     const ratePer1000 = Number(row[17]) || 0;
     // For older files without participation column, assume all practices with data are participating
-    const participation = hasParticipationColumn ? (Number(row[18]) || 0) : (submissions > 0 ? 1 : 0);
+    const rawParticipation = row[18];
+    const participation = hasParticipationColumn
+      ? (String(rawParticipation).trim() === '*' ? 1 : (Number(rawParticipation) || 0))
+      : (submissions > 0 ? 1 : 0);
 
     const practiceData = {
       odsCode,
