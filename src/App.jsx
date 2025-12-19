@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -24,6 +24,7 @@ import {
   Download, Loader2, PlayCircle, AlertTriangle, Trash2, Plus, Monitor, User, Search,
   ArrowUpDown, ArrowUp, ArrowDown, ChevronUp, Copy, Minimize2, Maximize2, Share2
 } from 'lucide-react';
+import { doc, getDoc, setDoc, updateDoc, increment } from 'firebase/firestore';
 
 // PDF.js setup
 import { GlobalWorkerOptions } from 'pdfjs-dist';
@@ -71,6 +72,7 @@ import {
 import logo from './assets/logo.png';
 import rushcliffeLogo from './assets/rushcliffe.png';
 import nottsWestLogo from './assets/nottswest.png';
+import { db } from './firebase/config';
 
 // Sample data imports
 import sampleAppt from './assets/sampledata/AppointmentReport.csv?url';
@@ -168,6 +170,9 @@ export default function App() {
   // Shared state between National Telephony and Online Consultations
   const [sharedPractice, setSharedPractice] = useState(null);
   const [sharedBookmarks, setSharedBookmarks] = useState([]);
+  const [sharedUsageStats, setSharedUsageStats] = useState({ totalChecks: 0, recentPractices: [] });
+  const latestUsageRef = useRef(sharedUsageStats);
+  const usageDocRef = useMemo(() => doc(db, 'telephonyStats', 'global'), []);
 
   // Load shared bookmarks from localStorage
   useEffect(() => {
@@ -185,6 +190,90 @@ export default function App() {
   const updateSharedBookmarks = (newBookmarks) => {
     setSharedBookmarks(newBookmarks);
     localStorage.setItem('sharedPracticeBookmarks', JSON.stringify(newBookmarks));
+  };
+
+  // Keep a ref of the latest usage stats for fallback calculations
+  useEffect(() => {
+    latestUsageRef.current = sharedUsageStats;
+  }, [sharedUsageStats]);
+
+  // Load shared usage stats (times used + recents) from localStorage
+  useEffect(() => {
+    const savedUsage = localStorage.getItem('sharedPracticeUsage');
+    if (savedUsage) {
+      try {
+        setSharedUsageStats(JSON.parse(savedUsage));
+      } catch (e) {
+        console.error('Failed to load shared usage stats:', e);
+      }
+    }
+  }, []);
+
+  // Load usage stats from Firestore (preserve existing totalChecks)
+  useEffect(() => {
+    const fetchUsageFromServer = async () => {
+      try {
+        const usageDoc = await getDoc(usageDocRef);
+        if (usageDoc.exists()) {
+          const serverTotal = usageDoc.data()?.totalChecks || 0;
+          setSharedUsageStats((prev = { totalChecks: 0, recentPractices: [] }) => {
+            const merged = {
+              ...prev,
+              totalChecks: Math.max(prev.totalChecks || 0, serverTotal)
+            };
+            localStorage.setItem('sharedPracticeUsage', JSON.stringify(merged));
+            return merged;
+          });
+        } else {
+          // Initialize server doc with local total if it doesn't exist
+          await setDoc(usageDocRef, { totalChecks: latestUsageRef.current.totalChecks || 0 });
+        }
+      } catch (error) {
+        console.error('Failed to fetch usage stats from server:', error);
+      }
+    };
+
+    fetchUsageFromServer();
+  }, [usageDocRef]);
+
+  // Update shared usage stats and persist to localStorage
+  const recordPracticeUsage = (practice) => {
+    if (!practice) return;
+    setSharedUsageStats((prev = { totalChecks: 0, recentPractices: [] }) => {
+      const newRecentPractices = [
+        {
+          odsCode: practice.odsCode,
+          name: practice.gpName,
+          pcnName: practice.pcnName,
+          icbName: practice.icbName
+        },
+        ...(prev.recentPractices || []).filter(p => p.odsCode !== practice.odsCode)
+      ].slice(0, 5);
+
+      const updatedStats = {
+        totalChecks: (prev.totalChecks || 0) + 1,
+        recentPractices: newRecentPractices
+      };
+
+      localStorage.setItem('sharedPracticeUsage', JSON.stringify(updatedStats));
+      return updatedStats;
+    });
+
+    // Increment server counter without blocking UI
+    const syncUsageToServer = async () => {
+      try {
+        await updateDoc(usageDocRef, { totalChecks: increment(1) });
+      } catch (error) {
+        try {
+          const fallbackTotal = (latestUsageRef.current.totalChecks || 0) + 1;
+          await setDoc(usageDocRef, { totalChecks: fallbackTotal }, { merge: true });
+        } catch (err) {
+          console.error('Failed to sync usage stats to server:', err);
+        }
+      }
+    };
+
+    syncUsageToServer();
   };
 
   const [selectedMonth, setSelectedMonth] = useState('All');
@@ -2493,6 +2582,8 @@ export default function App() {
             setSharedPractice={setSharedPractice}
             sharedBookmarks={sharedBookmarks}
             updateSharedBookmarks={updateSharedBookmarks}
+            sharedUsageStats={sharedUsageStats}
+            recordPracticeUsage={recordPracticeUsage}
           />
         </div>
 
@@ -2503,6 +2594,8 @@ export default function App() {
             setSharedPractice={setSharedPractice}
             sharedBookmarks={sharedBookmarks}
             updateSharedBookmarks={updateSharedBookmarks}
+            sharedUsageStats={sharedUsageStats}
+            recordPracticeUsage={recordPracticeUsage}
           />
         </div>
       </main>
@@ -2551,6 +2644,7 @@ export default function App() {
         isOpen={showAbout}
         onClose={() => setShowAbout(false)}
         onOpenBugReport={() => setShowBugReport(true)}
+        timesUsed={sharedUsageStats?.totalChecks || 0}
       />
     </div>
   );

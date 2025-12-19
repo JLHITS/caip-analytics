@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, ArrowUp, ArrowDown, Phone, Trophy, TrendingUp, ExternalLink, Info, Star, ChevronDown, ChevronUp, TrendingDown, Minus } from 'lucide-react';
+import { Search, ArrowUp, ArrowDown, Phone, Trophy, TrendingUp, ExternalLink, Info, Star, ChevronDown, ChevronUp, TrendingDown, Minus, Clock } from 'lucide-react';
 import { Line, Bar } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -29,8 +29,6 @@ import {
   calculateCallsSavedRanking
 } from '../utils/telephonyAnalysis';
 import { parsePopulationData, calculatePer1000, getWorkloadInterpretation } from '../utils/parsePopulationData';
-import { db } from '../firebase/config';
-import { doc, getDoc, setDoc, updateDoc, increment } from 'firebase/firestore';
 
 // Register Chart.js components
 ChartJS.register(
@@ -61,18 +59,27 @@ const MONTH_DATA = {
 // Ordered months for charts (oldest first)
 const MONTHS_ORDERED = ['October 2025', 'November 2025'];
 
-const NationalTelephony = ({ sharedPractice, setSharedPractice, sharedBookmarks, updateSharedBookmarks }) => {
+const NationalTelephony = ({
+  sharedPractice,
+  setSharedPractice,
+  sharedBookmarks,
+  updateSharedBookmarks,
+  sharedUsageStats,
+  recordPracticeUsage
+}) => {
   const [allMonthsData, setAllMonthsData] = useState({}); // Store all months data
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [showCallsSavedTooltip, setShowCallsSavedTooltip] = useState(false);
   const [showInterpretationTooltip, setShowInterpretationTooltip] = useState(false);
   const [showCoveragePopup, setShowCoveragePopup] = useState(false);
-  const [usageStats, setUsageStats] = useState({ totalChecks: 176, recentPractices: [] });
   const [showBookmarks, setShowBookmarks] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState('November 2025');
   const [compareWithPrevious, setCompareWithPrevious] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
+  const [showRecents, setShowRecents] = useState(() => (sharedUsageStats?.recentPractices?.length || 0) > 0);
+
+  const usageStats = sharedUsageStats || { totalChecks: 0, recentPractices: [] };
 
   // Use shared state for practice and bookmarks
   const bookmarkedPractices = sharedBookmarks;
@@ -97,6 +104,9 @@ const NationalTelephony = ({ sharedPractice, setSharedPractice, sharedBookmarks,
   const setSelectedPractice = (practice) => {
     setSelectedPracticeLocal(practice);
     if (practice) {
+      if (recordPracticeUsage) {
+        recordPracticeUsage(practice);
+      }
       setSharedPractice({
         odsCode: practice.odsCode,
         gpName: practice.gpName,
@@ -121,6 +131,19 @@ const NationalTelephony = ({ sharedPractice, setSharedPractice, sharedBookmarks,
 
   // Get current data based on selected month
   const data = allMonthsData[selectedMonth] || null;
+  const totalInboundCalls = useMemo(() => {
+    if (!data) return 0;
+    const nationalInbound = data.national?.inboundCalls || 0;
+    if (nationalInbound) return nationalInbound;
+    return (data.practices || []).reduce((sum, practice) => sum + (practice.inboundCalls || 0), 0);
+  }, [data]);
+  const recentPractices = usageStats.recentPractices || [];
+
+  useEffect(() => {
+    if (recentPractices.length > 0 && !showRecents) {
+      setShowRecents(true);
+    }
+  }, [recentPractices.length, showRecents]);
 
   // Switch away from Trends tab if comparison is disabled
   useEffect(() => {
@@ -294,27 +317,6 @@ const NationalTelephony = ({ sharedPractice, setSharedPractice, sharedBookmarks,
     return { consistent, volatile, practiceScores };
   }, [allMonthsData]);
 
-  // Load global usage stats from Firestore on mount
-  useEffect(() => {
-    const loadStats = async () => {
-      try {
-        const statsRef = doc(db, 'telephonyStats', 'global');
-        const statsDoc = await getDoc(statsRef);
-
-        if (statsDoc.exists()) {
-          setUsageStats(statsDoc.data());
-        } else {
-          const initialStats = { totalChecks: 176, recentPractices: [] };
-          await setDoc(statsRef, initialStats);
-          setUsageStats(initialStats);
-        }
-      } catch (error) {
-        console.error('Error loading stats:', error);
-      }
-    };
-    loadStats();
-  }, []);
-
   // Toggle bookmark for a practice
   const toggleBookmark = (practice) => {
     const isAlreadyBookmarked = bookmarkedPractices.some(p => p.odsCode === practice.odsCode);
@@ -341,43 +343,6 @@ const NationalTelephony = ({ sharedPractice, setSharedPractice, sharedBookmarks,
   const isBookmarked = (odsCode) => {
     return bookmarkedPractices.some(p => p.odsCode === odsCode);
   };
-
-  // Track practice selection and update global stats
-  useEffect(() => {
-    if (selectedPractice) {
-      const updateStats = async () => {
-        try {
-          const statsRef = doc(db, 'telephonyStats', 'global');
-          const statsDoc = await getDoc(statsRef);
-
-          if (statsDoc.exists()) {
-            const currentStats = statsDoc.data();
-            const newRecentPractices = [
-              {
-                name: selectedPractice.gpName,
-                odsCode: selectedPractice.odsCode,
-                timestamp: new Date().toISOString()
-              },
-              ...currentStats.recentPractices.filter(p => p.odsCode !== selectedPractice.odsCode)
-            ].slice(0, 5);
-
-            await updateDoc(statsRef, {
-              totalChecks: increment(1),
-              recentPractices: newRecentPractices
-            });
-
-            setUsageStats({
-              totalChecks: currentStats.totalChecks + 1,
-              recentPractices: newRecentPractices
-            });
-          }
-        } catch (error) {
-          console.error('Error updating stats:', error);
-        }
-      };
-      updateStats();
-    }
-  }, [selectedPractice]);
 
   // Load and parse all Excel files and population data on mount
   useEffect(() => {
@@ -487,7 +452,7 @@ const NationalTelephony = ({ sharedPractice, setSharedPractice, sharedBookmarks,
             National Telephony
           </h2>
           <p className="text-sm text-blue-100 mt-1">
-            {data.practices.length.toLocaleString()} practices | {data.national.totalInbound?.toLocaleString() || 0} total inbound calls
+            {data.practices.length.toLocaleString()} practices | {totalInboundCalls ? totalInboundCalls.toLocaleString() : '—'} total inbound calls
           </p>
         </div>
       </Card>
@@ -544,40 +509,50 @@ const NationalTelephony = ({ sharedPractice, setSharedPractice, sharedBookmarks,
         </div>
       </Card>
 
-      {/* Usage Statistics */}
-      <Card className="bg-gradient-to-br from-indigo-50 to-white border-indigo-100">
-        <div className="flex flex-col md:flex-row gap-6">
-          <div className="flex-shrink-0">
-            <p className="text-xs text-indigo-600 font-semibold uppercase tracking-wide mb-1">Times Used</p>
-            <p className="text-3xl font-bold text-indigo-900">{usageStats.totalChecks.toLocaleString()}</p>
-            <p className="text-xs text-slate-500 mt-1">practices viewed</p>
+      {/* Recent Practices */}
+      <Card className="bg-gradient-to-br from-slate-50 to-white border-slate-200">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Clock size={18} className="text-blue-600" />
+            <h3 className="font-bold text-slate-800">Recent Practices</h3>
+            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+              {recentPractices.length}
+            </span>
           </div>
-          <div className="flex-1 border-t md:border-t-0 md:border-l border-indigo-200 pt-4 md:pt-0 md:pl-6">
-            <p className="text-xs text-indigo-600 font-semibold uppercase tracking-wide mb-2">Recent Practices</p>
-            {usageStats.recentPractices.length > 0 ? (
-              <div className="space-y-1">
-                {usageStats.recentPractices.map((practice, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => {
-                      const foundPractice = data?.practices.find(p => p.odsCode === practice.odsCode);
-                      if (foundPractice) {
-                        setSelectedPractice(foundPractice);
-                        setSearchTerm('');
-                      }
-                    }}
-                    className="flex items-center justify-between text-sm w-full hover:bg-indigo-100 rounded px-2 py-1 transition-colors text-left"
-                  >
-                    <span className="text-slate-700 font-medium truncate">{practice.name}</span>
-                    <span className="text-slate-400 text-xs ml-2">{practice.odsCode}</span>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-slate-400 italic">No practices checked yet</p>
-            )}
-          </div>
+          <button
+            onClick={() => setShowRecents(!showRecents)}
+            className="text-slate-400 hover:text-slate-600 transition-colors p-3"
+          >
+            {showRecents ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+          </button>
         </div>
+        {showRecents && (
+          recentPractices.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {recentPractices.map((practice) => {
+                const foundPractice = data?.practices.find(p => p.odsCode === practice.odsCode);
+                const disabled = !foundPractice;
+                return (
+                  <button
+                    key={practice.odsCode}
+                    onClick={() => {
+                      if (!foundPractice) return;
+                      setSelectedPractice(foundPractice);
+                      setSearchTerm('');
+                    }}
+                    className={`px-3 py-2 rounded-lg border text-sm flex items-center gap-2 ${disabled ? 'bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed' : 'bg-white border-blue-200 text-blue-800 hover:bg-blue-50 hover:border-blue-300 transition-colors'}`}
+                    disabled={disabled}
+                  >
+                    <span className="font-semibold truncate max-w-[160px]">{practice.name}</span>
+                    <span className="text-xs text-slate-500">{practice.odsCode}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500">No recent practices yet. Select a practice to build your quick list.</p>
+          )
+        )}
       </Card>
 
       {/* Bookmarked Practices */}

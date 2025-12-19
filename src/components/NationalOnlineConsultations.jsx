@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, TrendingUp, TrendingDown, ExternalLink, Info, Star, ChevronDown, ChevronUp, Minus, Monitor, Users, Trophy } from 'lucide-react';
+import { Search, TrendingUp, TrendingDown, ExternalLink, Info, Star, ChevronDown, ChevronUp, Minus, Monitor, Users, Trophy, Clock } from 'lucide-react';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -98,7 +98,14 @@ const MONTHS_ORDERED = [
   'September 2025', 'October 2025', 'November 2025'
 ];
 
-const NationalOnlineConsultations = ({ sharedPractice, setSharedPractice, sharedBookmarks, updateSharedBookmarks }) => {
+const NationalOnlineConsultations = ({
+  sharedPractice,
+  setSharedPractice,
+  sharedBookmarks,
+  updateSharedBookmarks,
+  sharedUsageStats,
+  recordPracticeUsage
+}) => {
   const [allMonthsData, setAllMonthsData] = useState({});
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -108,8 +115,16 @@ const NationalOnlineConsultations = ({ sharedPractice, setSharedPractice, shared
   const [showBookmarks, setShowBookmarks] = useState(false);
   const [showInterpretationTooltip, setShowInterpretationTooltip] = useState(false);
   const [showCoveragePopup, setShowCoveragePopup] = useState(false);
-  const [usageStats, setUsageStats] = useState({ totalChecks: 0, recentPractices: [] });
+  const [showRecents, setShowRecents] = useState(() => (sharedUsageStats?.recentPractices?.length || 0) > 0);
+  const usageStats = sharedUsageStats || { totalChecks: 0, recentPractices: [] };
+  const recentPractices = usageStats.recentPractices || [];
   const searchRef = useRef(null);
+
+  useEffect(() => {
+    if (recentPractices.length > 0 && !showRecents) {
+      setShowRecents(true);
+    }
+  }, [recentPractices.length, showRecents]);
 
   // Use shared state for practice and bookmarks
   const bookmarkedPractices = sharedBookmarks;
@@ -249,35 +264,10 @@ const NationalOnlineConsultations = ({ sharedPractice, setSharedPractice, shared
     setSelectedPractice(practice);
     setSearchTerm('');
     setActiveTab('overview');
-
-    // Track usage statistics
-    setUsageStats(prev => {
-      const newRecentPractices = [
-        { odsCode: practice.odsCode, name: practice.gpName },
-        ...prev.recentPractices.filter(p => p.odsCode !== practice.odsCode)
-      ].slice(0, 5);
-
-      const newStats = {
-        totalChecks: prev.totalChecks + 1,
-        recentPractices: newRecentPractices
-      };
-
-      localStorage.setItem('ocUsageStats', JSON.stringify(newStats));
-      return newStats;
-    });
-  };
-
-  // Load usage stats from localStorage on mount
-  useEffect(() => {
-    const savedStats = localStorage.getItem('ocUsageStats');
-    if (savedStats) {
-      try {
-        setUsageStats(JSON.parse(savedStats));
-      } catch (e) {
-        console.error('Failed to load OC usage stats:', e);
-      }
+    if (recordPracticeUsage) {
+      recordPracticeUsage(practice);
     }
-  }, []);
+  };
 
   // Toggle bookmark
   const toggleBookmark = (practice) => {
@@ -482,39 +472,49 @@ const NationalOnlineConsultations = ({ sharedPractice, setSharedPractice, shared
         </div>
       </Card>
 
-      {/* Usage Statistics */}
-      <Card className="bg-gradient-to-br from-indigo-50 to-white border-indigo-100">
-        <div className="flex flex-col md:flex-row gap-6">
-          <div className="flex-shrink-0">
-            <p className="text-xs text-indigo-600 font-semibold uppercase tracking-wide mb-1">Times Used</p>
-            <p className="text-3xl font-bold text-indigo-900">{usageStats.totalChecks.toLocaleString()}</p>
-            <p className="text-xs text-slate-500 mt-1">practices viewed</p>
+      {/* Recent Practices */}
+      <Card className="bg-gradient-to-br from-slate-50 to-white border-slate-200">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Clock size={18} className="text-indigo-600" />
+            <h3 className="font-bold text-slate-800">Recent Practices</h3>
+            <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">
+              {recentPractices.length}
+            </span>
           </div>
-          <div className="flex-1 border-t md:border-t-0 md:border-l border-indigo-200 pt-4 md:pt-0 md:pl-6">
-            <p className="text-xs text-indigo-600 font-semibold uppercase tracking-wide mb-2">Recent Practices</p>
-            {usageStats.recentPractices.length > 0 ? (
-              <div className="space-y-1">
-                {usageStats.recentPractices.map((practice, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => {
-                      const foundPractice = data?.practices.find(p => p.odsCode === practice.odsCode);
-                      if (foundPractice) {
-                        handleSelectPractice(foundPractice);
-                      }
-                    }}
-                    className="flex items-center justify-between text-sm w-full hover:bg-indigo-100 rounded px-2 py-1 transition-colors text-left"
-                  >
-                    <span className="text-slate-700 font-medium truncate">{practice.name}</span>
-                    <span className="text-slate-400 text-xs ml-2">{practice.odsCode}</span>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-slate-400 italic">No practices checked yet</p>
-            )}
-          </div>
+          <button
+            onClick={() => setShowRecents(!showRecents)}
+            className="text-slate-400 hover:text-slate-600 transition-colors p-3"
+          >
+            {showRecents ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+          </button>
         </div>
+        {showRecents && (
+          recentPractices.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {recentPractices.map((practice) => {
+                const foundPractice = data?.practices.find(p => p.odsCode === practice.odsCode);
+                const disabled = !foundPractice;
+                return (
+                  <button
+                    key={practice.odsCode}
+                    onClick={() => {
+                      if (!foundPractice) return;
+                      handleSelectPractice(foundPractice);
+                    }}
+                    className={`px-3 py-2 rounded-lg border text-sm flex items-center gap-2 ${disabled ? 'bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed' : 'bg-white border-indigo-200 text-indigo-800 hover:bg-indigo-50 hover:border-indigo-300 transition-colors'}`}
+                    disabled={disabled}
+                  >
+                    <span className="font-semibold truncate max-w-[160px]">{practice.name}</span>
+                    <span className="text-xs text-slate-500">{practice.odsCode}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500">No recent practices yet. Select a practice to build your quick list.</p>
+          )
+        )}
       </Card>
 
       {/* Bookmarked Practices */}

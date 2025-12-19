@@ -1,9 +1,9 @@
 import React from 'react';
-import { Info, X, ExternalLink } from 'lucide-react';
+import { Info, X, ExternalLink, Clock } from 'lucide-react';
 import { NHS_BLUE } from '../../constants/colors';
 
 // About modal - displays information about CAIP.app
-const AboutModal = ({ isOpen, onClose, onOpenBugReport }) => {
+const AboutModal = ({ isOpen, onClose, onOpenBugReport, timesUsed = 0 }) => {
   if (!isOpen) return null;
 
   return (
@@ -28,6 +28,16 @@ const AboutModal = ({ isOpen, onClose, onOpenBugReport }) => {
         </div>
 
         <div className="space-y-4 text-slate-700 leading-relaxed">
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4 flex items-center gap-3">
+            <div className="p-3 bg-white rounded-full border border-blue-100">
+              <Clock className="text-blue-600" size={20} />
+            </div>
+            <div>
+              <p className="text-sm text-blue-700 font-semibold">Times used across National Telephony & Online tabs</p>
+              <p className="text-2xl font-bold text-blue-900">{Number(timesUsed || 0).toLocaleString()}</p>
+            </div>
+          </div>
+
           <p>
             CAIP.app was developed as part of the Capacity & Access improvement programme in{' '}
             <a
@@ -58,12 +68,15 @@ const AboutModal = ({ isOpen, onClose, onOpenBugReport }) => {
           </p>
 
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <p className="font-semibold text-blue-900 mb-2">Supported Platforms:</p>
+            <p className="font-semibold text-blue-900 mb-2">Supported Platforms for full Demand and Capacity Analysis</p>
             <ul className="list-disc list-inside space-y-1 text-blue-900">
               <li>TPP SystmOne</li>
               <li>SystmConnect</li>
               <li>X-on Surgery Connect</li>
             </ul>
+            <p className="text-sm text-blue-800 mt-3">
+              All systems are supported for the National Data Extracts tab as it relies on NHS England data.
+            </p>
           </div>
 
           <p>
