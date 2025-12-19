@@ -29,6 +29,15 @@ export function parseOnlineConsultationsData(fileBuffer) {
   const hasParticipationColumn = headerRow.length > 18 &&
     String(headerRow[18] || '').toLowerCase().includes('participation');
 
+  // Data corrections for known mapping errors in NHS England source data
+  const DATA_CORRECTIONS = {
+    // Orchard Surgery should be mapped to NHS Nottingham and Nottinghamshire ICB
+    'C82040': {
+      icbCode: 'QT1',
+      icbName: 'NHS NOTTINGHAM AND NOTTINGHAMSHIRE INTEGRATED CARE BOARD'
+    }
+  };
+
   const practices = [];
   let nationalTotals = {
     totalSubmissions: 0,
@@ -87,6 +96,11 @@ export function parseOnlineConsultationsData(fileBuffer) {
       adminPer1000: listSize > 0 ? (adminSubmissions / listSize) * 1000 : 0,
       otherPer1000: listSize > 0 ? (otherSubmissions / listSize) * 1000 : 0,
     };
+
+    // Apply any known data corrections
+    if (DATA_CORRECTIONS[odsCode]) {
+      Object.assign(practiceData, DATA_CORRECTIONS[odsCode]);
+    }
 
     practices.push(practiceData);
 

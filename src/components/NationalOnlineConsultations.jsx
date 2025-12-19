@@ -950,30 +950,24 @@ const NationalOnlineConsultations = ({
 
       {/* TRENDS TAB */}
       {selectedPractice && activeTab === 'trends' && compareWithPrevious && (() => {
-        // Build historical data for charts
-        const practiceHistory = [];
-        const nationalHistory = [];
-
-        MONTHS_ORDERED.forEach(month => {
+        // Build aligned historical data for charts (include months even if practice missing)
+        const history = MONTHS_ORDERED.map(month => {
+          const label = `${month.split(' ')[0].substring(0, 3)} ${month.split(' ')[1].substring(2)}`;
           const monthData = allMonthsData[month];
-          if (monthData) {
-            const practice = monthData.practices.find(p => p.odsCode === selectedPractice.odsCode);
-            if (practice) {
-              practiceHistory.push({
-                month: month.split(' ')[0].substring(0, 3) + ' ' + month.split(' ')[1].substring(2),
-                submissions: practice.submissions,
-                ratePer1000: practice.ratePer1000,
-                clinicalPct: practice.clinicalPct * 100,
-                adminPct: practice.adminPct * 100,
-              });
-            }
-            nationalHistory.push({
-              month: month.split(' ')[0].substring(0, 3) + ' ' + month.split(' ')[1].substring(2),
-              avgRatePer1000: monthData.national.avgRatePer1000,
-              totalSubmissions: monthData.national.totalSubmissions,
-            });
-          }
+          const practice = monthData?.practices.find(p => p.odsCode === selectedPractice.odsCode);
+          return {
+            month: label,
+            submissions: practice ? practice.submissions : 0,
+            ratePer1000: practice ? practice.ratePer1000 : 0,
+            clinicalPct: practice ? practice.clinicalPct * 100 : 0,
+            adminPct: practice ? practice.adminPct * 100 : 0,
+            avgRatePer1000: monthData?.national.avgRatePer1000 || 0,
+            totalSubmissions: monthData?.national.totalSubmissions || 0,
+          };
         });
+
+        const practiceHistory = history;
+        const nationalHistory = history;
 
         return (
           <>
