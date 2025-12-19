@@ -116,6 +116,7 @@ const NationalOnlineConsultations = ({
   const [showInterpretationTooltip, setShowInterpretationTooltip] = useState(false);
   const [showCoveragePopup, setShowCoveragePopup] = useState(false);
   const [showRecents, setShowRecents] = useState(() => (sharedUsageStats?.recentPractices?.length || 0) > 0);
+  const [showSearchBox, setShowSearchBox] = useState(true);
   const usageStats = sharedUsageStats || { totalChecks: 0, recentPractices: [] };
   const recentPractices = usageStats.recentPractices || [];
   const searchRef = useRef(null);
@@ -147,6 +148,7 @@ const NationalOnlineConsultations = ({
       );
       if (practice) {
         setSelectedPracticeLocal(practice);
+        setShowSearchBox(false);
       }
     }
   }, [sharedPractice, allMonthsData, selectedMonth]);
@@ -163,7 +165,10 @@ const NationalOnlineConsultations = ({
         icbCode: practice.icbCode,
         icbName: practice.icbName
       });
+      setShowSearchBox(false);
     } else {
+      setSearchTerm('');
+      setShowSearchBox(true);
       setSharedPractice(null);
     }
   };
@@ -609,9 +614,10 @@ const NationalOnlineConsultations = ({
       )}
 
       {/* Practice Search */}
-      <Card>
-        <div className="relative">
-          <div className="flex items-center gap-2 mb-2">
+      {showSearchBox && (
+        <Card>
+          <div className="relative">
+            <div className="flex items-center gap-2 mb-2">
             <Search size={20} className="text-slate-400" />
             <label className="font-semibold text-slate-700">Find Your Practice</label>
             <button
@@ -669,8 +675,9 @@ const NationalOnlineConsultations = ({
               <p className="text-sm text-slate-500">No practices found matching "{searchTerm}"</p>
             </div>
           )}
-        </div>
-      </Card>
+          </div>
+        </Card>
+      )}
 
       {/* Selected Practice Header */}
       {selectedPractice && (
@@ -705,9 +712,9 @@ const NationalOnlineConsultations = ({
             </div>
             <button
               onClick={() => setSelectedPractice(null)}
-              className="text-slate-400 hover:text-slate-600"
+              className="px-3 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-100 rounded-md transition-colors"
             >
-              &times;
+              Change Practice
             </button>
           </div>
         </Card>

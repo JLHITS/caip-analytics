@@ -78,6 +78,7 @@ const NationalTelephony = ({
   const [compareWithPrevious, setCompareWithPrevious] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
   const [showRecents, setShowRecents] = useState(() => (sharedUsageStats?.recentPractices?.length || 0) > 0);
+  const [showSearchBox, setShowSearchBox] = useState(true);
 
   const usageStats = sharedUsageStats || { totalChecks: 0, recentPractices: [] };
 
@@ -96,6 +97,7 @@ const NationalTelephony = ({
       );
       if (practice) {
         setSelectedPracticeLocal(practice);
+        setShowSearchBox(false);
       }
     }
   }, [sharedPractice, allMonthsData, selectedMonth]);
@@ -107,6 +109,7 @@ const NationalTelephony = ({
       if (recordPracticeUsage) {
         recordPracticeUsage(practice);
       }
+      setShowSearchBox(false);
       setSharedPractice({
         odsCode: practice.odsCode,
         gpName: practice.gpName,
@@ -116,6 +119,8 @@ const NationalTelephony = ({
         icbName: practice.icbName
       });
     } else {
+      setSearchTerm('');
+      setShowSearchBox(true);
       setSharedPractice(null);
     }
   };
@@ -669,7 +674,8 @@ const NationalTelephony = ({
 
       {/* Practice Search */}
       <Card>
-        <div className="relative">
+        {showSearchBox && (
+          <div className="relative">
           <div className="flex items-center gap-2 mb-2">
             <Search size={20} className="text-slate-400" />
             <label className="font-semibold text-slate-700">Find Your Practice</label>
@@ -689,8 +695,8 @@ const NationalTelephony = ({
           />
 
           {/* Search Results Dropdown - Only show when searching, hide after selection */}
-          {searchTerm && !selectedPractice && filteredPractices.length > 0 && (
-            <div className="absolute z-50 w-full mt-2 bg-white border border-slate-200 rounded-lg shadow-lg max-h-[50vh] sm:max-h-64 overflow-y-auto">
+            {searchTerm && !selectedPractice && filteredPractices.length > 0 && (
+              <div className="absolute z-50 w-full mt-2 bg-white border border-slate-200 rounded-lg shadow-lg max-h-[50vh] sm:max-h-64 overflow-y-auto">
               {filteredPractices.map((practice) => (
                 <div
                   key={practice.odsCode}
@@ -731,7 +737,8 @@ const NationalTelephony = ({
               <p className="text-sm text-slate-500">No practices found matching "{searchTerm}"</p>
             </div>
           )}
-        </div>
+          </div>
+        )}
 
         {selectedPractice && (
           <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200 flex justify-between items-start">
