@@ -45,6 +45,7 @@ import ShareModal from './components/modals/ShareModal';
 import BugReportModal from './components/modals/BugReportModal';
 import AboutModal from './components/modals/AboutModal';
 import NationalTelephony from './components/NationalTelephony';
+import NationalOnlineConsultations from './components/NationalOnlineConsultations';
 
 // Utility imports
 import { calculateLinearForecast, getNextMonthNames, isGP } from './utils/calculations';
@@ -1738,6 +1739,13 @@ export default function App() {
               <Phone size={20} />
               National Telephony
             </button>
+            <button
+              onClick={() => setMainTab('online-consultations')}
+              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-bold transition-all ${mainTab === 'online-consultations' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-800'}`}
+            >
+              <Monitor size={20} />
+              Online Consultations
+            </button>
           </div>
         </div>
 
@@ -2459,6 +2467,11 @@ export default function App() {
         {/* NATIONAL TELEPHONY CONTENT */}
         <div className={mainTab === 'telephony' ? '' : 'hidden'}>
           <NationalTelephony />
+        </div>
+
+        {/* NATIONAL ONLINE CONSULTATIONS CONTENT */}
+        <div className={mainTab === 'online-consultations' ? '' : 'hidden'}>
+          <NationalOnlineConsultations />
         </div>
       </main>
 
