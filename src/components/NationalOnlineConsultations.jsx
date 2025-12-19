@@ -118,6 +118,12 @@ const NationalOnlineConsultations = ({
   const [showRecents, setShowRecents] = useState(() => (sharedUsageStats?.recentPractices?.length || 0) > 0);
   const [showSearchBox, setShowSearchBox] = useState(true);
   const usageStats = sharedUsageStats || { totalChecks: 0, recentPractices: [] };
+  // Use shared state for practice and bookmarks
+  const bookmarkedPractices = sharedBookmarks;
+  const setBookmarkedPractices = updateSharedBookmarks;
+
+  // Local selected practice - synced with shared state
+  const [selectedPractice, setSelectedPracticeLocal] = useState(null);
   const recentPractices = usageStats.recentPractices || [];
   const searchRef = useRef(null);
 
@@ -132,13 +138,6 @@ const NationalOnlineConsultations = ({
       setShowBookmarks(true);
     }
   }, [bookmarkedPractices.length, showBookmarks]);
-
-  // Use shared state for practice and bookmarks
-  const bookmarkedPractices = sharedBookmarks;
-  const setBookmarkedPractices = updateSharedBookmarks;
-
-  // Local selected practice - synced with shared state
-  const [selectedPractice, setSelectedPracticeLocal] = useState(null);
 
   // Sync local practice with shared state when data loads or shared practice changes
   useEffect(() => {
