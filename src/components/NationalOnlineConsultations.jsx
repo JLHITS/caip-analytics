@@ -126,6 +126,12 @@ const NationalOnlineConsultations = ({
     }
   }, [recentPractices.length, showRecents]);
 
+  useEffect(() => {
+    if (bookmarkedPractices.length > 0 && !showBookmarks) {
+      setShowBookmarks(true);
+    }
+  }, [bookmarkedPractices.length, showBookmarks]);
+
   // Use shared state for practice and bookmarks
   const bookmarkedPractices = sharedBookmarks;
   const setBookmarkedPractices = updateSharedBookmarks;
