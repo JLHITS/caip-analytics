@@ -925,6 +925,7 @@ export default function TriageSlotAnalysis() {
       // Calculate target days for each urgency
       ['RED', 'AMBER', 'YELLOW', 'GREEN'].forEach(urgency => {
         let targetDayIndex;
+        let effectiveUrgency = urgency; // Track if urgency gets upgraded
 
         switch (urgency) {
           case 'RED':
@@ -939,9 +940,10 @@ export default function TriageSlotAnalysis() {
               // Next day is open - capacity needed there
               targetDayIndex = nextCalendarDay;
             } else {
-              // Next day is closed (weekend) - need same-day capacity
-              // This effectively upgrades AMBER to RED-like urgency
+              // Next day is closed (weekend) - need same-day RED capacity
+              // This upgrades AMBER to RED since they need same-day appointment
               targetDayIndex = isOpenDay(dayIndex) ? dayIndex : 0;
+              effectiveUrgency = 'RED'; // Count as RED capacity needed
             }
             break;
           case 'YELLOW':
@@ -958,7 +960,7 @@ export default function TriageSlotAnalysis() {
 
         const targetDay = indexToDay[targetDayIndex];
         if (isOpenDay(targetDayIndex) && capacityNeeded[targetDay]) {
-          capacityNeeded[targetDay][urgency] += demand[urgency];
+          capacityNeeded[targetDay][effectiveUrgency] += demand[urgency];
           capacityNeeded[targetDay].total += demand[urgency];
         }
       });
