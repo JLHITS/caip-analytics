@@ -1781,13 +1781,17 @@ export default function App() {
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800 pb-20">
       <header className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm/50 print:hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2 sm:gap-4">
+          <button
+            onClick={() => setDataSource(null)}
+            className="flex items-center gap-2 sm:gap-4 hover:opacity-80 transition-opacity"
+            title="Back to Home"
+          >
             <img src={logo} alt="CAIP Logo" className="h-10 w-10 rounded-lg object-cover" />
-            <div>
+            <div className="text-left">
               <h1 className="text-xl font-bold text-slate-900 leading-tight">CAIP Analytics <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full align-middle ml-2">{APP_VERSION}</span></h1>
               <p className="text-[10px] sm:text-xs text-slate-500 font-medium hidden sm:block">Free data analytics to help you improve capacity and access in primary care</p>
             </div>
-          </div>
+          </button>
 
           <div className="flex items-center gap-2">
             <button
@@ -1822,7 +1826,8 @@ export default function App() {
               </a>
             </div>
 
-            {processedData && (
+            {/* Only show month filter and reset for Demand & Capacity section */}
+            {dataSource === 'local' && mainTab === 'demand' && processedData && (
               <div className="flex items-center gap-4 text-sm">
                 <div className="relative group">
                   <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-lg text-slate-600 cursor-pointer">
