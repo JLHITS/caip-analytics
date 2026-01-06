@@ -170,10 +170,18 @@ export default function App() {
   const [dataSource, setDataSource] = useState(null); // null = intro, 'local', 'national'
   const [mainTab, setMainTab] = useState('demand'); // Local: 'demand', 'triage' | National: 'telephony', 'online-consultations'
 
-  // National data loading state - unified loading for both components
+  // National data loading state - only mount components when user first visits national data
+  const [nationalDataVisited, setNationalDataVisited] = useState(false);
   const [telephonyLoading, setTelephonyLoading] = useState(true);
   const [ocLoading, setOcLoading] = useState(true);
   const nationalDataLoading = telephonyLoading || ocLoading;
+
+  // Set nationalDataVisited to true when user first selects national data
+  useEffect(() => {
+    if (dataSource === 'national' && !nationalDataVisited) {
+      setNationalDataVisited(true);
+    }
+  }, [dataSource, nationalDataVisited]);
   const [activeTab, setActiveTab] = useState('dashboard');
 
   // Shared state between National Telephony and Online Consultations
@@ -2694,36 +2702,41 @@ export default function App() {
           </div>
         )}
 
-        {/* NATIONAL DATA UNIFIED LOADING SCREEN */}
-        {dataSource === 'national' && nationalDataLoading && (
-          <FancyNationalLoader type="combined" />
+        {/* NATIONAL DATA - Only mount components when user first visits national data */}
+        {nationalDataVisited && (
+          <>
+            {/* NATIONAL DATA UNIFIED LOADING SCREEN */}
+            {dataSource === 'national' && nationalDataLoading && (
+              <FancyNationalLoader type="combined" />
+            )}
+
+            {/* NATIONAL TELEPHONY CONTENT - Keep mounted once visited, use CSS to hide */}
+            <div className={dataSource === 'national' && mainTab === 'telephony' && !nationalDataLoading ? '' : 'hidden'}>
+              <NationalTelephony
+                sharedPractice={sharedPractice}
+                setSharedPractice={setSharedPractice}
+                sharedBookmarks={sharedBookmarks}
+                updateSharedBookmarks={updateSharedBookmarks}
+                sharedUsageStats={sharedUsageStats}
+                recordPracticeUsage={recordPracticeUsage}
+                onLoadingChange={setTelephonyLoading}
+              />
+            </div>
+
+            {/* NATIONAL ONLINE CONSULTATIONS CONTENT - Keep mounted once visited, use CSS to hide */}
+            <div className={dataSource === 'national' && mainTab === 'online-consultations' && !nationalDataLoading ? '' : 'hidden'}>
+              <NationalOnlineConsultations
+                sharedPractice={sharedPractice}
+                setSharedPractice={setSharedPractice}
+                sharedBookmarks={sharedBookmarks}
+                updateSharedBookmarks={updateSharedBookmarks}
+                sharedUsageStats={sharedUsageStats}
+                recordPracticeUsage={recordPracticeUsage}
+                onLoadingChange={setOcLoading}
+              />
+            </div>
+          </>
         )}
-
-        {/* NATIONAL TELEPHONY CONTENT - Keep mounted once visited, use CSS to hide */}
-        <div className={dataSource === 'national' && mainTab === 'telephony' && !nationalDataLoading ? '' : 'hidden'}>
-          <NationalTelephony
-            sharedPractice={sharedPractice}
-            setSharedPractice={setSharedPractice}
-            sharedBookmarks={sharedBookmarks}
-            updateSharedBookmarks={updateSharedBookmarks}
-            sharedUsageStats={sharedUsageStats}
-            recordPracticeUsage={recordPracticeUsage}
-            onLoadingChange={setTelephonyLoading}
-          />
-        </div>
-
-        {/* NATIONAL ONLINE CONSULTATIONS CONTENT - Keep mounted once visited, use CSS to hide */}
-        <div className={dataSource === 'national' && mainTab === 'online-consultations' && !nationalDataLoading ? '' : 'hidden'}>
-          <NationalOnlineConsultations
-            sharedPractice={sharedPractice}
-            setSharedPractice={setSharedPractice}
-            sharedBookmarks={sharedBookmarks}
-            updateSharedBookmarks={updateSharedBookmarks}
-            sharedUsageStats={sharedUsageStats}
-            recordPracticeUsage={recordPracticeUsage}
-            onLoadingChange={setOcLoading}
-          />
-        </div>
 
         {/* TRIAGE SLOT ANALYSIS CONTENT */}
         <div className={dataSource === 'local' && mainTab === 'triage' ? '' : 'hidden'}>
