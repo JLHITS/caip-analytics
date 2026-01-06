@@ -104,7 +104,8 @@ const NationalOnlineConsultations = ({
   sharedBookmarks,
   updateSharedBookmarks,
   sharedUsageStats,
-  recordPracticeUsage
+  recordPracticeUsage,
+  onLoadingChange
 }) => {
   const [allMonthsData, setAllMonthsData] = useState({});
   const [loading, setLoading] = useState(true);
@@ -250,13 +251,15 @@ const NationalOnlineConsultations = ({
 
         setAllMonthsData(allData);
         setLoading(false);
+        onLoadingChange?.(false);
       } catch (error) {
         console.error('Error loading online consultations data:', error);
         setLoading(false);
+        onLoadingChange?.(false);
       }
     };
     loadAllData();
-  }, []);
+  }, [onLoadingChange]);
 
   // Filter practices based on search
   const filteredPractices = useMemo(() => {
@@ -406,18 +409,9 @@ const NationalOnlineConsultations = ({
     return practiceHistory;
   }, [selectedPractice, allMonthsData]);
 
-  // Loading state
+  // Loading is now handled by parent component with unified loader
   if (loading) {
-    return (
-      <div className="space-y-4">
-        <Card>
-          <div className="flex items-center justify-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <span className="ml-3 text-slate-600">Loading online consultations data...</span>
-          </div>
-        </Card>
-      </div>
-    );
+    return null;
   }
 
   if (!data) {

@@ -47,6 +47,8 @@ import BugReportModal from './components/modals/BugReportModal';
 import AboutModal from './components/modals/AboutModal';
 import NationalTelephony from './components/NationalTelephony';
 import NationalOnlineConsultations from './components/NationalOnlineConsultations';
+import FancyNationalLoader from './components/ui/FancyNationalLoader';
+import TriageSlotAnalysis from './components/TriageSlotAnalysis';
 
 // Utility imports
 import { calculateLinearForecast, getNextMonthNames, isGP } from './utils/calculations';
@@ -164,7 +166,14 @@ export default function App() {
   const [forecastData, setForecastData] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState(null);
-  const [mainTab, setMainTab] = useState('demand'); // 'demand', 'telephony', or 'online-consultations'
+  // Navigation state - two levels: dataSource (local/national) then subTab
+  const [dataSource, setDataSource] = useState(null); // null = intro, 'local', 'national'
+  const [mainTab, setMainTab] = useState('demand'); // Local: 'demand', 'triage' | National: 'telephony', 'online-consultations'
+
+  // National data loading state - unified loading for both components
+  const [telephonyLoading, setTelephonyLoading] = useState(true);
+  const [ocLoading, setOcLoading] = useState(true);
+  const nationalDataLoading = telephonyLoading || ocLoading;
   const [activeTab, setActiveTab] = useState('dashboard');
 
   // Shared state between National Telephony and Online Consultations
@@ -235,6 +244,7 @@ export default function App() {
 
     fetchUsageFromServer();
   }, [usageDocRef]);
+
 
   // Update shared usage stats and persist to localStorage
   const recordPracticeUsage = (practice) => {
@@ -1835,40 +1845,142 @@ export default function App() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 print:hidden">
-        {/* MAIN TAB NAVIGATION - Always visible */}
-        <div className="flex justify-center mb-8" data-html2canvas-ignore="true">
-          <div className="bg-white p-1.5 rounded-xl shadow-lg border-2 border-slate-200 inline-flex">
-            <button
-              onClick={() => setMainTab('demand')}
-              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-bold transition-all ${mainTab === 'demand' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-800'}`}
-            >
-              <BarChart3 size={20} />
-              <span className="flex items-center gap-2">
-                Demand & Capacity
-                <span className={`text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full font-bold ${mainTab === 'demand' ? 'bg-white/20 text-white' : 'bg-blue-100 text-blue-700'}`}>
-                  Beta
-                </span>
-              </span>
-            </button>
-            <button
-              onClick={() => setMainTab('telephony')}
-              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-bold transition-all ${mainTab === 'telephony' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-800'}`}
-            >
-              <Phone size={20} />
-              National Telephony
-            </button>
-            <button
-              onClick={() => setMainTab('online-consultations')}
-              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-bold transition-all ${mainTab === 'online-consultations' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-800'}`}
-            >
-              <Monitor size={20} />
-              Online Consultations
-            </button>
+        {/* INTRO SPLASH PAGE - Choose data source */}
+        {!dataSource && (
+          <div className="max-w-3xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="text-center mb-12">
+              <h2 className="text-3xl font-bold text-slate-900 mb-3">Welcome to CAIP Analytics</h2>
+              <p className="text-lg text-slate-600 mb-4">
+                Analyse and optimise your primary care demand, capacity, and performance metrics.
+              </p>
+              <button
+                onClick={() => setShowAbout(true)}
+                className="text-blue-600 hover:text-blue-700 font-medium inline-flex items-center gap-1 hover:underline"
+              >
+                <Info size={16} />
+                Learn More
+              </button>
+            </div>
+
+            <h3 className="text-center text-lg font-semibold text-slate-700 mb-6">Choose your data source</h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Local Data Card */}
+              <button
+                onClick={() => { setDataSource('local'); setMainTab('demand'); }}
+                className="group bg-white p-8 rounded-2xl shadow-lg border-2 border-slate-200 hover:border-blue-400 hover:shadow-xl transition-all text-left"
+              >
+                <div className="w-14 h-14 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 mb-4 group-hover:bg-blue-100 transition-colors">
+                  <Upload size={28} />
+                </div>
+                <h4 className="text-xl font-bold text-slate-900 mb-2">Local Data</h4>
+                <p className="text-slate-500 text-sm mb-4">
+                  Upload your own practice data for personalised analysis and insights.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <span className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-full font-medium">Demand & Capacity</span>
+                  <span className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-full font-medium">Triage Slots</span>
+                </div>
+              </button>
+
+              {/* National Data Card */}
+              <button
+                onClick={() => { setDataSource('national'); setMainTab('telephony'); }}
+                className="group bg-white p-8 rounded-2xl shadow-lg border-2 border-slate-200 hover:border-green-400 hover:shadow-xl transition-all text-left"
+              >
+                <div className="w-14 h-14 bg-green-50 rounded-xl flex items-center justify-center text-green-600 mb-4 group-hover:bg-green-100 transition-colors">
+                  <Users size={28} />
+                </div>
+                <h4 className="text-xl font-bold text-slate-900 mb-2">National Data</h4>
+                <p className="text-slate-500 text-sm mb-4">
+                  Explore NHS England national datasets and benchmark your practice.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <span className="text-xs px-2 py-1 bg-cyan-50 text-cyan-700 rounded-full font-medium">Telephony</span>
+                  <span className="text-xs px-2 py-1 bg-indigo-50 text-indigo-700 rounded-full font-medium">Online Consultations</span>
+                </div>
+              </button>
+            </div>
           </div>
-        </div>
+        )}
+
+        {/* MAIN TAB NAVIGATION - Two-level navigation when data source selected */}
+        {dataSource && (
+          <>
+            {/* Level 1: Data Source Toggle */}
+            <div className="flex justify-center mb-4" data-html2canvas-ignore="true">
+              <div className="bg-slate-100 p-1 rounded-lg inline-flex">
+                <button
+                  onClick={() => { setDataSource('local'); setMainTab('demand'); }}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${dataSource === 'local' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}
+                >
+                  Local Data
+                </button>
+                <button
+                  onClick={() => { setDataSource('national'); setMainTab('telephony'); }}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${dataSource === 'national' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}
+                >
+                  National Data
+                </button>
+              </div>
+            </div>
+
+            {/* Level 2: Sub-tabs based on data source */}
+            <div className="flex justify-center mb-8" data-html2canvas-ignore="true">
+              <div className="bg-white p-1.5 rounded-xl shadow-lg border-2 border-slate-200 inline-flex">
+                {dataSource === 'local' && (
+                  <>
+                    <button
+                      onClick={() => setMainTab('demand')}
+                      className={`flex items-center gap-2 px-6 py-3 rounded-lg font-bold transition-all ${mainTab === 'demand' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-800'}`}
+                    >
+                      <BarChart3 size={20} />
+                      <span className="flex items-center gap-2">
+                        Demand & Capacity
+                        <span className={`text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full font-bold ${mainTab === 'demand' ? 'bg-white/20 text-white' : 'bg-blue-100 text-blue-700'}`}>
+                          Beta
+                        </span>
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => setMainTab('triage')}
+                      className={`flex items-center gap-2 px-6 py-3 rounded-lg font-bold transition-all ${mainTab === 'triage' ? 'bg-purple-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-800'}`}
+                    >
+                      <Activity size={20} />
+                      <span className="flex items-center gap-2">
+                        Triage Slots
+                        <span className={`text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full font-bold ${mainTab === 'triage' ? 'bg-white/20 text-white' : 'bg-purple-100 text-purple-700'}`}>
+                          Beta
+                        </span>
+                      </span>
+                    </button>
+                  </>
+                )}
+                {dataSource === 'national' && (
+                  <>
+                    <button
+                      onClick={() => setMainTab('telephony')}
+                      className={`flex items-center gap-2 px-6 py-3 rounded-lg font-bold transition-all ${mainTab === 'telephony' ? 'bg-cyan-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-800'}`}
+                    >
+                      <Phone size={20} />
+                      Telephony
+                    </button>
+                    <button
+                      onClick={() => setMainTab('online-consultations')}
+                      className={`flex items-center gap-2 px-6 py-3 rounded-lg font-bold transition-all ${mainTab === 'online-consultations' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-800'}`}
+                    >
+                      <Monitor size={20} />
+                      Online Consultations
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          </>
+        )}
 
         {/* See Example Button - Only on Demand & Capacity tab */}
-        {mainTab === 'demand' && !processedData && (
+        {dataSource === 'local' && mainTab === 'demand' && !processedData && (
           <div className="flex justify-center mb-6" data-html2canvas-ignore="true">
             <button
               onClick={loadExampleData}
@@ -1882,7 +1994,7 @@ export default function App() {
         )}
 
         {/* DEMAND & CAPACITY TAB */}
-        {mainTab === 'demand' && !processedData && (
+        {dataSource === 'local' && mainTab === 'demand' && !processedData && (
           <div className="max-w-2xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="text-center mb-10">
               <div className="flex justify-center mb-4">
@@ -2033,7 +2145,7 @@ export default function App() {
           </div>
         )}
 
-        {mainTab === 'demand' && processedData && (
+        {dataSource === 'local' && mainTab === 'demand' && processedData && (
           <div className="animate-in fade-in duration-700" id="dashboard-content">
             {/* Practice Header - Visible on screen and print */}
             {config.surgeryName && (
@@ -2582,8 +2694,13 @@ export default function App() {
           </div>
         )}
 
-        {/* NATIONAL TELEPHONY CONTENT */}
-        <div className={mainTab === 'telephony' ? '' : 'hidden'}>
+        {/* NATIONAL DATA UNIFIED LOADING SCREEN */}
+        {dataSource === 'national' && nationalDataLoading && (
+          <FancyNationalLoader type="combined" />
+        )}
+
+        {/* NATIONAL TELEPHONY CONTENT - Keep mounted once visited, use CSS to hide */}
+        <div className={dataSource === 'national' && mainTab === 'telephony' && !nationalDataLoading ? '' : 'hidden'}>
           <NationalTelephony
             sharedPractice={sharedPractice}
             setSharedPractice={setSharedPractice}
@@ -2591,11 +2708,12 @@ export default function App() {
             updateSharedBookmarks={updateSharedBookmarks}
             sharedUsageStats={sharedUsageStats}
             recordPracticeUsage={recordPracticeUsage}
+            onLoadingChange={setTelephonyLoading}
           />
         </div>
 
-        {/* NATIONAL ONLINE CONSULTATIONS CONTENT */}
-        <div className={mainTab === 'online-consultations' ? '' : 'hidden'}>
+        {/* NATIONAL ONLINE CONSULTATIONS CONTENT - Keep mounted once visited, use CSS to hide */}
+        <div className={dataSource === 'national' && mainTab === 'online-consultations' && !nationalDataLoading ? '' : 'hidden'}>
           <NationalOnlineConsultations
             sharedPractice={sharedPractice}
             setSharedPractice={setSharedPractice}
@@ -2603,8 +2721,15 @@ export default function App() {
             updateSharedBookmarks={updateSharedBookmarks}
             sharedUsageStats={sharedUsageStats}
             recordPracticeUsage={recordPracticeUsage}
+            onLoadingChange={setOcLoading}
           />
         </div>
+
+        {/* TRIAGE SLOT ANALYSIS CONTENT */}
+        <div className={dataSource === 'local' && mainTab === 'triage' ? '' : 'hidden'}>
+          <TriageSlotAnalysis />
+        </div>
+
       </main>
 
       <DataProcessingModal isOpen={showProcessingInfo} onClose={() => setShowProcessingInfo(false)} />

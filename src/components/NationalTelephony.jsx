@@ -65,7 +65,8 @@ const NationalTelephony = ({
   sharedBookmarks,
   updateSharedBookmarks,
   sharedUsageStats,
-  recordPracticeUsage
+  recordPracticeUsage,
+  onLoadingChange
 }) => {
   const [allMonthsData, setAllMonthsData] = useState({}); // Store all months data
   const [searchTerm, setSearchTerm] = useState('');
@@ -387,13 +388,15 @@ const NationalTelephony = ({
 
         setAllMonthsData(allData);
         setLoading(false);
+        onLoadingChange?.(false);
       } catch (error) {
         console.error('Error loading telephony data:', error);
         setLoading(false);
+        onLoadingChange?.(false);
       }
     };
     loadAllData();
-  }, []);
+  }, [onLoadingChange]);
 
   // Filter practices based on search (including PCN name search)
   const filteredPractices = useMemo(() => {
@@ -428,15 +431,9 @@ const NationalTelephony = ({
     }
   };
 
+  // Loading is now handled by parent component with unified loader
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <div className="text-center">
-          <Phone size={48} className="mx-auto mb-4 text-blue-500 animate-pulse" />
-          <p className="text-slate-600">Loading national telephony data...</p>
-        </div>
-      </div>
-    );
+    return null;
   }
 
   if (!data) {
