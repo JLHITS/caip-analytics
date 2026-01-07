@@ -151,7 +151,7 @@ export default function App() {
   });
 
   const [files, setFiles] = useState({
-    appointments: null,
+    appointments: [],
     dna: [],
     unused: [],
     onlineRequests: [],
@@ -483,12 +483,12 @@ export default function App() {
     const configToUse = customConfig || config;
 
     try {
-      if (!filesToProcess.appointments) {
+      if (!filesToProcess.appointments || filesToProcess.appointments.length === 0) {
         throw new Error('Please upload an Appointments CSV file.');
       }
 
       // Parse CSV files (combine multiple files if provided)
-      const apptData = await parseCSV(filesToProcess.appointments);
+      const apptData = await combineCSVFiles(filesToProcess.appointments);
       const dnaData = await combineCSVFiles(filesToProcess.dna);
       const unusedData = await combineCSVFiles(filesToProcess.unused);
 
@@ -2076,11 +2076,18 @@ export default function App() {
 
               <FileInput
                 label="Appointment Extract (CSV) *"
-                helpText="Be sure to use Appointment Reports → Appointment Report Extract Button"
+                helpText="TPP SystmOne limits to 1 year per extract - Multiple files supported for multi-year analysis"
                 accept=".csv"
                 file={files.appointments}
-                onChange={(e) => setFiles({ ...files, appointments: e.target.files[0] })}
-                onRemove={() => setFiles({ ...files, appointments: null })}
+                isMulti={true}
+                onChange={(e) => {
+                  if (e.target.files && e.target.files.length > 0) {
+                    setFiles(prev => ({ ...prev, appointments: [...prev.appointments, ...Array.from(e.target.files)] }));
+                  }
+                }}
+                onRemove={(index) => {
+                  setFiles(prev => ({ ...prev, appointments: prev.appointments.filter((_, i) => i !== index) }));
+                }}
               />
               <FileInput
                 label="DNA Extract (CSV) *"
@@ -2158,9 +2165,9 @@ export default function App() {
 
               <button
                 onClick={() => processFiles()}
-                disabled={isProcessing || !files.appointments}
+                disabled={isProcessing || files.appointments.length === 0}
                 className={`w-full py-3 rounded-xl font-bold text-white shadow-lg shadow-blue-500/20 transition-all
-                   ${isProcessing || !files.appointments ? 'bg-slate-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 hover:scale-[1.02] active:scale-[0.98]'}
+                   ${isProcessing || files.appointments.length === 0 ? 'bg-slate-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 hover:scale-[1.02] active:scale-[0.98]'}
                  `}
               >
                 {isProcessing ? 'Analysing Data...' : 'Generate Dashboard'}
@@ -2771,7 +2778,7 @@ export default function App() {
           setSelectedMonth('All');
           setAiReport(null);
           setConfig({ ...config, surgeryName: '', population: 10000 });
-          setFiles({ appointments: null, dna: [], unused: [], onlineRequests: [], telephony: [] });
+          setFiles({ appointments: [], dna: [], unused: [], onlineRequests: [], telephony: [] });
           setRawStaffData([]);
           setRawSlotData([]);
           setRawCombinedData([]);
