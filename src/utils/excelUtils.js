@@ -43,8 +43,18 @@ export const exportDemandCapacityToExcel = (data) => {
   }
 
   // Sheet 3: Forecast Data
-  if (forecastData) {
-    const forecastSheet = XLSX.utils.json_to_sheet(forecastData);
+  if (forecastData && forecastData.labels) {
+    // Convert forecast object to array format for Excel
+    const forecastArray = forecastData.labels.map((label, index) => ({
+      Month: label,
+      'Total Appointments (Actual)': forecastData.appts?.actual?.[index] || null,
+      'Total Appointments (Projected)': forecastData.appts?.projected?.[index] || null,
+      'GP Appointments (Actual)': forecastData.gpAppts?.actual?.[index] || null,
+      'GP Appointments (Projected)': forecastData.gpAppts?.projected?.[index] || null,
+      'Inbound Calls (Actual)': forecastData.inbound?.actual?.[index] || null,
+      'Inbound Calls (Projected)': forecastData.inbound?.projected?.[index] || null,
+    }));
+    const forecastSheet = XLSX.utils.json_to_sheet(forecastArray);
     XLSX.utils.book_append_sheet(workbook, forecastSheet, 'Forecast Data');
   }
 
@@ -205,10 +215,29 @@ export const restoreDemandCapacityFromExcel = (workbook) => {
     ? XLSX.utils.sheet_to_json(workbook.Sheets['Processed Data'])
     : null;
 
-  // Parse Forecast Data
-  const forecastData = workbook.Sheets['Forecast Data']
-    ? XLSX.utils.sheet_to_json(workbook.Sheets['Forecast Data'])
-    : null;
+  // Parse Forecast Data and reconstruct object structure
+  let forecastData = null;
+  if (workbook.Sheets['Forecast Data']) {
+    const forecastArray = XLSX.utils.sheet_to_json(workbook.Sheets['Forecast Data']);
+    if (forecastArray.length > 0) {
+      forecastData = {
+        labels: forecastArray.map(row => row.Month),
+        hasData: true,
+        appts: {
+          actual: forecastArray.map(row => row['Total Appointments (Actual)']),
+          projected: forecastArray.map(row => row['Total Appointments (Projected)']),
+        },
+        gpAppts: {
+          actual: forecastArray.map(row => row['GP Appointments (Actual)']),
+          projected: forecastArray.map(row => row['GP Appointments (Projected)']),
+        },
+        inbound: {
+          actual: forecastArray.map(row => row['Inbound Calls (Actual)']),
+          projected: forecastArray.map(row => row['Inbound Calls (Projected)']),
+        },
+      };
+    }
+  }
 
   // Parse AI Report
   let aiReport = null;

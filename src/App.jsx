@@ -2022,36 +2022,24 @@ export default function App() {
 
             <h3 className="text-center text-lg font-semibold text-slate-700 mb-6">Choose your data source</h3>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
               {/* Local Data Card */}
-              <div className="bg-white p-8 rounded-2xl shadow-lg border-2 border-slate-200 transition-all">
-                <div className="w-14 h-14 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 mb-4">
+              <button
+                onClick={() => { setDataSource('local'); setMainTab('demand'); }}
+                className="group bg-white p-8 rounded-2xl shadow-lg border-2 border-slate-200 hover:border-blue-400 hover:shadow-xl transition-all text-left"
+              >
+                <div className="w-14 h-14 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 mb-4 group-hover:bg-blue-100 transition-colors">
                   <Upload size={28} />
                 </div>
                 <h4 className="text-xl font-bold text-slate-900 mb-2">Local Data</h4>
                 <p className="text-slate-500 text-sm mb-4">
                   Upload your own practice data for personalised analysis and insights.
                 </p>
-                <div className="flex flex-wrap gap-2 mb-6">
+                <div className="flex flex-wrap gap-2">
                   <span className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-full font-medium">Demand & Capacity</span>
                   <span className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-full font-medium">Triage Slots</span>
                 </div>
-                <div className="flex flex-col gap-3">
-                  <button
-                    onClick={() => { setDataSource('local'); setMainTab('demand'); }}
-                    className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
-                  >
-                    <Upload size={18} />
-                    Upload New Data
-                  </button>
-                  <ImportButton
-                    onImport={handleImportExcel}
-                    loading={importLoading}
-                    label="Import Dashboard"
-                    variant="secondary"
-                  />
-                </div>
-              </div>
+              </button>
 
               {/* National Data Card */}
               <button
@@ -2070,6 +2058,31 @@ export default function App() {
                   <span className="text-xs px-2 py-1 bg-indigo-50 text-indigo-700 rounded-full font-medium">Online Consultations</span>
                 </div>
               </button>
+            </div>
+
+            {/* Import Card - Below main options */}
+            <div className="max-w-2xl mx-auto">
+              <div className="bg-gradient-to-br from-slate-50 to-slate-100 p-6 rounded-xl shadow border border-slate-200">
+                <div className="flex items-start gap-4">
+                  <div className="flex-shrink-0">
+                    <div className="w-12 h-12 bg-slate-200 rounded-lg flex items-center justify-center text-slate-600">
+                      <Download size={24} />
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="text-lg font-bold text-slate-900 mb-1">Import CAIP Data File</h4>
+                    <p className="text-sm text-slate-600 mb-4">
+                      Have a previously exported .xlsx file? Import it to restore your dashboard and continue your analysis.
+                    </p>
+                    <ImportButton
+                      onImport={handleImportExcel}
+                      loading={importLoading}
+                      label="Import Dashboard"
+                      variant="secondary"
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         )}
