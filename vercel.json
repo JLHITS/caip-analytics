@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/shared/:shareId",
+      "destination": "/index.html"
+    },
+    {
       "source": "/telephony",
       "destination": "/index.html"
     },

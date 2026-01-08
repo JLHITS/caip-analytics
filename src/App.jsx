@@ -43,8 +43,11 @@ import DataProcessingModal from './components/modals/DataProcessingModal';
 import ResetConfirmationModal from './components/modals/ResetConfirmationModal';
 import AIConsentModal from './components/modals/AIConsentModal';
 import ShareModal from './components/modals/ShareModal';
+import ShareOptionsModal from './components/modals/ShareOptionsModal';
 import BugReportModal from './components/modals/BugReportModal';
 import AboutModal from './components/modals/AboutModal';
+import Toast from './components/ui/Toast';
+import ImportButton from './components/ui/ImportButton';
 import NationalTelephony from './components/NationalTelephony';
 import NationalOnlineConsultations from './components/NationalOnlineConsultations';
 import FancyNationalLoader from './components/ui/FancyNationalLoader';
@@ -54,6 +57,9 @@ import TriageSlotAnalysis from './components/TriageSlotAnalysis';
 import { calculateLinearForecast, getNextMonthNames, isGP } from './utils/calculations';
 import { parseCSV, extractTextFromPDF } from './utils/parsers';
 import { validateHeaders } from './utils/validators';
+import { exportDemandCapacityToExcel, restoreDemandCapacityFromExcel, validateExcelFile, generateExcelFilename } from './utils/excelUtils';
+import { createFirebaseShare, loadFirebaseShare, maybeCleanupExpiredShares } from './utils/shareUtils';
+import * as XLSX from 'xlsx';
 
 // Constants imports
 import {
@@ -305,6 +311,13 @@ export default function App() {
   const [showBugReport, setShowBugReport] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
   const [shareUrl, setShareUrl] = useState(null);
+  const [shareType, setShareType] = useState('firebase');
+  const [shareExpiresAt, setShareExpiresAt] = useState(null);
+  const [showShareOptions, setShowShareOptions] = useState(false);
+  const [shareLoading, setShareLoading] = useState(false);
+  const [excelLoading, setExcelLoading] = useState(false);
+  const [toast, setToast] = useState(null);
+  const [importLoading, setImportLoading] = useState(false);
 
   // Set document title and favicon on mount
   useEffect(() => {
@@ -321,6 +334,9 @@ export default function App() {
 
     // Scroll to top on mount to ensure tab menu is visible
     window.scrollTo(0, 0);
+
+    // Cleanup expired shares probabilistically
+    maybeCleanupExpiredShares();
   }, []);
 
   // Auto-select tab based on URL path
@@ -339,6 +355,49 @@ export default function App() {
       setDataSource('local');
       setMainTab('demand');
     }
+  }, []);
+
+  // Load Firebase shared dashboard from /shared/:id URL
+  useEffect(() => {
+    const loadFirebaseSharedDashboard = async () => {
+      const path = window.location.pathname;
+      const match = path.match(/^\/shared\/([a-zA-Z0-9]+)$/);
+
+      if (!match) return;
+
+      try {
+        setIsProcessing(true);
+        const shareId = match[1];
+        const shareData = await loadFirebaseShare(shareId);
+
+        if (shareData.type === 'demand-capacity') {
+          setProcessedData(shareData.processedData);
+          setConfig(shareData.config);
+          setForecastData(shareData.forecastData);
+          setAiReport(shareData.aiReport);
+          setRawOnlineData(shareData.rawOnlineData || []);
+          setRawStaffData(shareData.rawStaffData || []);
+          setRawSlotData(shareData.rawSlotData || []);
+          setRawCombinedData(shareData.rawCombinedData || []);
+
+          setDataSource('local');
+          setMainTab('demand');
+          window.history.replaceState({}, '', '/dc');
+
+          setToast({ type: 'success', message: 'Shared dashboard loaded successfully!' });
+        }
+      } catch (error) {
+        console.error('Failed to load shared dashboard:', error);
+        setToast({ type: 'error', message: error.message });
+        setTimeout(() => {
+          window.location.href = '/';
+        }, 3000);
+      } finally {
+        setIsProcessing(false);
+      }
+    };
+
+    loadFirebaseSharedDashboard();
   }, []);
 
   // Load shared dashboard from URL on mount
@@ -1464,39 +1523,104 @@ export default function App() {
   };
 
   // Share dashboard handler - generates shareable URL with compressed data
-  const handleShare = async () => {
+  // Export dashboard to Excel file
+  const handleExportToExcel = async () => {
     try {
-      // Package essential data + online data for full dashboard functionality
-      // Excludes large raw appointment data to keep URLs manageable
-      const shareData = {
-        processedData,    // Aggregated monthly metrics (essential)
-        config,           // Surgery name and settings (essential)
-        forecastData,     // Demand forecasts (small, essential)
-        aiReport,         // AI analysis (optional but valuable)
-        rawOnlineData,    // Online request data (needed for online tab)
-        rawStaffData,     // Staff appointment data (needed for tables)
-        rawSlotData,      // Slot type data (needed for tables)
-        rawCombinedData,  // Combined staff+slot data (needed for tables)
-        version: APP_VERSION
+      setExcelLoading(true);
+
+      const exportData = {
+        processedData,
+        config,
+        forecastData,
+        aiReport,
+        rawOnlineData,
+        rawStaffData,
+        rawSlotData,
+        rawCombinedData,
       };
 
-      // Compress data to URL-safe format
-      const compressed = LZString.compressToEncodedURIComponent(JSON.stringify(shareData));
+      const workbook = exportDemandCapacityToExcel(exportData);
+      const filename = generateExcelFilename('demand-capacity', config.surgeryName || 'Dashboard');
 
-      // Generate shareable URL using hash-based routing
-      const generatedUrl = `https://www.caip.app/#/${compressed}`;
+      XLSX.writeFile(workbook, filename);
 
-      // Set URL for modal display
-      setShareUrl(generatedUrl);
+      setShareType('excel');
+      setShareUrl(null);
+      setShareExpiresAt(null);
+      setShowShareOptions(false);
+      setToast({ type: 'success', message: 'Excel file downloaded successfully!' });
+    } catch (error) {
+      console.error('Excel export failed:', error);
+      setToast({ type: 'error', message: `Export failed: ${error.message}` });
+    } finally {
+      setExcelLoading(false);
+    }
+  };
 
-      // Copy to clipboard
+  // Generate Firebase share link
+  const handleGenerateShareLink = async () => {
+    try {
+      setShareLoading(true);
+
+      const shareData = {
+        processedData,
+        config,
+        forecastData,
+        aiReport,
+        rawOnlineData,
+        rawStaffData,
+        rawSlotData,
+        rawCombinedData,
+      };
+
+      const { shareUrl: generatedUrl, expiresAt } = await createFirebaseShare(shareData, 'demand-capacity');
+
       await navigator.clipboard.writeText(generatedUrl);
 
-      console.log('✅ Share URL generated and copied to clipboard');
-      console.log(`📏 URL length: ${generatedUrl.length} characters`);
+      setShareType('firebase');
+      setShareUrl(generatedUrl);
+      setShareExpiresAt(expiresAt);
+      setShowShareOptions(false);
+      setToast({ type: 'success', message: 'Link copied to clipboard!' });
     } catch (error) {
-      console.error('❌ Share generation failed:', error);
-      alert('Failed to generate share URL. The data might be too large.');
+      console.error('Share link generation failed:', error);
+      setToast({ type: 'error', message: error.message });
+    } finally {
+      setShareLoading(false);
+    }
+  };
+
+  // Import dashboard from Excel file
+  const handleImportExcel = async (file) => {
+    try {
+      setImportLoading(true);
+      setIsProcessing(true);
+
+      const arrayBuffer = await file.arrayBuffer();
+      const workbook = XLSX.read(arrayBuffer);
+
+      validateExcelFile(workbook, 'demand-capacity');
+
+      const restored = restoreDemandCapacityFromExcel(workbook);
+
+      setProcessedData(restored.processedData);
+      setConfig(restored.config);
+      setForecastData(restored.forecastData);
+      setAiReport(restored.aiReport);
+      setRawOnlineData(restored.rawOnlineData);
+      setRawStaffData(restored.rawStaffData);
+      setRawSlotData(restored.rawSlotData);
+      setRawCombinedData(restored.rawCombinedData);
+
+      setDataSource('local');
+      setMainTab('demand');
+      setToast({ type: 'success', message: 'Dashboard restored from Excel!' });
+    } catch (error) {
+      console.error('Import failed:', error);
+      setToast({ type: 'error', message: `Import failed: ${error.message}` });
+    } finally {
+      setImportLoading(false);
+      setIsProcessing(false);
     }
   };
 
@@ -1890,22 +2014,34 @@ export default function App() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Local Data Card */}
-              <button
-                onClick={() => { setDataSource('local'); setMainTab('demand'); }}
-                className="group bg-white p-8 rounded-2xl shadow-lg border-2 border-slate-200 hover:border-blue-400 hover:shadow-xl transition-all text-left"
-              >
-                <div className="w-14 h-14 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 mb-4 group-hover:bg-blue-100 transition-colors">
+              <div className="bg-white p-8 rounded-2xl shadow-lg border-2 border-slate-200 transition-all">
+                <div className="w-14 h-14 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 mb-4">
                   <Upload size={28} />
                 </div>
                 <h4 className="text-xl font-bold text-slate-900 mb-2">Local Data</h4>
                 <p className="text-slate-500 text-sm mb-4">
                   Upload your own practice data for personalised analysis and insights.
                 </p>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2 mb-6">
                   <span className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-full font-medium">Demand & Capacity</span>
                   <span className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-full font-medium">Triage Slots</span>
                 </div>
-              </button>
+                <div className="flex flex-col gap-3">
+                  <button
+                    onClick={() => { setDataSource('local'); setMainTab('demand'); }}
+                    className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Upload size={18} />
+                    Upload New Data
+                  </button>
+                  <ImportButton
+                    onImport={handleImportExcel}
+                    loading={importLoading}
+                    label="Import Dashboard"
+                    variant="secondary"
+                  />
+                </div>
+              </div>
 
               {/* National Data Card */}
               <button
@@ -2267,14 +2403,25 @@ export default function App() {
                 <span className="font-semibold">Export PDF</span>
               </button>
 
-              {/* 3. Share Button */}
-              <button
-                onClick={handleShare}
-                className="flex items-center gap-2 px-6 py-3 bg-white text-slate-600 border border-slate-200 rounded-full hover:bg-slate-50 hover:border-slate-300 hover:text-slate-800 transition-all shadow-sm hover:shadow-md disabled:opacity-70"
-              >
-                <Share2 size={18} />
-                <span className="font-semibold">Share Dashboard</span>
-              </button>
+              {/* 3. Share Button with dropdown */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowShareOptions(!showShareOptions)}
+                  className="flex items-center gap-2 px-6 py-3 bg-white text-slate-600 border border-slate-200 rounded-full hover:bg-slate-50 hover:border-slate-300 hover:text-slate-800 transition-all shadow-sm hover:shadow-md disabled:opacity-70"
+                >
+                  <Share2 size={18} />
+                  <span className="font-semibold">Share Dashboard</span>
+                  <ChevronDown size={16} className={`transition-transform ${showShareOptions ? 'rotate-180' : ''}`} />
+                </button>
+                <ShareOptionsModal
+                  isOpen={showShareOptions}
+                  onClose={() => setShowShareOptions(false)}
+                  onExportExcel={handleExportToExcel}
+                  onGenerateLink={handleGenerateShareLink}
+                  excelLoading={excelLoading}
+                  linkLoading={shareLoading}
+                />
+              </div>
             </div>
 
             <div className="flex justify-center mb-8" data-html2canvas-ignore="true">
@@ -2798,9 +2945,15 @@ export default function App() {
       />
 
       <ShareModal
-        isOpen={shareUrl !== null}
-        onClose={() => setShareUrl(null)}
+        isOpen={shareUrl !== null || shareType === 'excel'}
+        onClose={() => {
+          setShareUrl(null);
+          setShareType('firebase');
+          setShareExpiresAt(null);
+        }}
         shareUrl={shareUrl}
+        shareType={shareType}
+        expiresAt={shareExpiresAt}
       />
 
       <BugReportModal
@@ -2814,6 +2967,14 @@ export default function App() {
         onOpenBugReport={() => setShowBugReport(true)}
         timesUsed={sharedUsageStats?.totalChecks || 0}
       />
+
+      {toast && (
+        <Toast
+          type={toast.type}
+          message={toast.message}
+          onClose={() => setToast(null)}
+        />
+      )}
     </div>
   );
 }

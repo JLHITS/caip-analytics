@@ -23,6 +23,11 @@ import {
 import * as XLSX from 'xlsx';
 import Card from './ui/Card';
 import ShareModal from './modals/ShareModal';
+import ShareOptionsModal from './modals/ShareOptionsModal';
+import Toast from './ui/Toast';
+import ImportButton from './ui/ImportButton';
+import { exportTriageSlotsToExcel, restoreTriageSlotsFromExcel, validateExcelFile, generateExcelFilename } from '../utils/excelUtils';
+import { createFirebaseShare, loadFirebaseShare } from '../utils/shareUtils';
 
 // Sample data import
 import sampleTriageData from '../assets/Rapid Health December Data Example  - 20260106.xlsx?url';
@@ -772,6 +777,13 @@ export default function TriageSlotAnalysis() {
   const [activeTab, setActiveTab] = useState('overview');
   const [requestTypeFilter, setRequestTypeFilter] = useState('All');
   const [shareUrl, setShareUrl] = useState(null);
+  const [shareType, setShareType] = useState('firebase');
+  const [shareExpiresAt, setShareExpiresAt] = useState(null);
+  const [showShareOptions, setShowShareOptions] = useState(false);
+  const [shareLoading, setShareLoading] = useState(false);
+  const [excelLoading, setExcelLoading] = useState(false);
+  const [toast, setToast] = useState(null);
+  const [importLoading, setImportLoading] = useState(false);
 
   // Slot capacity inputs (user-configurable)
   const [slotCapacity, setSlotCapacity] = useState({
@@ -788,6 +800,43 @@ export default function TriageSlotAnalysis() {
 
   // Toggle for whether practice accepts requests on weekends
   const [acceptWeekendRequests, setAcceptWeekendRequests] = useState(false);
+
+  // Load Firebase shared dashboard from /shared/:id URL
+  useEffect(() => {
+    const loadFirebaseSharedDashboard = async () => {
+      const path = window.location.pathname;
+      const match = path.match(/^\/shared\/([a-zA-Z0-9]+)$/);
+
+      if (!match) return;
+
+      try {
+        setIsLoading(true);
+        const shareId = match[1];
+        const shareData = await loadFirebaseShare(shareId);
+
+        if (shareData.type === 'triage-slots') {
+          setData(shareData.data);
+          setFiles(shareData.files || ['Shared Dashboard']);
+          setSlotCapacity(shareData.slotCapacity || slotCapacity);
+          setAcceptWeekendRequests(shareData.acceptWeekendRequests || false);
+          setActiveTab('overview');
+          window.history.replaceState({}, '', '/slots');
+
+          setToast({ type: 'success', message: 'Shared dashboard loaded successfully!' });
+        }
+      } catch (error) {
+        console.error('Failed to load shared dashboard:', error);
+        setToast({ type: 'error', message: error.message });
+        setTimeout(() => {
+          window.location.href = '/';
+        }, 3000);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadFirebaseSharedDashboard();
+  }, []);
 
   // Load shared dashboard from URL hash on mount
   useEffect(() => {
@@ -887,8 +936,41 @@ export default function TriageSlotAnalysis() {
   }, []);
 
   // Share dashboard handler
-  const handleShare = useCallback(async () => {
+  // Export dashboard to Excel file
+  const handleExportToExcel = useCallback(async () => {
     try {
+      setExcelLoading(true);
+
+      const exportData = {
+        data,
+        slotCapacity,
+        acceptWeekendRequests,
+        files,
+      };
+
+      const workbook = exportTriageSlotsToExcel(exportData);
+      const filename = generateExcelFilename('triage-slots', files[0] || 'Dashboard');
+
+      XLSX.writeFile(workbook, filename);
+
+      setShareType('excel');
+      setShareUrl(null);
+      setShareExpiresAt(null);
+      setShowShareOptions(false);
+      setToast({ type: 'success', message: 'Excel file downloaded successfully!' });
+    } catch (error) {
+      console.error('Excel export failed:', error);
+      setToast({ type: 'error', message: `Export failed: ${error.message}` });
+    } finally {
+      setExcelLoading(false);
+    }
+  }, [data, slotCapacity, acceptWeekendRequests, files]);
+
+  // Generate Firebase share link
+  const handleGenerateShareLink = useCallback(async () => {
+    try {
+      setShareLoading(true);
+
       const shareData = {
         data,
         slotCapacity,
@@ -896,15 +978,50 @@ export default function TriageSlotAnalysis() {
         files,
       };
 
-      const compressed = LZString.compressToEncodedURIComponent(JSON.stringify(shareData));
-      const generatedUrl = `${window.location.origin}/slots#${compressed}`;
+      const { shareUrl: generatedUrl, expiresAt } = await createFirebaseShare(shareData, 'triage-slots');
 
-      setShareUrl(generatedUrl);
       await navigator.clipboard.writeText(generatedUrl);
+
+      setShareType('firebase');
+      setShareUrl(generatedUrl);
+      setShareExpiresAt(expiresAt);
+      setShowShareOptions(false);
+      setToast({ type: 'success', message: 'Link copied to clipboard!' });
     } catch (error) {
-      console.error('Failed to share dashboard:', error);
+      console.error('Share link generation failed:', error);
+      setToast({ type: 'error', message: error.message });
+    } finally {
+      setShareLoading(false);
     }
   }, [data, slotCapacity, acceptWeekendRequests, files]);
+
+  // Import dashboard from Excel file
+  const handleImportExcel = useCallback(async (file) => {
+    try {
+      setImportLoading(true);
+      setIsLoading(true);
+
+      const arrayBuffer = await file.arrayBuffer();
+      const workbook = XLSX.read(arrayBuffer);
+
+      validateExcelFile(workbook, 'triage-slots');
+
+      const restored = restoreTriageSlotsFromExcel(workbook);
+
+      setData(restored.data);
+      setSlotCapacity(restored.slotCapacity);
+      setAcceptWeekendRequests(restored.acceptWeekendRequests);
+      setFiles(restored.files);
+      setActiveTab('overview');
+      setToast({ type: 'success', message: 'Dashboard restored from Excel!' });
+    } catch (error) {
+      console.error('Import failed:', error);
+      setToast({ type: 'error', message: `Import failed: ${error.message}` });
+    } finally {
+      setImportLoading(false);
+      setIsLoading(false);
+    }
+  }, []);
 
   // Update slot capacity
   const updateSlotCapacity = (day, urgency, value) => {
@@ -1191,13 +1308,24 @@ export default function TriageSlotAnalysis() {
           <span>{files.join(', ')}</span>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={handleShare}
-            className="flex items-center gap-1 px-3 py-1.5 text-sm text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-          >
-            <Share2 size={16} />
-            Share
-          </button>
+          <div className="relative">
+            <button
+              onClick={() => setShowShareOptions(!showShareOptions)}
+              className="flex items-center gap-1 px-3 py-1.5 text-sm text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+            >
+              <Share2 size={16} />
+              Share
+              <ChevronDown size={14} className={`transition-transform ${showShareOptions ? 'rotate-180' : ''}`} />
+            </button>
+            <ShareOptionsModal
+              isOpen={showShareOptions}
+              onClose={() => setShowShareOptions(false)}
+              onExportExcel={handleExportToExcel}
+              onGenerateLink={handleGenerateShareLink}
+              excelLoading={excelLoading}
+              linkLoading={shareLoading}
+            />
+          </div>
           <button
             onClick={handleReset}
             className="flex items-center gap-1 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
@@ -2846,10 +2974,24 @@ function NonAutomatedInboxTab({ data }) {
       </Card>
 
       <ShareModal
-        isOpen={shareUrl !== null}
-        onClose={() => setShareUrl(null)}
+        isOpen={shareUrl !== null || shareType === 'excel'}
+        onClose={() => {
+          setShareUrl(null);
+          setShareType('firebase');
+          setShareExpiresAt(null);
+        }}
         shareUrl={shareUrl}
+        shareType={shareType}
+        expiresAt={shareExpiresAt}
       />
+
+      {toast && (
+        <Toast
+          type={toast.type}
+          message={toast.message}
+          onClose={() => setToast(null)}
+        />
+      )}
     </div>
   );
 }

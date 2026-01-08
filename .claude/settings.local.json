@@ -18,7 +18,11 @@
       "Bash(node debug-rushcliffe.js:*)",
       "Bash(git restore:*)",
       "Bash(taskkill:*)",
-      "Bash(node -e:*)"
+      "Bash(node -e:*)",
+      "Bash(node analyze-oc-data.js:*)",
+      "Bash(curl:*)",
+      "Bash(npm run build:*)",
+      "Bash(node analyze-triage-data.js:*)"
     ],
     "deny": [],
     "ask": []
