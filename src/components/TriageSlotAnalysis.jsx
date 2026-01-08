@@ -3,7 +3,7 @@ import LZString from 'lz-string';
 import {
   Upload, FileText, AlertCircle, CheckCircle, Calendar, Clock,
   TrendingUp, BarChart3, PieChart, AlertTriangle, Info, PlayCircle,
-  Loader2, X, ChevronUp, Activity, Target, Save, Trash2,
+  Loader2, X, ChevronUp, ChevronDown, Activity, Target, Save, Trash2,
   History, ChevronRight, ChevronLeft, Inbox, ArrowUpRight, ArrowDownRight, Share2
 } from 'lucide-react';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
