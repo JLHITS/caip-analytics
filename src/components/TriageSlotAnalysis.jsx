@@ -940,6 +940,12 @@ export default function TriageSlotAnalysis() {
         return;
       }
 
+      // Prevent sharing of sample/example data to reduce abuse
+      if (files.some(f => f.includes('(Sample)'))) {
+        setToast({ type: 'error', message: 'Cannot share example data. Please upload your own data to create share links.' });
+        return;
+      }
+
       const shareData = {
         data,
         slotCapacity,

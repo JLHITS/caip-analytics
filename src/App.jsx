@@ -1572,6 +1572,12 @@ export default function App() {
         return;
       }
 
+      // Prevent sharing of sample/example data to reduce abuse
+      if (config?.surgeryName === 'Example Surgery') {
+        setToast({ type: 'error', message: 'Cannot share example data. Please upload your own data to create share links.' });
+        return;
+      }
+
       const shareData = {
         processedData,
         config,
@@ -1891,11 +1897,11 @@ export default function App() {
   };
 
   const createForecastChartData = (labelActual, labelProjected, dataObj, color) => ({
-    labels: forecastData?.labels,
+    labels: forecastData?.labels || [],
     datasets: [
       {
         label: labelActual,
-        data: forecastData ? dataObj.actual : [],
+        data: dataObj?.actual || [],
         borderColor: color,
         backgroundColor: 'transparent',
         tension: 0.3,
@@ -1903,7 +1909,7 @@ export default function App() {
       },
       {
         label: labelProjected,
-        data: forecastData ? dataObj.projected : [],
+        data: dataObj?.projected || [],
         borderColor: color,
         borderDash: [5, 5],
         backgroundColor: 'transparent',

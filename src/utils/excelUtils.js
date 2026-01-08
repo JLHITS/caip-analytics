@@ -51,8 +51,8 @@ export const exportDemandCapacityToExcel = (data) => {
       'Total Appointments (Projected)': forecastData.appts?.projected?.[index] || null,
       'GP Appointments (Actual)': forecastData.gpAppts?.actual?.[index] || null,
       'GP Appointments (Projected)': forecastData.gpAppts?.projected?.[index] || null,
-      'Inbound Calls (Actual)': forecastData.inbound?.actual?.[index] || null,
-      'Inbound Calls (Projected)': forecastData.inbound?.projected?.[index] || null,
+      'Inbound Calls (Actual)': forecastData.calls?.actual?.[index] || null,
+      'Inbound Calls (Projected)': forecastData.calls?.projected?.[index] || null,
     }));
     const forecastSheet = XLSX.utils.json_to_sheet(forecastArray);
     XLSX.utils.book_append_sheet(workbook, forecastSheet, 'Forecast Data');
@@ -237,7 +237,7 @@ export const restoreDemandCapacityFromExcel = (workbook) => {
           actual: extractValues('GP Appointments (Actual)'),
           projected: extractValues('GP Appointments (Projected)'),
         },
-        inbound: {
+        calls: {
           actual: extractValues('Inbound Calls (Actual)'),
           projected: extractValues('Inbound Calls (Projected)'),
         },

@@ -7,6 +7,69 @@ const EXPIRY_DAYS = 30;
 const MAX_SIZE_KB = 900;
 const CLEANUP_PROBABILITY = 0.15;
 
+// Rate limiting constants
+const RATE_LIMIT_KEY = 'caip_share_rate_limit';
+const RATE_LIMIT_MAX = 5; // Maximum shares per time window
+const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour in milliseconds
+
+/**
+ * Check if rate limit allows another share creation
+ * @returns {Object} { allowed: boolean, remainingTime: number (ms), sharesRemaining: number }
+ */
+export const checkRateLimit = () => {
+  try {
+    const stored = localStorage.getItem(RATE_LIMIT_KEY);
+    const now = Date.now();
+
+    if (!stored) {
+      return { allowed: true, remainingTime: 0, sharesRemaining: RATE_LIMIT_MAX };
+    }
+
+    const timestamps = JSON.parse(stored);
+    // Filter to only keep timestamps within the window
+    const recentTimestamps = timestamps.filter(ts => now - ts < RATE_LIMIT_WINDOW_MS);
+
+    if (recentTimestamps.length >= RATE_LIMIT_MAX) {
+      // Find when the oldest timestamp will expire
+      const oldestTimestamp = Math.min(...recentTimestamps);
+      const remainingTime = RATE_LIMIT_WINDOW_MS - (now - oldestTimestamp);
+      return {
+        allowed: false,
+        remainingTime,
+        sharesRemaining: 0
+      };
+    }
+
+    return {
+      allowed: true,
+      remainingTime: 0,
+      sharesRemaining: RATE_LIMIT_MAX - recentTimestamps.length
+    };
+  } catch {
+    // If localStorage fails, allow the action
+    return { allowed: true, remainingTime: 0, sharesRemaining: RATE_LIMIT_MAX };
+  }
+};
+
+/**
+ * Record a share creation for rate limiting
+ */
+const recordShareCreation = () => {
+  try {
+    const stored = localStorage.getItem(RATE_LIMIT_KEY);
+    const now = Date.now();
+
+    let timestamps = stored ? JSON.parse(stored) : [];
+    // Filter to only keep timestamps within the window, then add new one
+    timestamps = timestamps.filter(ts => now - ts < RATE_LIMIT_WINDOW_MS);
+    timestamps.push(now);
+
+    localStorage.setItem(RATE_LIMIT_KEY, JSON.stringify(timestamps));
+  } catch {
+    // Silently fail if localStorage is unavailable
+  }
+};
+
 /**
  * Generate a unique share ID using base58 encoding
  * @param {number} length - Length of the ID (default 8)
@@ -33,6 +96,13 @@ export const generateShareId = (length = 8) => {
  * @throws {Error} if data is too large or operation fails
  */
 export const createFirebaseShare = async (shareData, dashboardType) => {
+  // Check rate limit first
+  const rateLimit = checkRateLimit();
+  if (!rateLimit.allowed) {
+    const minutesRemaining = Math.ceil(rateLimit.remainingTime / 60000);
+    throw new Error(`Rate limit exceeded. Please wait ${minutesRemaining} minute${minutesRemaining > 1 ? 's' : ''} before creating another share link.`);
+  }
+
   try {
     const compressed = LZString.compressToBase64(JSON.stringify(shareData));
 
@@ -78,6 +148,9 @@ export const createFirebaseShare = async (shareData, dashboardType) => {
 
     await setDoc(doc(db, COLLECTION_NAME, shareId), shareDoc);
 
+    // Record successful creation for rate limiting
+    recordShareCreation();
+
     const shareUrl = `${window.location.origin}/shared/${shareId}`;
 
     return {
@@ -86,7 +159,7 @@ export const createFirebaseShare = async (shareData, dashboardType) => {
       expiresAt: expiresAt.toDate(),
     };
   } catch (error) {
-    if (error.message.includes('too large')) {
+    if (error.message.includes('too large') || error.message.includes('Rate limit')) {
       throw error;
     }
     throw new Error(`Failed to create share link: ${error.message}`);
