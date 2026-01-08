@@ -107,6 +107,24 @@ const parseTimeToMinutes = (timeStr) => {
   return hours * 60 + minutes;
 };
 
+// Helper to restore Date objects from serialized shared data
+const restoreDatesInData = (data) => {
+  if (!data) return data;
+
+  // Create a shallow copy
+  const restored = { ...data };
+
+  // Restore dateRange dates
+  if (restored.dateRange) {
+    restored.dateRange = {
+      min: restored.dateRange.min ? new Date(restored.dateRange.min) : null,
+      max: restored.dateRange.max ? new Date(restored.dateRange.max) : null,
+    };
+  }
+
+  return restored;
+};
+
 // Validate file headers match expected format
 const validateHeaders = (headers) => {
   const normalizedHeaders = headers.map(h => String(h || '').trim().toLowerCase());
@@ -826,7 +844,7 @@ export default function TriageSlotAnalysis() {
         const shareData = await loadFirebaseShare(shareId);
 
         if (shareData.type === 'triage-slots') {
-          setData(shareData.data);
+          setData(restoreDatesInData(shareData.data));
           setFiles(shareData.files || ['Shared Dashboard']);
           setSlotCapacity(shareData.slotCapacity || slotCapacity);
           setAcceptWeekendRequests(shareData.acceptWeekendRequests || false);
@@ -868,7 +886,7 @@ export default function TriageSlotAnalysis() {
         const shareData = JSON.parse(decompressed);
 
         if (shareData.data) {
-          setData(shareData.data);
+          setData(restoreDatesInData(shareData.data));
           setFiles(shareData.files || ['Shared Dashboard']);
           setSlotCapacity(shareData.slotCapacity || slotCapacity);
           setAcceptWeekendRequests(shareData.acceptWeekendRequests || false);
