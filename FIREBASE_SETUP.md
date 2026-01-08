@@ -19,16 +19,21 @@ service cloud.firestore {
 
     // Rules for shared dashboards
     match /sharedDashboards/{shareId} {
-      // Allow anyone to create a new share (no authentication required)
-      allow create: if request.auth == null
-                    && request.resource.data.keys().hasAll(['data', 'type', 'createdAt', 'expiresAt', 'version'])
-                    && request.resource.data.type in ['demand-capacity', 'triage-slots'];
+      // Allow anyone to create a new share (authenticated or not)
+      // Validates that required fields exist and type is valid
+      allow create: if request.resource.data.type in ['demand-capacity', 'triage-slots']
+                    && request.resource.data.data != null
+                    && request.resource.data.createdAt != null
+                    && request.resource.data.expiresAt != null;
 
       // Allow anyone to read shares (for viewing shared dashboards)
       allow read: if true;
 
-      // No updates or deletes allowed (shares are immutable)
-      allow update, delete: if false;
+      // Allow updates only to increment view count
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['views', 'lastViewedAt']);
+
+      // No deletes allowed (shares expire automatically after 30 days)
+      allow delete: if false;
     }
   }
 }
