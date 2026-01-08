@@ -385,6 +385,11 @@ export default function App() {
           window.history.replaceState({}, '', '/dc');
 
           setToast({ type: 'success', message: 'Shared dashboard loaded successfully!' });
+        } else if (shareData.type === 'triage-slots') {
+          // Switch to slots tab - TriageSlotAnalysis will handle loading from the URL
+          setMainTab('slots');
+          // Don't change the URL - let TriageSlotAnalysis handle it
+          return; // Exit early so we don't show processing state
         }
       } catch (error) {
         console.error('Failed to load shared dashboard:', error);
