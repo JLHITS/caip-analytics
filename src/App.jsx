@@ -388,8 +388,9 @@ export default function App() {
         } else if (shareData.type === 'triage-slots') {
           // Switch to slots tab - TriageSlotAnalysis will handle loading from the URL
           setMainTab('slots');
+          setIsProcessing(false);
           // Don't change the URL - let TriageSlotAnalysis handle it
-          return; // Exit early so we don't show processing state
+          return;
         }
       } catch (error) {
         console.error('Failed to load shared dashboard:', error);
