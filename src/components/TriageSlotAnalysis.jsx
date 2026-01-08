@@ -3,7 +3,7 @@ import LZString from 'lz-string';
 import {
   Upload, FileText, AlertCircle, CheckCircle, Calendar, Clock,
   TrendingUp, BarChart3, PieChart, AlertTriangle, Info, PlayCircle,
-  Loader2, X, ChevronDown, ChevronUp, Activity, Target, Save, Trash2,
+  Loader2, X, ChevronUp, Activity, Target, Save, Trash2,
   History, ChevronRight, ChevronLeft, Inbox, ArrowUpRight, ArrowDownRight, Share2
 } from 'lucide-react';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
@@ -23,10 +23,8 @@ import {
 import * as XLSX from 'xlsx';
 import Card from './ui/Card';
 import ShareModal from './modals/ShareModal';
-import ShareOptionsModal from './modals/ShareOptionsModal';
 import Toast from './ui/Toast';
-import ImportButton from './ui/ImportButton';
-import { exportTriageSlotsToExcel, restoreTriageSlotsFromExcel, validateExcelFile, generateExcelFilename } from '../utils/excelUtils';
+import { restoreTriageSlotsFromExcel, validateExcelFile } from '../utils/excelUtils';
 import { createFirebaseShare, loadFirebaseShare } from '../utils/shareUtils';
 
 // Sample data import
@@ -779,11 +777,8 @@ export default function TriageSlotAnalysis() {
   const [shareUrl, setShareUrl] = useState(null);
   const [shareType, setShareType] = useState('firebase');
   const [shareExpiresAt, setShareExpiresAt] = useState(null);
-  const [showShareOptions, setShowShareOptions] = useState(false);
   const [shareLoading, setShareLoading] = useState(false);
-  const [excelLoading, setExcelLoading] = useState(false);
   const [toast, setToast] = useState(null);
-  const [importLoading, setImportLoading] = useState(false);
 
   // Slot capacity inputs (user-configurable)
   const [slotCapacity, setSlotCapacity] = useState({
@@ -935,42 +930,6 @@ export default function TriageSlotAnalysis() {
     setActiveTab('overview');
   }, []);
 
-  // Share dashboard handler
-  // Export dashboard to Excel file
-  const handleExportToExcel = useCallback(async () => {
-    try {
-      setExcelLoading(true);
-
-      if (!data || data.length === 0) {
-        setToast({ type: 'error', message: 'No data to export. Please upload and process your files first.' });
-        return;
-      }
-
-      const exportData = {
-        data,
-        slotCapacity,
-        acceptWeekendRequests,
-        files,
-      };
-
-      const workbook = exportTriageSlotsToExcel(exportData);
-      const filename = generateExcelFilename('triage-slots', files[0] || 'Dashboard');
-
-      XLSX.writeFile(workbook, filename);
-
-      setShareType('excel');
-      setShareUrl(null);
-      setShareExpiresAt(null);
-      setShowShareOptions(false);
-      setToast({ type: 'success', message: 'Excel file downloaded successfully!' });
-    } catch (error) {
-      console.error('Excel export failed:', error);
-      setToast({ type: 'error', message: `Export failed: ${error.message}` });
-    } finally {
-      setExcelLoading(false);
-    }
-  }, [data, slotCapacity, acceptWeekendRequests, files]);
-
   // Generate Firebase share link
   const handleGenerateShareLink = useCallback(async () => {
     try {
@@ -995,7 +954,6 @@ export default function TriageSlotAnalysis() {
       setShareType('firebase');
       setShareUrl(generatedUrl);
       setShareExpiresAt(expiresAt);
-      setShowShareOptions(false);
       setToast({ type: 'success', message: 'Link copied to clipboard!' });
     } catch (error) {
       console.error('Share link generation failed:', error);
@@ -1004,34 +962,6 @@ export default function TriageSlotAnalysis() {
       setShareLoading(false);
     }
   }, [data, slotCapacity, acceptWeekendRequests, files]);
-
-  // Import dashboard from Excel file
-  const handleImportExcel = useCallback(async (file) => {
-    try {
-      setImportLoading(true);
-      setIsLoading(true);
-
-      const arrayBuffer = await file.arrayBuffer();
-      const workbook = XLSX.read(arrayBuffer);
-
-      validateExcelFile(workbook, 'triage-slots');
-
-      const restored = restoreTriageSlotsFromExcel(workbook);
-
-      setData(restored.data);
-      setSlotCapacity(restored.slotCapacity);
-      setAcceptWeekendRequests(restored.acceptWeekendRequests);
-      setFiles(restored.files);
-      setActiveTab('overview');
-      setToast({ type: 'success', message: 'Dashboard restored from Excel!' });
-    } catch (error) {
-      console.error('Import failed:', error);
-      setToast({ type: 'error', message: `Import failed: ${error.message}` });
-    } finally {
-      setImportLoading(false);
-      setIsLoading(false);
-    }
-  }, []);
 
   // Update slot capacity
   const updateSlotCapacity = (day, urgency, value) => {
@@ -1318,24 +1248,14 @@ export default function TriageSlotAnalysis() {
           <span>{files.join(', ')}</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="relative">
-            <button
-              onClick={() => setShowShareOptions(!showShareOptions)}
-              className="flex items-center gap-1 px-3 py-1.5 text-sm text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-            >
-              <Share2 size={16} />
-              Share
-              <ChevronDown size={14} className={`transition-transform ${showShareOptions ? 'rotate-180' : ''}`} />
-            </button>
-            <ShareOptionsModal
-              isOpen={showShareOptions}
-              onClose={() => setShowShareOptions(false)}
-              onExportExcel={handleExportToExcel}
-              onGenerateLink={handleGenerateShareLink}
-              excelLoading={excelLoading}
-              linkLoading={shareLoading}
-            />
-          </div>
+          <button
+            onClick={handleGenerateShareLink}
+            disabled={shareLoading}
+            className="flex items-center gap-1 px-3 py-1.5 text-sm text-purple-600 hover:bg-purple-50 rounded-lg transition-colors disabled:opacity-50"
+          >
+            {shareLoading ? <Loader2 size={16} className="animate-spin" /> : <Share2 size={16} />}
+            {shareLoading ? 'Generating...' : 'Share'}
+          </button>
           <button
             onClick={handleReset}
             className="flex items-center gap-1 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"

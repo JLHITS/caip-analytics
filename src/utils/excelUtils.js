@@ -220,20 +220,26 @@ export const restoreDemandCapacityFromExcel = (workbook) => {
   if (workbook.Sheets['Forecast Data']) {
     const forecastArray = XLSX.utils.sheet_to_json(workbook.Sheets['Forecast Data']);
     if (forecastArray.length > 0) {
+      // Helper to safely extract numeric values, converting null/undefined to null
+      const extractValues = (key) => forecastArray.map(row => {
+        const val = row[key];
+        return (val === null || val === undefined || val === '') ? null : val;
+      });
+
       forecastData = {
-        labels: forecastArray.map(row => row.Month),
+        labels: forecastArray.map(row => row.Month || ''),
         hasData: true,
         appts: {
-          actual: forecastArray.map(row => row['Total Appointments (Actual)']),
-          projected: forecastArray.map(row => row['Total Appointments (Projected)']),
+          actual: extractValues('Total Appointments (Actual)'),
+          projected: extractValues('Total Appointments (Projected)'),
         },
         gpAppts: {
-          actual: forecastArray.map(row => row['GP Appointments (Actual)']),
-          projected: forecastArray.map(row => row['GP Appointments (Projected)']),
+          actual: extractValues('GP Appointments (Actual)'),
+          projected: extractValues('GP Appointments (Projected)'),
         },
         inbound: {
-          actual: forecastArray.map(row => row['Inbound Calls (Actual)']),
-          projected: forecastArray.map(row => row['Inbound Calls (Projected)']),
+          actual: extractValues('Inbound Calls (Actual)'),
+          projected: extractValues('Inbound Calls (Projected)'),
         },
       };
     }
