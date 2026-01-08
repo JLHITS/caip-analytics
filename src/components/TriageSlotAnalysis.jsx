@@ -1333,6 +1333,26 @@ export default function TriageSlotAnalysis() {
       {activeTab === 'nonauto-inbox' && (
         <NonAutomatedInboxTab data={data} />
       )}
+
+      <ShareModal
+        isOpen={shareUrl !== null || shareType === 'excel'}
+        onClose={() => {
+          setShareUrl(null);
+          setShareType('firebase');
+          setShareExpiresAt(null);
+        }}
+        shareUrl={shareUrl}
+        shareType={shareType}
+        expiresAt={shareExpiresAt}
+      />
+
+      {toast && (
+        <Toast
+          type={toast.type}
+          message={toast.message}
+          onClose={() => setToast(null)}
+        />
+      )}
     </div>
   );
 }
@@ -2908,26 +2928,6 @@ function NonAutomatedInboxTab({ data }) {
           </>
         )}
       </Card>
-
-      <ShareModal
-        isOpen={shareUrl !== null || shareType === 'excel'}
-        onClose={() => {
-          setShareUrl(null);
-          setShareType('firebase');
-          setShareExpiresAt(null);
-        }}
-        shareUrl={shareUrl}
-        shareType={shareType}
-        expiresAt={shareExpiresAt}
-      />
-
-      {toast && (
-        <Toast
-          type={toast.type}
-          message={toast.message}
-          onClose={() => setToast(null)}
-        />
-      )}
     </div>
   );
 }
