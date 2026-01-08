@@ -75,6 +75,22 @@ const excelDateToJS = (serial) => {
   return new Date(utc_value * 1000);
 };
 
+// Helper to convert Excel serial date or value to month name
+const excelValueToMonthName = (value) => {
+  if (value === null || value === undefined || value === '') return '';
+
+  // If it's a number, treat as Excel serial date
+  if (typeof value === 'number') {
+    const date = excelDateToJS(value);
+    if (date) {
+      return date.toLocaleString('en-GB', { month: 'long', year: 'numeric' });
+    }
+  }
+
+  // Otherwise return as string
+  return String(value);
+};
+
 // Helper to convert Excel time fraction to hours/minutes
 const excelTimeToHour = (timeFraction) => {
   if (typeof timeFraction !== 'number') return null;
@@ -157,7 +173,7 @@ const parseTriageData = (workbook) => {
     rows.push({
       tenant: String(row[cols.tenant] || ''),
       requestDate,
-      requestMonth: String(row[cols.requestMonth] || ''),
+      requestMonth: excelValueToMonthName(row[cols.requestMonth]),
       requestDay: requestDay.replace(/\s+/g, ''),
       requestHour,
       requestType: String(row[cols.requestType] || ''),
