@@ -1,9 +1,10 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import LZString from 'lz-string';
 import {
   Upload, FileText, AlertCircle, CheckCircle, Calendar, Clock,
   TrendingUp, BarChart3, PieChart, AlertTriangle, Info, PlayCircle,
   Loader2, X, ChevronDown, ChevronUp, Activity, Target, Save, Trash2,
-  History, ChevronRight, ChevronLeft, Inbox, ArrowUpRight, ArrowDownRight
+  History, ChevronRight, ChevronLeft, Inbox, ArrowUpRight, ArrowDownRight, Share2
 } from 'lucide-react';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import {
@@ -21,6 +22,7 @@ import {
 } from 'chart.js';
 import * as XLSX from 'xlsx';
 import Card from './ui/Card';
+import ShareModal from './modals/ShareModal';
 
 // Sample data import
 import sampleTriageData from '../assets/Rapid Health December Data Example  - 20260106.xlsx?url';
@@ -769,6 +771,7 @@ export default function TriageSlotAnalysis() {
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('overview');
   const [requestTypeFilter, setRequestTypeFilter] = useState('All');
+  const [shareUrl, setShareUrl] = useState(null);
 
   // Slot capacity inputs (user-configurable)
   const [slotCapacity, setSlotCapacity] = useState({
@@ -785,6 +788,39 @@ export default function TriageSlotAnalysis() {
 
   // Toggle for whether practice accepts requests on weekends
   const [acceptWeekendRequests, setAcceptWeekendRequests] = useState(false);
+
+  // Load shared dashboard from URL hash on mount
+  useEffect(() => {
+    const loadSharedDashboard = () => {
+      try {
+        const hash = window.location.hash;
+        if (!hash || !hash.startsWith('#')) return;
+
+        const compressed = hash.substring(1);
+        if (!compressed) return;
+
+        const decompressed = LZString.decompressFromEncodedURIComponent(compressed);
+        if (!decompressed) {
+          console.error('Failed to decompress shared data');
+          return;
+        }
+
+        const shareData = JSON.parse(decompressed);
+
+        if (shareData.data) {
+          setData(shareData.data);
+          setFiles(shareData.files || ['Shared Dashboard']);
+          setSlotCapacity(shareData.slotCapacity || slotCapacity);
+          setAcceptWeekendRequests(shareData.acceptWeekendRequests || false);
+          setActiveTab('overview');
+        }
+      } catch (error) {
+        console.error('Error loading shared dashboard:', error);
+      }
+    };
+
+    loadSharedDashboard();
+  }, []);
 
   // Handle file upload
   const handleFileUpload = useCallback(async (e) => {
@@ -849,6 +885,26 @@ export default function TriageSlotAnalysis() {
     setError(null);
     setActiveTab('overview');
   }, []);
+
+  // Share dashboard handler
+  const handleShare = useCallback(async () => {
+    try {
+      const shareData = {
+        data,
+        slotCapacity,
+        acceptWeekendRequests,
+        files,
+      };
+
+      const compressed = LZString.compressToEncodedURIComponent(JSON.stringify(shareData));
+      const generatedUrl = `${window.location.origin}/slots#${compressed}`;
+
+      setShareUrl(generatedUrl);
+      await navigator.clipboard.writeText(generatedUrl);
+    } catch (error) {
+      console.error('Failed to share dashboard:', error);
+    }
+  }, [data, slotCapacity, acceptWeekendRequests, files]);
 
   // Update slot capacity
   const updateSlotCapacity = (day, urgency, value) => {
@@ -1128,19 +1184,28 @@ export default function TriageSlotAnalysis() {
         </div>
       </Card>
 
-      {/* File info and reset */}
+      {/* File info and actions */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2 text-sm text-slate-600">
           <FileText size={16} />
           <span>{files.join(', ')}</span>
         </div>
-        <button
-          onClick={handleReset}
-          className="flex items-center gap-1 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-        >
-          <X size={16} />
-          Reset
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleShare}
+            className="flex items-center gap-1 px-3 py-1.5 text-sm text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+          >
+            <Share2 size={16} />
+            Share
+          </button>
+          <button
+            onClick={handleReset}
+            className="flex items-center gap-1 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+          >
+            <X size={16} />
+            Reset
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -2779,6 +2844,12 @@ function NonAutomatedInboxTab({ data }) {
           </>
         )}
       </Card>
+
+      <ShareModal
+        isOpen={shareUrl !== null}
+        onClose={() => setShareUrl(null)}
+        shareUrl={shareUrl}
+      />
     </div>
   );
 }
