@@ -357,14 +357,16 @@ export default function App() {
     }
   }, []);
 
-  // Load Firebase shared dashboard from /shared/:id URL
+  // Detect shared dashboard URLs and route to appropriate tab
   useEffect(() => {
-    const loadFirebaseSharedDashboard = async () => {
+    const handleSharedURL = async () => {
       const path = window.location.pathname;
       const match = path.match(/^\/shared\/([a-zA-Z0-9]+)$/);
 
       if (!match) return;
 
+      // For shared URLs, we need to determine the type first
+      // We'll try loading and check the type, then route appropriately
       try {
         setIsProcessing(true);
         const shareId = match[1];
@@ -383,27 +385,26 @@ export default function App() {
           setDataSource('local');
           setMainTab('demand');
           window.history.replaceState({}, '', '/dc');
+          setIsProcessing(false);
 
           setToast({ type: 'success', message: 'Shared dashboard loaded successfully!' });
         } else if (shareData.type === 'triage-slots') {
-          // Switch to slots tab - TriageSlotAnalysis will handle loading from the URL
-          setMainTab('slots');
+          // For triage-slots, switch to the triage tab so TriageSlotAnalysis can mount and load the data
           setIsProcessing(false);
-          // Don't change the URL - let TriageSlotAnalysis handle it
-          return;
+          setDataSource('local');
+          setMainTab('triage');
         }
       } catch (error) {
+        setIsProcessing(false);
         console.error('Failed to load shared dashboard:', error);
         setToast({ type: 'error', message: error.message });
         setTimeout(() => {
           window.location.href = '/';
         }, 3000);
-      } finally {
-        setIsProcessing(false);
       }
     };
 
-    loadFirebaseSharedDashboard();
+    handleSharedURL();
   }, []);
 
   // Load shared dashboard from URL on mount

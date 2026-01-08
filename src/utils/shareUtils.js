@@ -9,7 +9,7 @@ const CLEANUP_PROBABILITY = 0.15;
 
 // Rate limiting constants
 const RATE_LIMIT_KEY = 'caip_share_rate_limit';
-const RATE_LIMIT_MAX = 5; // Maximum shares per time window
+const RATE_LIMIT_MAX = 15; // Maximum shares per time window
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour in milliseconds
 
 /**
