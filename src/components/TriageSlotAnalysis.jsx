@@ -941,6 +941,11 @@ export default function TriageSlotAnalysis() {
     try {
       setExcelLoading(true);
 
+      if (!data || data.length === 0) {
+        setToast({ type: 'error', message: 'No data to export. Please upload and process your files first.' });
+        return;
+      }
+
       const exportData = {
         data,
         slotCapacity,
@@ -970,6 +975,11 @@ export default function TriageSlotAnalysis() {
   const handleGenerateShareLink = useCallback(async () => {
     try {
       setShareLoading(true);
+
+      if (!data || data.length === 0) {
+        setToast({ type: 'error', message: 'No data to share. Please upload and process your files first.' });
+        return;
+      }
 
       const shareData = {
         data,

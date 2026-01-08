@@ -487,7 +487,7 @@ export default function App() {
       const pdf12 = await fetchFile(samplePdf12, 'month12.pdf', 'application/pdf');
 
       const exampleFiles = {
-        appointments: apptFile,
+        appointments: [apptFile],
         dna: [dnaFile],
         unused: [unusedFile],
         onlineRequests: [onlineFile],
@@ -1528,6 +1528,11 @@ export default function App() {
     try {
       setExcelLoading(true);
 
+      if (!processedData || processedData.length === 0) {
+        setToast({ type: 'error', message: 'No data to export. Please process your files first.' });
+        return;
+      }
+
       const exportData = {
         processedData,
         config,
@@ -1561,6 +1566,11 @@ export default function App() {
   const handleGenerateShareLink = async () => {
     try {
       setShareLoading(true);
+
+      if (!processedData || processedData.length === 0) {
+        setToast({ type: 'error', message: 'No data to share. Please process your files first.' });
+        return;
+      }
 
       const shareData = {
         processedData,
