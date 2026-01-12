@@ -269,7 +269,11 @@ export default function App() {
     const normalizedOds = String(practice.odsCode).trim().toUpperCase();
     if (!normalizedOds) return;
     if (lastRecordedOdsRef.current === normalizedOds) return;
+    const lastUsageAt = Number(localStorage.getItem('lastPracticeUsageAt') || 0);
+    const now = Date.now();
+    if (now - lastUsageAt < 3000) return;
     lastRecordedOdsRef.current = normalizedOds;
+    localStorage.setItem('lastPracticeUsageAt', String(now));
     setSharedUsageStats((prev = { totalChecks: 0, recentPractices: [] }) => {
       const newRecentPractices = [
         {
