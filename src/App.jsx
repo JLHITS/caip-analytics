@@ -192,13 +192,14 @@ export default function App() {
   const [sharedBookmarks, setSharedBookmarks] = useState([]);
   const [sharedUsageStats, setSharedUsageStats] = useState({ totalChecks: 0, recentPractices: [] });
   const latestUsageRef = useRef(sharedUsageStats);
-  const lastRecordedOdsRef = useRef(null);
+  const usageSessionRef = useRef(new Set());
+  const lastUsageAtRef = useRef(0);
 
   // Practice comparison state
   const [showComparison, setShowComparison] = useState(false);
   const [comparisonId, setComparisonId] = useState(null);
   const [showComparisonBuilder, setShowComparisonBuilder] = useState(false);
-  const usageDocRef = useMemo(() => doc(db, 'telephonyStats', 'global'), []);
+  const usageDocRef = useMemo(() => doc(db, 'usageStatsV2', 'global'), []);
 
   // Load shared bookmarks from localStorage
   useEffect(() => {
@@ -225,7 +226,7 @@ export default function App() {
 
   // Load shared usage stats (times used + recents) from localStorage
   useEffect(() => {
-    const savedUsage = localStorage.getItem('sharedPracticeUsage');
+    const savedUsage = localStorage.getItem('sharedPracticeUsageV2');
     if (savedUsage) {
       try {
         setSharedUsageStats(JSON.parse(savedUsage));
@@ -233,6 +234,20 @@ export default function App() {
         console.error('Failed to load shared usage stats:', e);
       }
     }
+  }, []);
+
+  // Load session usage guard
+  useEffect(() => {
+    const savedSession = sessionStorage.getItem('usageRecordedOdsV2');
+    if (savedSession) {
+      try {
+        usageSessionRef.current = new Set(JSON.parse(savedSession));
+      } catch (e) {
+        usageSessionRef.current = new Set();
+      }
+    }
+    const lastUsageAt = Number(sessionStorage.getItem('lastUsageAtV2') || 0);
+    lastUsageAtRef.current = Number.isNaN(lastUsageAt) ? 0 : lastUsageAt;
   }, []);
 
   // Load usage stats from Firestore (preserve existing totalChecks)
@@ -247,7 +262,7 @@ export default function App() {
               ...prev,
               totalChecks: Math.max(prev.totalChecks || 0, serverTotal)
             };
-            localStorage.setItem('sharedPracticeUsage', JSON.stringify(merged));
+            localStorage.setItem('sharedPracticeUsageV2', JSON.stringify(merged));
             return merged;
           });
         } else {
@@ -268,12 +283,16 @@ export default function App() {
     if (!practice || !practice.odsCode) return;
     const normalizedOds = String(practice.odsCode).trim().toUpperCase();
     if (!normalizedOds) return;
-    if (lastRecordedOdsRef.current === normalizedOds) return;
-    const lastUsageAt = Number(localStorage.getItem('lastPracticeUsageAt') || 0);
+
+    if (usageSessionRef.current.has(normalizedOds)) return;
     const now = Date.now();
-    if (now - lastUsageAt < 3000) return;
-    lastRecordedOdsRef.current = normalizedOds;
-    localStorage.setItem('lastPracticeUsageAt', String(now));
+    if (now - lastUsageAtRef.current < 2000) return;
+
+    usageSessionRef.current.add(normalizedOds);
+    lastUsageAtRef.current = now;
+    sessionStorage.setItem('usageRecordedOdsV2', JSON.stringify(Array.from(usageSessionRef.current)));
+    sessionStorage.setItem('lastUsageAtV2', String(now));
+
     setSharedUsageStats((prev = { totalChecks: 0, recentPractices: [] }) => {
       const newRecentPractices = [
         {
@@ -290,18 +309,17 @@ export default function App() {
         recentPractices: newRecentPractices
       };
 
-      localStorage.setItem('sharedPracticeUsage', JSON.stringify(updatedStats));
+      localStorage.setItem('sharedPracticeUsageV2', JSON.stringify(updatedStats));
       return updatedStats;
     });
 
-    // Increment server counter without blocking UI
     const syncUsageToServer = async () => {
       try {
-        await updateDoc(usageDocRef, { totalChecks: increment(1) });
+        await updateDoc(usageDocRef, { totalChecks: increment(1), updatedAt: serverTimestamp() });
       } catch (error) {
         try {
           const fallbackTotal = (latestUsageRef.current.totalChecks || 0) + 1;
-          await setDoc(usageDocRef, { totalChecks: fallbackTotal }, { merge: true });
+          await setDoc(usageDocRef, { totalChecks: fallbackTotal, updatedAt: serverTimestamp() }, { merge: true });
         } catch (err) {
           console.error('Failed to sync usage stats to server:', err);
         }
