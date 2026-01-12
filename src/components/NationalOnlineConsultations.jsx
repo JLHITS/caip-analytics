@@ -984,7 +984,7 @@ const NationalOnlineConsultations = ({
                                 <div className="font-medium">{practice.gpName}</div>
                                 <div className="text-xs text-slate-500">{practice.odsCode}</div>
                               </td>
-                              <td className="p-3 text-xs text-slate-600">{practice.supplier}</td>
+                              <td className="p-3 text-xs text-slate-600">{practice.supplier || (practice.suppliers && practice.suppliers.length > 0 ? practice.suppliers.join(', ') : '-')}</td>
                               <td className="p-3 text-right text-indigo-600 font-medium">{practice.ratePer1000.toFixed(1)}</td>
                               <td className="p-3 text-right">{practice.submissions.toLocaleString()}</td>
                             </tr>
@@ -1333,7 +1333,7 @@ const NationalOnlineConsultations = ({
                                 <div className="text-xs text-slate-500">{practice.odsCode}</div>
                               </td>
                               <td className="p-3 text-xs text-slate-600">{practice.pcnName}</td>
-                              <td className="p-3 text-xs text-slate-600">{practice.supplier}</td>
+                              <td className="p-3 text-xs text-slate-600">{practice.supplier || (practice.suppliers && practice.suppliers.length > 0 ? practice.suppliers.join(', ') : '-')}</td>
                               <td className="p-3 text-right text-indigo-600 font-medium">{practice.ratePer1000.toFixed(1)}</td>
                               <td className="p-3 text-right">{practice.submissions.toLocaleString()}</td>
                             </tr>

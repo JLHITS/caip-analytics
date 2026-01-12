@@ -24,7 +24,7 @@ import {
   Download, Loader2, PlayCircle, AlertTriangle, Trash2, Plus, Monitor, User, Search,
   ArrowUpDown, ArrowUp, ArrowDown, ChevronUp, Copy, Minimize2, Maximize2, Share2
 } from 'lucide-react';
-import { doc, getDoc, setDoc, updateDoc, increment } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, increment, serverTimestamp } from 'firebase/firestore';
 
 // PDF.js setup
 import { GlobalWorkerOptions } from 'pdfjs-dist';
@@ -264,7 +264,7 @@ export default function App() {
 
   // Update shared usage stats and persist to localStorage
   const recordPracticeUsage = (practice) => {
-    if (!practice) return;
+    if (!practice || !practice.odsCode) return;
     setSharedUsageStats((prev = { totalChecks: 0, recentPractices: [] }) => {
       const newRecentPractices = [
         {
@@ -300,6 +300,24 @@ export default function App() {
     };
 
     syncUsageToServer();
+
+    const syncPracticeUsage = async () => {
+      try {
+        const practiceRef = doc(db, 'practiceUsage', practice.odsCode);
+        await setDoc(practiceRef, {
+          odsCode: practice.odsCode,
+          gpName: practice.gpName,
+          pcnName: practice.pcnName || '',
+          icbName: practice.icbName || '',
+          lastUsed: serverTimestamp(),
+          count: increment(1),
+        }, { merge: true });
+      } catch (error) {
+        console.error('Failed to sync practice usage:', error);
+      }
+    };
+
+    syncPracticeUsage();
   };
 
   const [selectedMonth, setSelectedMonth] = useState('All');
