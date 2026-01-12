@@ -306,7 +306,7 @@ const NationalDemandCapacity = ({
   }, [searchQuery, appointmentData, selectedMonth]);
 
   // Handle practice selection
-  const handleSelectPractice = useCallback((practice) => {
+  const handleSelectPractice = useCallback((practice, options = { recordUsage: true }) => {
     setSelectedPractice(practice);
     setSearchQuery('');
     setShowSearchDropdown(false);
@@ -316,7 +316,7 @@ const NationalDemandCapacity = ({
       setSharedPractice(practice);
     }
 
-    if (recordPracticeUsage) {
+    if (options.recordUsage && recordPracticeUsage) {
       recordPracticeUsage(practice);
     }
 
@@ -366,7 +366,7 @@ const NationalDemandCapacity = ({
         );
         if (practice) {
           setSelectedMonth(month);
-          handleSelectPractice(practice);
+          handleSelectPractice(practice, { recordUsage: false });
           return;
         }
       }

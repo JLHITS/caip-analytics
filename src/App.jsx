@@ -199,7 +199,13 @@ export default function App() {
   const [showComparison, setShowComparison] = useState(false);
   const [comparisonId, setComparisonId] = useState(null);
   const [showComparisonBuilder, setShowComparisonBuilder] = useState(false);
-  const usageDocRef = useMemo(() => doc(db, 'usageStatsV2', 'global'), []);
+  const usageDocRef = useMemo(() => doc(db, 'usageStatsV3', 'global'), []);
+  const usagePermissionWarnedRef = useRef(false);
+
+  const isPermissionDenied = (error) => (
+    error?.code === 'permission-denied' ||
+    /missing or insufficient permissions/i.test(error?.message || '')
+  );
 
   // Load shared bookmarks from localStorage
   useEffect(() => {
@@ -226,7 +232,7 @@ export default function App() {
 
   // Load shared usage stats (times used + recents) from localStorage
   useEffect(() => {
-    const savedUsage = localStorage.getItem('sharedPracticeUsageV2');
+    const savedUsage = localStorage.getItem('sharedPracticeUsageV3');
     if (savedUsage) {
       try {
         setSharedUsageStats(JSON.parse(savedUsage));
@@ -238,7 +244,7 @@ export default function App() {
 
   // Load session usage guard
   useEffect(() => {
-    const savedSession = sessionStorage.getItem('usageRecordedOdsV2');
+    const savedSession = sessionStorage.getItem('usageRecordedOdsV3');
     if (savedSession) {
       try {
         usageSessionRef.current = new Set(JSON.parse(savedSession));
@@ -246,7 +252,7 @@ export default function App() {
         usageSessionRef.current = new Set();
       }
     }
-    const lastUsageAt = Number(sessionStorage.getItem('lastUsageAtV2') || 0);
+    const lastUsageAt = Number(sessionStorage.getItem('lastUsageAtV3') || 0);
     lastUsageAtRef.current = Number.isNaN(lastUsageAt) ? 0 : lastUsageAt;
   }, []);
 
@@ -262,7 +268,7 @@ export default function App() {
               ...prev,
               totalChecks: Math.max(prev.totalChecks || 0, serverTotal)
             };
-            localStorage.setItem('sharedPracticeUsageV2', JSON.stringify(merged));
+            localStorage.setItem('sharedPracticeUsageV3', JSON.stringify(merged));
             return merged;
           });
         } else {
@@ -270,6 +276,13 @@ export default function App() {
           await setDoc(usageDocRef, { totalChecks: latestUsageRef.current.totalChecks || 0 });
         }
       } catch (error) {
+        if (isPermissionDenied(error)) {
+          if (!usagePermissionWarnedRef.current) {
+            usagePermissionWarnedRef.current = true;
+            console.warn('Usage stats read blocked by Firestore rules.');
+          }
+          return;
+        }
         console.error('Failed to fetch usage stats from server:', error);
       }
     };
@@ -290,8 +303,8 @@ export default function App() {
 
     usageSessionRef.current.add(normalizedOds);
     lastUsageAtRef.current = now;
-    sessionStorage.setItem('usageRecordedOdsV2', JSON.stringify(Array.from(usageSessionRef.current)));
-    sessionStorage.setItem('lastUsageAtV2', String(now));
+    sessionStorage.setItem('usageRecordedOdsV3', JSON.stringify(Array.from(usageSessionRef.current)));
+    sessionStorage.setItem('lastUsageAtV3', String(now));
 
     setSharedUsageStats((prev = { totalChecks: 0, recentPractices: [] }) => {
       const newRecentPractices = [
@@ -309,7 +322,7 @@ export default function App() {
         recentPractices: newRecentPractices
       };
 
-      localStorage.setItem('sharedPracticeUsageV2', JSON.stringify(updatedStats));
+      localStorage.setItem('sharedPracticeUsageV3', JSON.stringify(updatedStats));
       return updatedStats;
     });
 
@@ -317,10 +330,12 @@ export default function App() {
       try {
         await updateDoc(usageDocRef, { totalChecks: increment(1), updatedAt: serverTimestamp() });
       } catch (error) {
+        if (isPermissionDenied(error)) return;
         try {
           const fallbackTotal = (latestUsageRef.current.totalChecks || 0) + 1;
           await setDoc(usageDocRef, { totalChecks: fallbackTotal, updatedAt: serverTimestamp() }, { merge: true });
         } catch (err) {
+          if (isPermissionDenied(err)) return;
           console.error('Failed to sync usage stats to server:', err);
         }
       }
@@ -340,6 +355,7 @@ export default function App() {
           count: increment(1),
         }, { merge: true });
       } catch (error) {
+        if (isPermissionDenied(error)) return;
         console.error('Failed to sync practice usage:', error);
       }
     };

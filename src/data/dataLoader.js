@@ -23,6 +23,38 @@ const dataCache = {
   onlineConsultations: null,
 };
 
+const LFS_PREFIX = 'version https://git-lfs.github.com/spec/v1';
+
+const isHtmlResponse = (text) => {
+  const trimmed = text.trim().toLowerCase();
+  return trimmed.startsWith('<!doctype') || trimmed.startsWith('<html');
+};
+
+const isLfsPointer = (text) => text.trim().startsWith(LFS_PREFIX);
+
+const fetchJsonIfAvailable = async (url) => {
+  const response = await fetch(url);
+  if (!response.ok) {
+    return { unavailable: true, status: response.status };
+  }
+
+  const contentType = response.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) {
+    return { data: await response.json() };
+  }
+
+  const text = await response.text();
+  if (isLfsPointer(text) || isHtmlResponse(text)) {
+    return { unavailable: true };
+  }
+
+  try {
+    return { data: JSON.parse(text) };
+  } catch {
+    return { unavailable: true };
+  }
+};
+
 /**
  * Load appointments data from pre-processed JSON
  * @returns {Promise<Object>} Appointments data by month
@@ -32,44 +64,38 @@ export async function loadAppointmentsData() {
     return dataCache.appointments;
   }
 
-  try {
-    const indexResponse = await fetch('/data/appointments-index.json');
-    if (indexResponse.ok) {
-      const indexData = await indexResponse.json();
-      const months = Array.isArray(indexData.months) ? indexData.months : Object.keys(indexData.files || {});
-      const fileMap = indexData.files || {};
+  const indexResult = await fetchJsonIfAvailable('/data/appointments-index.json');
+  if (indexResult?.data) {
+    const indexData = indexResult.data;
+    const months = Array.isArray(indexData.months) ? indexData.months : Object.keys(indexData.files || {});
+    const fileMap = indexData.files || {};
 
+    try {
       const entries = await Promise.all(months.map(async (month) => {
         const relativePath = fileMap[month] || `appointments/${month.replace(/\\s+/g, '_')}.json`;
-        const response = await fetch(`/data/${relativePath}`);
-        if (!response.ok) {
-          throw new Error(`Failed to load appointments data for ${month}: ${response.status}`);
+        const monthResult = await fetchJsonIfAvailable(`/data/${relativePath}`);
+        if (!monthResult?.data) {
+          throw new Error(`Appointments JSON unavailable for ${month}`);
         }
-        const data = await response.json();
-        return [month, data];
+        return [month, monthResult.data];
       }));
 
       const data = Object.fromEntries(entries);
       data.metadata = { ...(indexData.metadata || {}), months, files: fileMap };
       dataCache.appointments = data;
       return data;
+    } catch {
+      return null;
     }
-  } catch (error) {
-    console.error('Error loading appointments index:', error);
   }
 
-  try {
-    const response = await fetch('/data/appointments.json');
-    if (!response.ok) {
-      throw new Error(`Failed to load appointments data: ${response.status}`);
-    }
-    const data = await response.json();
-    dataCache.appointments = data;
-    return data;
-  } catch (error) {
-    console.error('Error loading appointments data:', error);
-    throw error;
+  const legacyResult = await fetchJsonIfAvailable('/data/appointments.json');
+  if (legacyResult?.data) {
+    dataCache.appointments = legacyResult.data;
+    return legacyResult.data;
   }
+
+  return null;
 }
 
 /**
@@ -81,18 +107,13 @@ export async function loadTelephonyData() {
     return dataCache.telephony;
   }
 
-  try {
-    const response = await fetch('/data/telephony.json');
-    if (!response.ok) {
-      throw new Error(`Failed to load telephony data: ${response.status}`);
-    }
-    const data = await response.json();
-    dataCache.telephony = data;
-    return data;
-  } catch (error) {
-    console.error('Error loading telephony data:', error);
-    throw error;
+  const result = await fetchJsonIfAvailable('/data/telephony.json');
+  if (result?.data) {
+    dataCache.telephony = result.data;
+    return result.data;
   }
+
+  return null;
 }
 
 /**
@@ -104,18 +125,13 @@ export async function loadOnlineConsultationsData() {
     return dataCache.onlineConsultations;
   }
 
-  try {
-    const response = await fetch('/data/online-consultations.json');
-    if (!response.ok) {
-      throw new Error(`Failed to load online consultations data: ${response.status}`);
-    }
-    const data = await response.json();
-    dataCache.onlineConsultations = data;
-    return data;
-  } catch (error) {
-    console.error('Error loading online consultations data:', error);
-    throw error;
+  const result = await fetchJsonIfAvailable('/data/online-consultations.json');
+  if (result?.data) {
+    dataCache.onlineConsultations = result.data;
+    return result.data;
   }
+
+  return null;
 }
 
 /**
@@ -160,6 +176,7 @@ export async function getPracticeData(odsCode, dataType) {
   }
 
   const practiceData = [];
+  if (!data) return practiceData;
 
   for (const [month, monthData] of Object.entries(data)) {
     if (month === 'metadata') continue;
@@ -201,6 +218,7 @@ export async function searchPractices(query, dataType = 'appointments') {
       throw new Error(`Unknown data type: ${dataType}`);
   }
 
+  if (!data) return [];
   const queryLower = query.toLowerCase();
   const practicesMap = new Map();
 
