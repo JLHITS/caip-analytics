@@ -192,6 +192,7 @@ export default function App() {
   const [sharedBookmarks, setSharedBookmarks] = useState([]);
   const [sharedUsageStats, setSharedUsageStats] = useState({ totalChecks: 0, recentPractices: [] });
   const latestUsageRef = useRef(sharedUsageStats);
+  const lastRecordedOdsRef = useRef(null);
 
   // Practice comparison state
   const [showComparison, setShowComparison] = useState(false);
@@ -265,6 +266,8 @@ export default function App() {
   // Update shared usage stats and persist to localStorage
   const recordPracticeUsage = (practice) => {
     if (!practice || !practice.odsCode) return;
+    if (lastRecordedOdsRef.current === practice.odsCode) return;
+    lastRecordedOdsRef.current = practice.odsCode;
     setSharedUsageStats((prev = { totalChecks: 0, recentPractices: [] }) => {
       const newRecentPractices = [
         {
