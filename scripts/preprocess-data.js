@@ -254,6 +254,7 @@ function parseTable3a(rawData) {
   const headerRow = rawData[headerRowIndex] || [];
   const baseHeaders = new Set([
     'Month',
+    'Appointment Month Start Date',
     'GP_CODE',
     'GP_NAME',
     'SUPPLIER',
@@ -706,25 +707,47 @@ function parseOCFile(filePath) {
 console.log('Processing Appointments data...');
 const apptDir = join(ASSETS_DIR, 'appt');
 const apptFiles = readdirSync(apptDir).filter(f => f.endsWith('.xlsx'));
-const appointmentsData = {};
+const apptOutputDir = join(OUTPUT_DIR, 'appointments');
+if (!existsSync(apptOutputDir)) {
+  mkdirSync(apptOutputDir, { recursive: true });
+}
+const appointmentsIndex = {
+  months: [],
+  files: {},
+  metadata: {
+    generatedAt: new Date().toISOString(),
+  },
+};
+
+const monthToFilename = (month) => {
+  const safe = String(month || 'Unknown')
+    .trim()
+    .replace(/\s+/g, '_')
+    .replace(/[^A-Za-z0-9_-]/g, '');
+  return safe.length > 0 ? safe : 'Unknown';
+};
 
 for (const file of apptFiles) {
   try {
     const filePath = join(apptDir, file);
     const data = parseAppointmentsFile(filePath);
-    appointmentsData[data.dataMonth] = data;
-    console.log(`  ✓ ${data.dataMonth} - ${data.practices.length} practices`);
+    const fileKey = monthToFilename(data.dataMonth);
+    const outputPath = join(apptOutputDir, `${fileKey}.json`);
+    writeFileSync(outputPath, JSON.stringify(data), 'utf-8');
+    appointmentsIndex.months.push(data.dataMonth);
+    appointmentsIndex.files[data.dataMonth] = `appointments/${fileKey}.json`;
+    console.log(`  - ${data.dataMonth} - ${data.practices.length} practices`);
   } catch (err) {
-    console.error(`  ✗ Error parsing ${file}:`, err.message);
+    console.error(`  - Error parsing ${file}:`, err.message);
   }
 }
 
 writeFileSync(
-  join(OUTPUT_DIR, 'appointments.json'),
-  JSON.stringify(appointmentsData),
+  join(OUTPUT_DIR, 'appointments-index.json'),
+  JSON.stringify(appointmentsIndex),
   'utf-8'
 );
-console.log(`  Saved appointments.json (${Object.keys(appointmentsData).length} months)\n`);
+console.log(`  Saved appointments index (${appointmentsIndex.months.length} months)\n`);
 
 // Process Telephony
 console.log('Processing Telephony data...');
@@ -775,7 +798,7 @@ console.log(`  Saved online-consultations.json (${Object.keys(ocData).length} mo
 // Summary
 console.log('='.repeat(50));
 console.log('Preprocessing complete!');
-console.log(`  Appointments: ${Object.keys(appointmentsData).length} months`);
+console.log(`  Appointments: ${appointmentsIndex.months.length} months`);
 console.log(`  Telephony: ${Object.keys(telephonyData).length} months`);
 console.log(`  Online Consultations: ${Object.keys(ocData).length} months`);
 console.log('='.repeat(50));

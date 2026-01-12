@@ -33,6 +33,32 @@ export async function loadAppointmentsData() {
   }
 
   try {
+    const indexResponse = await fetch('/data/appointments-index.json');
+    if (indexResponse.ok) {
+      const indexData = await indexResponse.json();
+      const months = Array.isArray(indexData.months) ? indexData.months : Object.keys(indexData.files || {});
+      const fileMap = indexData.files || {};
+
+      const entries = await Promise.all(months.map(async (month) => {
+        const relativePath = fileMap[month] || `appointments/${month.replace(/\\s+/g, '_')}.json`;
+        const response = await fetch(`/data/${relativePath}`);
+        if (!response.ok) {
+          throw new Error(`Failed to load appointments data for ${month}: ${response.status}`);
+        }
+        const data = await response.json();
+        return [month, data];
+      }));
+
+      const data = Object.fromEntries(entries);
+      data.metadata = { ...(indexData.metadata || {}), months, files: fileMap };
+      dataCache.appointments = data;
+      return data;
+    }
+  } catch (error) {
+    console.error('Error loading appointments index:', error);
+  }
+
+  try {
     const response = await fetch('/data/appointments.json');
     if (!response.ok) {
       throw new Error(`Failed to load appointments data: ${response.status}`);

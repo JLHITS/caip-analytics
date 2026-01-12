@@ -18,7 +18,7 @@ import NationalOnlineConsultations from './NationalOnlineConsultations';
 
 // Utility imports
 import { parseNationalAppointmentsData, searchAppointmentPractices } from '../utils/parseNationalAppointments';
-import { loadTelephonyData, loadOnlineConsultationsData } from '../data/dataLoader';
+import { loadAppointmentsData, loadTelephonyData, loadOnlineConsultationsData } from '../data/dataLoader';
 import {
   calculatePracticeMetrics,
   calculateNetworkAverages,
@@ -246,9 +246,8 @@ const NationalDemandCapacity = ({
       if (!jsonLoadAttemptedRef.current) {
         jsonLoadAttemptedRef.current = true;
         try {
-          const jsonResponse = await fetch('/data/appointments.json');
-          if (jsonResponse.ok) {
-            const jsonData = await jsonResponse.json();
+          const jsonData = await loadAppointmentsData();
+          if (jsonData) {
             preloadedJsonRef.current = jsonData;
             console.log('Using pre-processed JSON data for appointments');
 
@@ -317,13 +316,13 @@ const NationalDemandCapacity = ({
       setSharedPractice(practice);
     }
 
-    // Record usage
-    if (recordPracticeUsage) {
-      recordPracticeUsage(practice);
-    }
-
     setToast({ type: 'success', message: `Selected: ${practice.gpName}` });
-  }, [setSharedPractice, recordPracticeUsage]);
+  }, [setSharedPractice]);
+
+  useEffect(() => {
+    if (!selectedPractice || !recordPracticeUsage) return;
+    recordPracticeUsage(selectedPractice);
+  }, [selectedPractice, recordPracticeUsage]);
 
   const copyPracticeLink = useCallback(async () => {
     if (!selectedPractice?.odsCode) return;
@@ -2660,7 +2659,6 @@ const NationalDemandCapacity = ({
           sharedBookmarks={sharedBookmarks}
           updateSharedBookmarks={updateSharedBookmarks}
           sharedUsageStats={sharedUsageStats}
-          recordPracticeUsage={recordPracticeUsage}
           onLoadingChange={setTelephonyLoading}
           onDataLoaded={setTelephonyData}
           hideSearch={true} // Search and month controls handled by parent
@@ -2686,7 +2684,6 @@ const NationalDemandCapacity = ({
           sharedBookmarks={sharedBookmarks}
           updateSharedBookmarks={updateSharedBookmarks}
           sharedUsageStats={sharedUsageStats}
-          recordPracticeUsage={recordPracticeUsage}
           onLoadingChange={setOcLoading}
           onDataLoaded={setOcData}
           hideSearch={true} // Search and month controls handled by parent

@@ -33,7 +33,7 @@ const AboutModal = ({ isOpen, onClose, onOpenBugReport, timesUsed = 0 }) => {
               <Clock className="text-blue-600" size={20} />
             </div>
             <div>
-              <p className="text-sm text-blue-700 font-semibold">Times used across National Telephony & Online tabs</p>
+              <p className="text-sm text-blue-700 font-semibold">Times used across National Data tabs</p>
               <p className="text-2xl font-bold text-blue-900">{Number(timesUsed || 0).toLocaleString()}</p>
             </div>
           </div>
