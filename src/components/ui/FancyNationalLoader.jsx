@@ -1,14 +1,15 @@
 import React from 'react';
-import { BarChart3, Activity, Database, TrendingUp, Phone, Monitor } from 'lucide-react';
+import { BarChart3, Activity, Database, TrendingUp, Phone, Monitor, Calendar, Users } from 'lucide-react';
 
 const FancyNationalLoader = ({ type = 'telephony' }) => {
   const isCombined = type === 'combined';
+  const isDC = type === 'demand-capacity';
   const isOC = type === 'online-consultations';
 
-  // Combined uses a purple gradient that blends both
-  const gradientFrom = isCombined ? 'from-blue-600' : (isOC ? 'from-indigo-600' : 'from-blue-600');
-  const gradientTo = isCombined ? 'to-purple-600' : (isOC ? 'to-purple-600' : 'to-cyan-600');
-  const title = isCombined ? 'National Data' : (isOC ? 'Online Consultations' : 'Telephony');
+  // Demand Capacity uses NHS blue/indigo gradient, Combined uses purple, OC uses indigo, Telephony uses cyan
+  const gradientFrom = isDC ? 'from-blue-600' : (isCombined ? 'from-blue-600' : (isOC ? 'from-indigo-600' : 'from-blue-600'));
+  const gradientTo = isDC ? 'to-indigo-600' : (isCombined ? 'to-purple-600' : (isOC ? 'to-purple-600' : 'to-cyan-600'));
+  const title = isDC ? 'National Demand & Capacity' : (isCombined ? 'National Data' : (isOC ? 'Online Consultations' : 'Telephony'));
 
   return (
     <div className="flex items-center justify-center min-h-[60vh]">
@@ -19,19 +20,25 @@ const FancyNationalLoader = ({ type = 'telephony' }) => {
           <div className="absolute inset-0 flex items-center justify-center">
             <div
               className="w-32 h-32 rounded-full animate-ping opacity-20"
-              style={{ backgroundColor: isCombined ? '#818cf8' : (isOC ? '#818cf8' : '#93c5fd') }}
+              style={{ backgroundColor: isDC ? '#3b82f6' : (isCombined ? '#818cf8' : (isOC ? '#818cf8' : '#93c5fd')) }}
             ></div>
           </div>
           <div className="absolute inset-0 flex items-center justify-center">
             <div
               className="w-24 h-24 rounded-full animate-ping opacity-30"
-              style={{ backgroundColor: isCombined ? '#a5b4fc' : (isOC ? '#a5b4fc' : '#bfdbfe'), animationDelay: '0.5s' }}
+              style={{ backgroundColor: isDC ? '#93c5fd' : (isCombined ? '#a5b4fc' : (isOC ? '#a5b4fc' : '#bfdbfe')), animationDelay: '0.5s' }}
             ></div>
           </div>
 
           {/* Central icon container */}
           <div className={`relative mx-auto w-24 h-24 rounded-full bg-gradient-to-br ${gradientFrom} ${gradientTo} flex items-center justify-center shadow-lg`}>
-            {isCombined ? (
+            {isDC ? (
+              <div className="flex gap-1">
+                <Calendar size={20} className="text-white animate-pulse" />
+                <Phone size={20} className="text-white animate-pulse" style={{ animationDelay: '0.2s' }} />
+                <Monitor size={20} className="text-white animate-pulse" style={{ animationDelay: '0.4s' }} />
+              </div>
+            ) : isCombined ? (
               <div className="flex gap-1">
                 <Phone size={24} className="text-white animate-pulse" />
                 <Monitor size={24} className="text-white animate-pulse" style={{ animationDelay: '0.3s' }} />
@@ -66,7 +73,7 @@ const FancyNationalLoader = ({ type = 'telephony' }) => {
         <div className="flex items-center justify-center gap-2 text-slate-500 mb-6">
           <Activity size={16} className="animate-pulse" />
           <span className="text-sm">
-            {isCombined ? 'Fetching telephony & online consultations data...' : 'Fetching data from NHS sources'}
+            {isDC ? 'Fetching appointments, telephony & OC data...' : (isCombined ? 'Fetching telephony & online consultations data...' : 'Fetching data from NHS sources')}
           </span>
         </div>
 
@@ -84,7 +91,22 @@ const FancyNationalLoader = ({ type = 'telephony' }) => {
 
           {/* Data points loading */}
           <div className="flex items-center justify-center gap-6 text-xs text-slate-400">
-            {isCombined ? (
+            {isDC ? (
+              <>
+                <div className="flex items-center gap-1.5 animate-pulse">
+                  <Calendar size={12} />
+                  <span>Appointments</span>
+                </div>
+                <div className="flex items-center gap-1.5 animate-pulse" style={{ animationDelay: '0.2s' }}>
+                  <Phone size={12} />
+                  <span>Telephony</span>
+                </div>
+                <div className="flex items-center gap-1.5 animate-pulse" style={{ animationDelay: '0.4s' }}>
+                  <Monitor size={12} />
+                  <span>Online Consultations</span>
+                </div>
+              </>
+            ) : isCombined ? (
               <>
                 <div className="flex items-center gap-1.5 animate-pulse">
                   <Phone size={12} />

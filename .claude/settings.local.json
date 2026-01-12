@@ -22,7 +22,8 @@
       "Bash(node analyze-oc-data.js:*)",
       "Bash(curl:*)",
       "Bash(npm run build:*)",
-      "Bash(node analyze-triage-data.js:*)"
+      "Bash(node analyze-triage-data.js:*)",
+      "Bash(npm run preprocess:*)"
     ],
     "deny": [],
     "ask": []

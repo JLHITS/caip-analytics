@@ -26,9 +26,10 @@ export const exportDemandCapacityToExcel = (data) => {
   const metadata = [
     ['CAIP Analytics Export'],
     ['Dashboard Type', 'Demand & Capacity'],
-    ['Version', '0.5.18'],
+    ['Version', '0.6.0'],
     ['Export Date', timestamp],
     ['Surgery Name', config?.surgeryName || 'Unknown'],
+    ['ODS Code', config?.odsCode || ''],
     [''],
     ['This file contains all data needed to restore your dashboard.'],
     ['Import this file in CAIP Analytics to restore the interactive dashboard.'],

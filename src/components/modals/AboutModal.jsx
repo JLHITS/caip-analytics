@@ -63,12 +63,12 @@ const AboutModal = ({ isOpen, onClose, onOpenBugReport, timesUsed = 0 }) => {
           </p>
 
           <p>
-            It is a tool that practices can use to provide analytics and data presentations of your local clinical system data,
-            rather than unreliable national data sets for access metrics.
+            It is a tool that practice can use to provide data analytics and presentations of your local clinical system data,
+            or nationally available data provided by NHS England. This app is completely free to use.
           </p>
 
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <p className="font-semibold text-blue-900 mb-2">Supported Platforms for full Demand and Capacity Analysis</p>
+            <p className="font-semibold text-blue-900 mb-2">Supported platforms for LOCAL data demand and capacity analysis</p>
             <ul className="list-disc list-inside space-y-1 text-blue-900">
               <li>TPP SystmOne</li>
               <li>SystmConnect</li>

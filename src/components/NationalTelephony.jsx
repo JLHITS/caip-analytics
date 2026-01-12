@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, ArrowUp, ArrowDown, Phone, Trophy, TrendingUp, ExternalLink, Info, Star, ChevronDown, ChevronUp, TrendingDown, Minus, Clock } from 'lucide-react';
+import { Search, ArrowUp, ArrowDown, Phone, Trophy, TrendingUp, ExternalLink, Info, Star, ChevronDown, ChevronUp, TrendingDown, Minus, Clock, BarChart3, Users, Activity } from 'lucide-react';
 import { Line, Bar } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -66,7 +66,12 @@ const NationalTelephony = ({
   updateSharedBookmarks,
   sharedUsageStats,
   recordPracticeUsage,
-  onLoadingChange
+  onLoadingChange,
+  onDataLoaded,
+  hideSearch = false, // When true, hides the search box and month/compare controls (used when embedded in unified D&C view)
+  parentSelectedMonth, // Optional: controlled month from parent component
+  parentCompareMode, // Optional: controlled compare mode from parent component
+  parentTimeRangeMonths, // Optional: controlled time range months from parent component
 }) => {
   const [allMonthsData, setAllMonthsData] = useState({}); // Store all months data
   const [searchTerm, setSearchTerm] = useState('');
@@ -75,8 +80,14 @@ const NationalTelephony = ({
   const [showInterpretationTooltip, setShowInterpretationTooltip] = useState(false);
   const [showCoveragePopup, setShowCoveragePopup] = useState(false);
   const [showBookmarks, setShowBookmarks] = useState(true);
-  const [selectedMonth, setSelectedMonth] = useState('November 2025');
-  const [compareWithPrevious, setCompareWithPrevious] = useState(true);
+  const [localSelectedMonth, setLocalSelectedMonth] = useState('November 2025');
+  const [localCompareWithPrevious, setLocalCompareWithPrevious] = useState(true);
+
+  // Use parent-controlled values if provided, otherwise use local state
+  const selectedMonth = parentSelectedMonth || localSelectedMonth;
+  const setSelectedMonth = parentSelectedMonth ? () => {} : setLocalSelectedMonth;
+  const compareWithPrevious = parentCompareMode !== undefined ? parentCompareMode : localCompareWithPrevious;
+  const setCompareWithPrevious = parentCompareMode !== undefined ? () => {} : setLocalCompareWithPrevious;
   const [activeTab, setActiveTab] = useState('overview');
   const [showRecents, setShowRecents] = useState(() => (sharedUsageStats?.recentPractices?.length || 0) > 0);
   const [showSearchBox, setShowSearchBox] = useState(true);
@@ -128,21 +139,15 @@ const NationalTelephony = ({
 
   // Tab definitions
   const TABS = [
-    { id: 'overview', label: 'Overview', icon: '📊' },
-    { id: 'trends', label: 'Trends', icon: '📈' },
-    { id: 'leaderboards', label: 'Leaderboards', icon: '🏆' },
-    { id: 'per1000', label: 'Per 1000 Pts', icon: '👥' },
-    { id: 'impact', label: 'Impact Metrics', icon: '💼' }
+    { id: 'overview', label: 'Overview', icon: BarChart3 },
+    { id: 'trends', label: 'Trends', icon: TrendingUp },
+    { id: 'leaderboards', label: 'Leaderboards', icon: Trophy },
+    { id: 'per1000', label: 'Per 1000 Pts', icon: Users },
+    { id: 'impact', label: 'Impact Metrics', icon: Activity }
   ];
 
   // Get current data based on selected month
   const data = allMonthsData[selectedMonth] || null;
-  const totalInboundCalls = useMemo(() => {
-    if (!data) return 0;
-    const nationalInbound = data.national?.inboundCalls || 0;
-    if (nationalInbound) return nationalInbound;
-    return (data.practices || []).reduce((sum, practice) => sum + (practice.inboundCalls || 0), 0);
-  }, [data]);
   const recentPractices = usageStats.recentPractices || [];
 
   useEffect(() => {
@@ -159,13 +164,25 @@ const NationalTelephony = ({
   }, [compareWithPrevious, activeTab]);
 
   // Get previous month data for comparison
+  const availableChartMonths = useMemo(() => (
+    MONTHS_ORDERED.filter(month => allMonthsData[month])
+  ), [allMonthsData]);
+
+  const chartMonths = useMemo(() => {
+    if (parentTimeRangeMonths && parentTimeRangeMonths.length > 0) {
+      const filtered = parentTimeRangeMonths.filter(month => availableChartMonths.includes(month));
+      return filtered.length > 0 ? filtered : availableChartMonths;
+    }
+    return availableChartMonths;
+  }, [parentTimeRangeMonths, availableChartMonths]);
+
   const previousMonth = useMemo(() => {
-    const currentIndex = MONTHS_ORDERED.indexOf(selectedMonth);
+    const currentIndex = chartMonths.indexOf(selectedMonth);
     if (currentIndex > 0) {
-      return MONTHS_ORDERED[currentIndex - 1];
+      return chartMonths[currentIndex - 1];
     }
     return null;
-  }, [selectedMonth]);
+  }, [selectedMonth, chartMonths]);
 
   const previousData = previousMonth ? allMonthsData[previousMonth] : null;
 
@@ -244,7 +261,7 @@ const NationalTelephony = ({
     // Build a map of practice performance across all months
     const practicePerformance = {};
 
-    MONTHS_ORDERED.forEach(month => {
+    chartMonths.forEach(month => {
       const monthData = allMonthsData[month];
       if (!monthData) return;
 
@@ -321,7 +338,7 @@ const NationalTelephony = ({
     });
 
     return { consistent, volatile, practiceScores };
-  }, [allMonthsData]);
+  }, [allMonthsData, chartMonths]);
 
   // Toggle bookmark for a practice
   const toggleBookmark = (practice) => {
@@ -350,43 +367,78 @@ const NationalTelephony = ({
     return bookmarkedPractices.some(p => p.odsCode === odsCode);
   };
 
-  // Load and parse all Excel files and population data on mount
+  // Track if data has been loaded to prevent re-loading
+  const dataLoadedRef = useRef(false);
+
+  // Load and parse all Excel files and population data on mount (only once)
   useEffect(() => {
+    // Prevent re-loading if already loaded
+    if (dataLoadedRef.current) return;
+    dataLoadedRef.current = true;
+
     const loadAllData = async () => {
       try {
         setLoading(true);
         const allData = {};
 
-        // Load all months in parallel (telephony + population)
-        const loadPromises = Object.entries(MONTH_DATA).map(async ([month, { telephony, population }]) => {
-          const cacheBuster = `?v=${Date.now()}`;
+        // Try to load pre-processed JSON first (much faster - 10-20x improvement)
+        let jsonData = null;
+        try {
+          const jsonResponse = await fetch('/data/telephony.json');
+          if (jsonResponse.ok) {
+            jsonData = await jsonResponse.json();
+            console.log('Using pre-processed JSON data');
+          }
+        } catch (e) {
+          console.log('Pre-processed JSON not available, falling back to XLSX parsing');
+        }
 
-          // Load telephony data
-          const response = await fetch(telephony + cacheBuster);
-          const arrayBuffer = await response.arrayBuffer();
-          const parsedData = parseNationalTelephonyData(arrayBuffer);
+        if (jsonData) {
+          // Use pre-processed JSON data - just load population data
+          for (const month of Object.keys(jsonData)) {
+            if (month === 'metadata') continue;
+            const monthConfig = MONTH_DATA[month];
+            if (monthConfig) {
+              const populationMap = await parsePopulationData(monthConfig.population);
+              allData[month] = {
+                ...jsonData[month],
+                populationMap
+              };
+            }
+          }
+        } else {
+          // Fallback: Load all months in parallel (telephony + population) using XLSX parsing
+          const loadPromises = Object.entries(MONTH_DATA).map(async ([month, { telephony, population }]) => {
+            const cacheBuster = `?v=${Date.now()}`;
 
-          // Load population data
-          const populationMap = await parsePopulationData(population + cacheBuster);
+            // Load telephony data
+            const response = await fetch(telephony + cacheBuster);
+            const arrayBuffer = await response.arrayBuffer();
+            const parsedData = parseNationalTelephonyData(arrayBuffer);
 
-          return { month, data: parsedData, populationMap };
-        });
+            // Load population data
+            const populationMap = await parsePopulationData(population + cacheBuster);
 
-        const results = await Promise.all(loadPromises);
-        results.forEach(({ month, data, populationMap }) => {
-          allData[month] = {
-            ...data,
-            populationMap
-          };
-        });
+            return { month, data: parsedData, populationMap };
+          });
 
-        // DEBUG: Log the parsed national data
+          const results = await Promise.all(loadPromises);
+          results.forEach(({ month, data, populationMap }) => {
+            allData[month] = {
+              ...data,
+              populationMap
+            };
+          });
+        }
+
+        // DEBUG: Log the loaded data
         console.log('=== ALL MONTHS DATA LOADED ===');
         Object.entries(allData).forEach(([month, parsedData]) => {
           console.log(`${month}: ${parsedData.practices?.length} practices, ${Object.keys(parsedData.populationMap || {}).length} population records`);
         });
 
         setAllMonthsData(allData);
+        onDataLoaded?.(allData);
         setLoading(false);
         onLoadingChange?.(false);
       } catch (error) {
@@ -396,7 +448,7 @@ const NationalTelephony = ({
       }
     };
     loadAllData();
-  }, [onLoadingChange]);
+  }, []);
 
   // Filter practices based on search (including PCN name search)
   const filteredPractices = useMemo(() => {
@@ -446,72 +498,63 @@ const NationalTelephony = ({
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <Card className="bg-gradient-to-r from-blue-600 to-cyan-600 text-white">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold flex items-center justify-center gap-2">
-            <Phone size={28} />
-            National Telephony
-          </h2>
-          <p className="text-sm text-blue-100 mt-1">
-            {data.practices.length.toLocaleString()} practices | {totalInboundCalls ? totalInboundCalls.toLocaleString() : '—'} total inbound calls
-          </p>
-        </div>
-      </Card>
+      {/* Month Selection Card - Hidden when embedded in unified view */}
+      {!hideSearch && (
+        <Card>
+          <div className="text-center space-y-3">
+            <div className="flex flex-wrap items-center justify-center gap-4">
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium text-slate-600">Month:</label>
+                <select
+                  value={selectedMonth}
+                  onChange={(e) => {
+                    setSelectedMonth(e.target.value);
+                    setSearchTerm('');
+                  }}
+                  className="px-3 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  {Object.keys(MONTH_DATA).map(month => (
+                    <option key={month} value={month}>{month}</option>
+                  ))}
+                </select>
+              </div>
 
-      {/* Month Selection Card */}
-      <Card>
-        <div className="text-center space-y-3">
-          <div className="flex flex-wrap items-center justify-center gap-4">
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-slate-600">Month:</label>
-              <select
-                value={selectedMonth}
-                onChange={(e) => {
-                  setSelectedMonth(e.target.value);
-                  setSearchTerm('');
-                }}
-                className="px-3 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                {Object.keys(MONTH_DATA).map(month => (
-                  <option key={month} value={month}>{month}</option>
-                ))}
-              </select>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={compareWithPrevious}
+                  onChange={(e) => setCompareWithPrevious(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
+                />
+                <span className="text-sm text-slate-600 font-medium">Compare with previous months</span>
+              </label>
             </div>
 
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={compareWithPrevious}
-                onChange={(e) => setCompareWithPrevious(e.target.checked)}
-                className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
-              />
-              <span className="text-sm text-slate-600 font-medium">Compare with previous months</span>
-            </label>
+            <div className="flex flex-wrap justify-center gap-4">
+              <a
+                href="https://digital.nhs.uk/data-and-information/publications/statistical/cloud-based-telephony-data-in-general-practice"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 transition-colors"
+              >
+                📞 Telephony Data <ExternalLink size={12} />
+              </a>
+              <a
+                href="https://digital.nhs.uk/data-and-information/publications/statistical/patients-registered-at-a-gp-practice"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 transition-colors"
+              >
+                👥 Patient List Sizes <ExternalLink size={12} />
+              </a>
+            </div>
           </div>
+        </Card>
+      )}
 
-          <div className="flex flex-wrap justify-center gap-4">
-            <a
-              href="https://digital.nhs.uk/data-and-information/publications/statistical/cloud-based-telephony-data-in-general-practice"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 transition-colors"
-            >
-              📞 Telephony Data <ExternalLink size={12} />
-            </a>
-            <a
-              href="https://digital.nhs.uk/data-and-information/publications/statistical/patients-registered-at-a-gp-practice"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 transition-colors"
-            >
-              👥 Patient List Sizes <ExternalLink size={12} />
-            </a>
-          </div>
-        </div>
-      </Card>
-
-      {/* Recent Practices */}
+      {!hideSearch && (
+        <>
+          {/* Recent Practices */}
       <Card className="bg-gradient-to-br from-slate-50 to-white border-slate-200">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
@@ -609,6 +652,8 @@ const NationalTelephony = ({
           )}
         </Card>
       )}
+        </>
+      )}
 
       {/* Coverage Popup Modal */}
       {showCoveragePopup && createPortal(
@@ -669,7 +714,8 @@ const NationalTelephony = ({
         document.body
       )}
 
-      {/* Practice Search */}
+      {/* Practice Search - Hidden when embedded in unified D&C view */}
+      {!hideSearch && (
       <Card>
         {showSearchBox && (
           <div className="relative">
@@ -756,27 +802,29 @@ const NationalTelephony = ({
           </div>
         )}
       </Card>
+      )}
 
       {/* Tab Navigation - Only show when practice selected */}
       {selectedPractice && (
-        <div className="bg-white rounded-lg border border-slate-200 p-1 flex flex-wrap gap-1">
+        <div className="flex flex-wrap gap-1.5 bg-slate-50 p-1 rounded-lg border border-slate-200">
           {TABS.map(tab => {
             const isDisabled = tab.id === 'trends' && !compareWithPrevious;
+            const Icon = tab.icon;
             return (
               <button
                 key={tab.id}
                 onClick={() => !isDisabled && setActiveTab(tab.id)}
                 disabled={isDisabled}
-                className={`flex-1 min-w-[120px] px-4 py-2.5 rounded-md text-sm font-medium transition-all ${
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
                   isDisabled
-                    ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                    ? 'text-slate-300 cursor-not-allowed'
                     : activeTab === tab.id
-                      ? 'bg-blue-600 text-white shadow-sm'
-                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800'
+                      ? 'bg-white text-blue-700 shadow-sm border border-blue-200'
+                      : 'text-slate-500 hover:text-slate-700 hover:bg-white/60'
                 }`}
                 title={isDisabled ? 'Enable "Compare with previous months" to view trends' : ''}
               >
-                <span className="mr-1.5">{tab.icon}</span>
+                <Icon size={14} />
                 {tab.label}
               </button>
             );
@@ -1146,10 +1194,10 @@ const NationalTelephony = ({
                     <div className="h-64">
                       <Bar
                         data={{
-                          labels: MONTHS_ORDERED.map(m => m.split(' ')[0]),
+                          labels: chartMonths.map(m => m.split(' ')[0]),
                           datasets: [{
                             label: 'Missed Calls',
-                            data: MONTHS_ORDERED.map(month => {
+                            data: chartMonths.map(month => {
                               const monthData = allMonthsData[month];
                               if (!monthData) return 0;
                               const practice = monthData.practices.find(p => p.odsCode === selectedPractice.odsCode);
@@ -1183,11 +1231,11 @@ const NationalTelephony = ({
                     <div className="h-64">
                       <Line
                         data={{
-                          labels: MONTHS_ORDERED.map(m => m.split(' ')[0]),
+                          labels: chartMonths.map(m => m.split(' ')[0]),
                           datasets: [
                             {
                               label: 'Your Practice',
-                              data: MONTHS_ORDERED.map(month => {
+                              data: chartMonths.map(month => {
                                 const monthData = allMonthsData[month];
                                 if (!monthData) return null;
                                 const practice = monthData.practices.find(p => p.odsCode === selectedPractice.odsCode);
@@ -1201,7 +1249,7 @@ const NationalTelephony = ({
                             },
                             {
                               label: 'National Average',
-                              data: MONTHS_ORDERED.map(month => {
+                              data: chartMonths.map(month => {
                                 const monthData = allMonthsData[month];
                                 return monthData ? (monthData.national.missedPct * 100).toFixed(1) : null;
                               }),

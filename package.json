@@ -1,11 +1,12 @@
 {
   "name": "caip-analytics",
   "private": true,
-  "version": "0.6.0",
+  "version": "0.9.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "preprocess": "node scripts/preprocess-data.js",
+    "build": "npm run preprocess && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },

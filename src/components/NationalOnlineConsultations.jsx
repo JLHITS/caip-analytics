@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, TrendingUp, TrendingDown, ExternalLink, Info, Star, ChevronDown, ChevronUp, Minus, Monitor, Users, Trophy, Clock } from 'lucide-react';
+import { Search, TrendingUp, TrendingDown, ExternalLink, Info, Star, ChevronDown, ChevronUp, Minus, Monitor, Users, Trophy, Clock, BarChart3, Activity } from 'lucide-react';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -105,13 +105,24 @@ const NationalOnlineConsultations = ({
   updateSharedBookmarks,
   sharedUsageStats,
   recordPracticeUsage,
-  onLoadingChange
+  onLoadingChange,
+  onDataLoaded,
+  hideSearch = false, // When true, hides the search box and month/compare controls (used when embedded in unified D&C view)
+  parentSelectedMonth, // Optional: controlled month from parent component
+  parentCompareMode, // Optional: controlled compare mode from parent component
+  parentTimeRangeMonths, // Optional: controlled time range months from parent component
 }) => {
   const [allMonthsData, setAllMonthsData] = useState({});
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedMonth, setSelectedMonth] = useState('November 2025');
-  const [compareWithPrevious, setCompareWithPrevious] = useState(true);
+  const [localSelectedMonth, setLocalSelectedMonth] = useState('November 2025');
+  const [localCompareWithPrevious, setLocalCompareWithPrevious] = useState(true);
+
+  // Use parent-controlled values if provided, otherwise use local state
+  const selectedMonth = parentSelectedMonth || localSelectedMonth;
+  const setSelectedMonth = parentSelectedMonth ? () => {} : setLocalSelectedMonth;
+  const compareWithPrevious = parentCompareMode !== undefined ? parentCompareMode : localCompareWithPrevious;
+  const setCompareWithPrevious = parentCompareMode !== undefined ? () => {} : setLocalCompareWithPrevious;
   const [activeTab, setActiveTab] = useState('overview');
   const [showBookmarks, setShowBookmarks] = useState(false);
   const [showInterpretationTooltip, setShowInterpretationTooltip] = useState(false);
@@ -175,11 +186,11 @@ const NationalOnlineConsultations = ({
 
   // Tab definitions
   const TABS = [
-    { id: 'overview', label: 'Overview', icon: '📊' },
-    { id: 'trends', label: 'Trends', icon: '📈' },
-    { id: 'leaderboards', label: 'Leaderboards', icon: '🏆' },
-    { id: 'per1000', label: 'Per 1000 Pts', icon: '👥' },
-    { id: 'forecasting', label: 'Forecasting', icon: '🔮' },
+    { id: 'overview', label: 'Overview', icon: BarChart3 },
+    { id: 'trends', label: 'Trends', icon: TrendingUp },
+    { id: 'leaderboards', label: 'Leaderboards', icon: Trophy },
+    { id: 'per1000', label: 'Per 1000 Pts', icon: Users },
+    { id: 'forecasting', label: 'Forecasting', icon: Activity },
   ];
 
   // Get current data based on selected month
@@ -193,13 +204,25 @@ const NationalOnlineConsultations = ({
   }, [compareWithPrevious, activeTab]);
 
   // Get previous month data for comparison
+  const availableChartMonths = useMemo(() => (
+    MONTHS_ORDERED.filter(month => allMonthsData[month])
+  ), [allMonthsData]);
+
+  const chartMonths = useMemo(() => {
+    if (parentTimeRangeMonths && parentTimeRangeMonths.length > 0) {
+      const filtered = parentTimeRangeMonths.filter(month => availableChartMonths.includes(month));
+      return filtered.length > 0 ? filtered : availableChartMonths;
+    }
+    return availableChartMonths;
+  }, [parentTimeRangeMonths, availableChartMonths]);
+
   const previousMonth = useMemo(() => {
-    const currentIndex = MONTHS_ORDERED.indexOf(selectedMonth);
+    const currentIndex = chartMonths.indexOf(selectedMonth);
     if (currentIndex > 0) {
-      return MONTHS_ORDERED[currentIndex - 1];
+      return chartMonths[currentIndex - 1];
     }
     return null;
-  }, [selectedMonth]);
+  }, [selectedMonth, chartMonths]);
 
   const previousData = previousMonth ? allMonthsData[previousMonth] : null;
 
@@ -218,38 +241,66 @@ const NationalOnlineConsultations = ({
     return { change, improved, worsened, noChange: change === 0 };
   };
 
-  // Load and parse all Excel files on mount
+  // Track if data has been loaded to prevent re-loading
+  const dataLoadedRef = useRef(false);
+
+  // Load and parse all Excel files on mount (only once)
   useEffect(() => {
+    // Prevent re-loading if already loaded
+    if (dataLoadedRef.current) return;
+    dataLoadedRef.current = true;
+
     const loadAllData = async () => {
       try {
         setLoading(true);
-        const allData = {};
+        let allData = {};
 
-        // Load all months in parallel
-        const loadPromises = Object.entries(MONTH_DATA).map(async ([month, fileUrl]) => {
-          try {
-            const cacheBuster = `?v=${Date.now()}`;
-            const response = await fetch(fileUrl + cacheBuster);
-            const arrayBuffer = await response.arrayBuffer();
-            const parsedData = parseOnlineConsultationsData(arrayBuffer);
-            return { month, data: parsedData, success: true };
-          } catch (err) {
-            console.error(`Error loading ${month}:`, err);
-            return { month, data: null, success: false };
+        // Try to load pre-processed JSON first (much faster - 10-20x improvement)
+        let jsonData = null;
+        try {
+          const jsonResponse = await fetch('/data/online-consultations.json');
+          if (jsonResponse.ok) {
+            jsonData = await jsonResponse.json();
+            console.log('Using pre-processed JSON data for online consultations');
           }
-        });
+        } catch (e) {
+          console.log('Pre-processed JSON not available, falling back to XLSX parsing');
+        }
 
-        const results = await Promise.all(loadPromises);
-        results.forEach(({ month, data, success }) => {
-          if (success && data) {
-            allData[month] = data;
+        if (jsonData) {
+          // Use pre-processed JSON data directly
+          for (const month of Object.keys(jsonData)) {
+            if (month === 'metadata') continue;
+            allData[month] = jsonData[month];
           }
-        });
+        } else {
+          // Fallback: Load all months in parallel using XLSX parsing
+          const loadPromises = Object.entries(MONTH_DATA).map(async ([month, fileUrl]) => {
+            try {
+              const cacheBuster = `?v=${Date.now()}`;
+              const response = await fetch(fileUrl + cacheBuster);
+              const arrayBuffer = await response.arrayBuffer();
+              const parsedData = parseOnlineConsultationsData(arrayBuffer);
+              return { month, data: parsedData, success: true };
+            } catch (err) {
+              console.error(`Error loading ${month}:`, err);
+              return { month, data: null, success: false };
+            }
+          });
+
+          const results = await Promise.all(loadPromises);
+          results.forEach(({ month, data, success }) => {
+            if (success && data) {
+              allData[month] = data;
+            }
+          });
+        }
 
         console.log('=== ONLINE CONSULTATIONS DATA LOADED ===');
         console.log(`Loaded ${Object.keys(allData).length} months of data`);
 
         setAllMonthsData(allData);
+        onDataLoaded?.(allData);
         setLoading(false);
         onLoadingChange?.(false);
       } catch (error) {
@@ -259,7 +310,7 @@ const NationalOnlineConsultations = ({
       }
     };
     loadAllData();
-  }, [onLoadingChange]);
+  }, []);
 
   // Filter practices based on search
   const filteredPractices = useMemo(() => {
@@ -314,7 +365,7 @@ const NationalOnlineConsultations = ({
 
     const practicePerformance = {};
 
-    MONTHS_ORDERED.forEach(month => {
+    chartMonths.forEach(month => {
       const monthData = allMonthsData[month];
       if (!monthData) return;
 
@@ -383,14 +434,14 @@ const NationalOnlineConsultations = ({
     });
 
     return { consistent, volatile, practiceScores };
-  }, [allMonthsData]);
+  }, [allMonthsData, chartMonths]);
 
   // Calculate practice trend data for forecasting
   const practiceTrendData = useMemo(() => {
     if (!selectedPractice) return null;
 
     const practiceHistory = [];
-    MONTHS_ORDERED.forEach(month => {
+    chartMonths.forEach(month => {
       const monthData = allMonthsData[month];
       if (monthData) {
         const practice = monthData.practices.find(p => p.odsCode === selectedPractice.odsCode);
@@ -407,7 +458,7 @@ const NationalOnlineConsultations = ({
     });
 
     return practiceHistory;
-  }, [selectedPractice, allMonthsData]);
+  }, [selectedPractice, allMonthsData, chartMonths]);
 
   // Loading is now handled by parent component with unified loader
   if (loading) {
@@ -428,61 +479,52 @@ const NationalOnlineConsultations = ({
 
   return (
     <div className="space-y-4">
-      {/* Header */}
-      <Card className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold flex items-center justify-center gap-2">
-            <Monitor size={28} />
-            National Online Consultations
-          </h2>
-          <p className="text-sm text-indigo-200 mt-1">
-            {data.national.participatingPractices.toLocaleString()} participating practices | {data.national.totalSubmissions.toLocaleString()} total submissions
-          </p>
-        </div>
-      </Card>
+      {/* Month Selection Card - Hidden when embedded in unified view */}
+      {!hideSearch && (
+        <Card>
+          <div className="text-center space-y-3">
+            <div className="flex flex-wrap items-center justify-center gap-4">
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium text-slate-600">Month:</label>
+                <select
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  className="px-3 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                >
+                  {[...MONTHS_ORDERED].reverse().map(month => (
+                    <option key={month} value={month}>{month}</option>
+                  ))}
+                </select>
+              </div>
 
-      {/* Month Selection Card */}
-      <Card>
-        <div className="text-center space-y-3">
-          <div className="flex flex-wrap items-center justify-center gap-4">
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-slate-600">Month:</label>
-              <select
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(e.target.value)}
-                className="px-3 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-              >
-                {[...MONTHS_ORDERED].reverse().map(month => (
-                  <option key={month} value={month}>{month}</option>
-                ))}
-              </select>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={compareWithPrevious}
+                  onChange={(e) => setCompareWithPrevious(e.target.checked)}
+                  className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500"
+                />
+                <span className="text-sm text-slate-600 font-medium">Compare with previous months</span>
+              </label>
             </div>
 
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={compareWithPrevious}
-                onChange={(e) => setCompareWithPrevious(e.target.checked)}
-                className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500"
-              />
-              <span className="text-sm text-slate-600 font-medium">Compare with previous months</span>
-            </label>
+            <div className="flex flex-wrap justify-center gap-4">
+              <a
+                href="https://digital.nhs.uk/data-and-information/publications/statistical/submissions-via-online-consultation-systems-in-general-practice"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 transition-colors"
+              >
+                💻 Online Consultations Data <ExternalLink size={12} />
+              </a>
+            </div>
           </div>
+        </Card>
+      )}
 
-          <div className="flex flex-wrap justify-center gap-4">
-            <a
-              href="https://digital.nhs.uk/data-and-information/publications/statistical/submissions-via-online-consultation-systems-in-general-practice"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 transition-colors"
-            >
-              💻 Online Consultations Data <ExternalLink size={12} />
-            </a>
-          </div>
-        </div>
-      </Card>
-
-      {/* Recent Practices */}
+      {!hideSearch && (
+        <>
+          {/* Recent Practices */}
       <Card className="bg-gradient-to-br from-slate-50 to-white border-slate-200">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
@@ -577,6 +619,8 @@ const NationalOnlineConsultations = ({
           )}
         </Card>
       )}
+        </>
+      )}
 
       {/* Coverage Popup */}
       {showCoveragePopup && createPortal(
@@ -612,8 +656,8 @@ const NationalOnlineConsultations = ({
         document.body
       )}
 
-      {/* Practice Search */}
-      {showSearchBox && (
+      {/* Practice Search - Hidden when embedded in unified D&C view */}
+      {!hideSearch && showSearchBox && (
         <Card>
           <div className="relative">
             <div className="flex items-center gap-2 mb-2">
@@ -679,7 +723,7 @@ const NationalOnlineConsultations = ({
       )}
 
       {/* Selected Practice Header */}
-      {selectedPractice && (
+      {!hideSearch && selectedPractice && (
         <Card className="bg-gradient-to-r from-indigo-50 to-purple-50 border-indigo-200">
           <div className="flex items-start justify-between">
             <div>
@@ -701,13 +745,15 @@ const NationalOnlineConsultations = ({
               <p className="text-sm text-slate-600">{selectedPractice.odsCode}</p>
               <p className="text-sm text-slate-500">{selectedPractice.pcnName}</p>
               <p className="text-xs text-slate-400">{selectedPractice.icbName}</p>
-              <div className="mt-2 flex flex-wrap gap-1">
-                {selectedPractice.suppliers.map((supplier, idx) => (
-                  <span key={idx} className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-xs">
-                    {supplier}
-                  </span>
-                ))}
-              </div>
+              {selectedPractice.suppliers?.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {selectedPractice.suppliers.map((supplier, idx) => (
+                    <span key={idx} className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-xs">
+                      {supplier}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
             <button
               onClick={() => setSelectedPractice(null)}
@@ -721,24 +767,25 @@ const NationalOnlineConsultations = ({
 
       {/* Tab Navigation */}
       {selectedPractice && (
-        <div className="bg-white rounded-lg border border-slate-200 p-1 flex flex-wrap gap-1">
+        <div className="flex flex-wrap gap-1.5 bg-slate-50 p-1 rounded-lg border border-slate-200">
           {TABS.map(tab => {
             const isDisabled = (tab.id === 'trends' || tab.id === 'forecasting') && !compareWithPrevious;
+            const Icon = tab.icon;
             return (
               <button
                 key={tab.id}
                 onClick={() => !isDisabled && setActiveTab(tab.id)}
                 disabled={isDisabled}
-                className={`flex-1 min-w-[100px] px-3 py-2 rounded-md text-sm font-medium transition-all ${
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
                   isDisabled
-                    ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                    ? 'text-slate-300 cursor-not-allowed'
                     : activeTab === tab.id
-                      ? 'bg-indigo-600 text-white shadow-sm'
-                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800'
+                      ? 'bg-white text-blue-700 shadow-sm border border-blue-200'
+                      : 'text-slate-500 hover:text-slate-700 hover:bg-white/60'
                 }`}
                 title={isDisabled ? 'Enable "Compare with previous months" to view this tab' : ''}
               >
-                <span className="mr-1">{tab.icon}</span>
+                <Icon size={14} />
                 {tab.label}
               </button>
             );
@@ -752,7 +799,10 @@ const NationalOnlineConsultations = ({
         const nationalRanking = calculateOCNationalRanking(selectedPractice, data.practices);
         const icbRanking = calculateOCICBRanking(selectedPractice, data.practices);
         const pcnRanking = calculateOCPCNRanking(selectedPractice, data.practices);
-        const interpretation = getOCPerformanceInterpretation(selectedPractice.ratePer1000, data.national.avgRatePer1000);
+        const showInterpretation = false;
+        const interpretation = showInterpretation
+          ? getOCPerformanceInterpretation(selectedPractice.ratePer1000, data.national.avgRatePer1000)
+          : null;
 
         const submissionsChange = prevPractice ? getMetricChange(selectedPractice.submissions, prevPractice.submissions) : null;
         const rateChange = prevPractice ? getMetricChange(selectedPractice.ratePer1000, prevPractice.ratePer1000) : null;
@@ -760,7 +810,8 @@ const NationalOnlineConsultations = ({
         return (
           <>
             {/* Performance Interpretation */}
-            <Card className={`bg-gradient-to-br from-${interpretation.color}-50 to-white border-${interpretation.color}-200`}>
+            {showInterpretation && interpretation && (
+              <Card className={`bg-gradient-to-br from-${interpretation.color}-50 to-white border-${interpretation.color}-200`}>
               <div className="text-center">
                 <div className="text-4xl mb-2">{interpretation.emoji}</div>
                 <div className="flex items-center justify-center gap-2 mb-2">
@@ -799,6 +850,7 @@ const NationalOnlineConsultations = ({
                 <p className="text-slate-600 mt-2">{interpretation.description}</p>
               </div>
             </Card>
+            )}
 
             {/* Summary Tiles */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -951,7 +1003,7 @@ const NationalOnlineConsultations = ({
       {/* TRENDS TAB */}
       {selectedPractice && activeTab === 'trends' && compareWithPrevious && (() => {
         // Build aligned historical data for charts (include months even if practice missing)
-        const history = MONTHS_ORDERED.map(month => {
+        const history = chartMonths.map(month => {
           const label = `${month.split(' ')[0].substring(0, 3)} ${month.split(' ')[1].substring(2)}`;
           const monthData = allMonthsData[month];
           const practice = monthData?.practices.find(p => p.odsCode === selectedPractice.odsCode);
@@ -1641,7 +1693,7 @@ const NationalOnlineConsultations = ({
         );
 
         // Get next months labels
-        const lastMonth = MONTHS_ORDERED[MONTHS_ORDERED.length - 1];
+        const lastMonth = chartMonths[chartMonths.length - 1];
         const [lastMonthName, lastYear] = lastMonth.split(' ');
         const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
         const lastMonthIdx = monthNames.indexOf(lastMonthName);
@@ -1666,7 +1718,7 @@ const NationalOnlineConsultations = ({
 
         // Year-over-year comparison
         const yoyData = [];
-        MONTHS_ORDERED.forEach(month => {
+        chartMonths.forEach(month => {
           const [monthName, year] = month.split(' ');
           const currentData = allMonthsData[month];
           const previousYearMonth = `${monthName} ${parseInt(year) - 1}`;

@@ -264,3 +264,201 @@ export const maybeCleanupExpiredShares = async () => {
     }
   }
 };
+
+// === COMPARISON SET FUNCTIONS ===
+
+const COMPARISON_COLLECTION = 'comparisonSets';
+const MAX_PRACTICES_IN_COMPARISON = 15;
+
+/**
+ * Create a comparison set from multiple share IDs
+ * @param {string[]} shareIds - Array of share IDs to include (max 15)
+ * @param {string} name - Optional name for the comparison
+ * @returns {Promise<Object>} { comparisonId, comparisonUrl, expiresAt }
+ * @throws {Error} if validation fails or operation errors
+ */
+export const createComparisonSet = async (shareIds, name = '') => {
+  // Validate input
+  if (!Array.isArray(shareIds) || shareIds.length < 2) {
+    throw new Error('A comparison requires at least 2 practices.');
+  }
+
+  if (shareIds.length > MAX_PRACTICES_IN_COMPARISON) {
+    throw new Error(`Maximum ${MAX_PRACTICES_IN_COMPARISON} practices allowed in a comparison.`);
+  }
+
+  // Check rate limit
+  const rateLimit = checkRateLimit();
+  if (!rateLimit.allowed) {
+    const minutesRemaining = Math.ceil(rateLimit.remainingTime / 60000);
+    throw new Error(`Rate limit exceeded. Please wait ${minutesRemaining} minute${minutesRemaining > 1 ? 's' : ''} before creating another comparison.`);
+  }
+
+  try {
+    // Validate all share IDs exist and are demand-capacity type
+    const validationResults = await Promise.allSettled(
+      shareIds.map(async (id) => {
+        const docRef = doc(db, COLLECTION_NAME, id);
+        const docSnap = await getDoc(docRef);
+        if (!docSnap.exists()) {
+          throw new Error(`Share '${id}' not found`);
+        }
+        const data = docSnap.data();
+        if (data.type !== 'demand-capacity') {
+          throw new Error(`Share '${id}' is not a Demand & Capacity dashboard`);
+        }
+        if (data.expiresAt.seconds < Timestamp.now().seconds) {
+          throw new Error(`Share '${id}' has expired`);
+        }
+        return { id, valid: true };
+      })
+    );
+
+    // Check for validation failures
+    const failures = validationResults.filter(r => r.status === 'rejected');
+    if (failures.length > 0) {
+      const errorMessages = failures.map(f => f.reason.message).join('; ');
+      throw new Error(`Invalid shares: ${errorMessages}`);
+    }
+
+    // Generate comparison ID
+    let comparisonId;
+    let attempts = 0;
+    const maxAttempts = 3;
+
+    while (attempts < maxAttempts) {
+      comparisonId = generateShareId(8);
+      const docRef = doc(db, COMPARISON_COLLECTION, comparisonId);
+      const docSnap = await getDoc(docRef);
+
+      if (!docSnap.exists()) {
+        break;
+      }
+
+      attempts++;
+      if (attempts >= maxAttempts) {
+        throw new Error('Failed to generate unique comparison ID. Please try again.');
+      }
+    }
+
+    const now = Timestamp.now();
+    const expiresAt = new Timestamp(
+      now.seconds + (EXPIRY_DAYS * 24 * 60 * 60),
+      now.nanoseconds
+    );
+
+    // Create comparison document
+    const comparisonDoc = {
+      shareIds,
+      name: name || `Comparison ${new Date().toLocaleDateString()}`,
+      createdAt: now,
+      expiresAt,
+      views: 0,
+      lastViewedAt: null,
+      practiceCount: shareIds.length,
+    };
+
+    await setDoc(doc(db, COMPARISON_COLLECTION, comparisonId), comparisonDoc);
+
+    // Record creation for rate limiting
+    recordShareCreation();
+
+    const comparisonUrl = `${window.location.origin}/compare/${comparisonId}`;
+
+    return {
+      comparisonId,
+      comparisonUrl,
+      expiresAt: expiresAt.toDate(),
+    };
+  } catch (error) {
+    if (error.message.includes('Rate limit') || error.message.includes('Invalid shares') || error.message.includes('requires at least')) {
+      throw error;
+    }
+    throw new Error(`Failed to create comparison: ${error.message}`);
+  }
+};
+
+/**
+ * Load a comparison set from Firebase
+ * @param {string} comparisonId - The comparison ID to load
+ * @returns {Promise<Object>} { shareIds, name, createdAt, expiresAt, views, practiceCount }
+ * @throws {Error} if not found or expired
+ */
+export const loadComparisonSet = async (comparisonId) => {
+  try {
+    const docRef = doc(db, COMPARISON_COLLECTION, comparisonId);
+    const docSnap = await getDoc(docRef);
+
+    if (!docSnap.exists()) {
+      throw new Error('Comparison not found. It may have expired or been deleted.');
+    }
+
+    const data = docSnap.data();
+    const now = Timestamp.now();
+
+    // Check expiry
+    if (data.expiresAt.seconds < now.seconds) {
+      await deleteDoc(docRef);
+      throw new Error('This comparison has expired (30 day limit).');
+    }
+
+    // Update view count
+    await setDoc(docRef, {
+      ...data,
+      views: (data.views || 0) + 1,
+      lastViewedAt: now,
+    });
+
+    return {
+      shareIds: data.shareIds,
+      name: data.name,
+      createdAt: data.createdAt.toDate(),
+      expiresAt: data.expiresAt.toDate(),
+      views: (data.views || 0) + 1,
+      practiceCount: data.practiceCount || data.shareIds.length,
+    };
+  } catch (error) {
+    if (error.message.includes('expired') || error.message.includes('not found')) {
+      throw error;
+    }
+    throw new Error(`Failed to load comparison: ${error.message}`);
+  }
+};
+
+/**
+ * Load all practice data for a comparison
+ * @param {string[]} shareIds - Array of share IDs to load
+ * @returns {Promise<Object>} { practices: Array, errors: Array }
+ */
+export const loadComparisonPractices = async (shareIds) => {
+  const results = await Promise.allSettled(
+    shareIds.map(async (shareId) => {
+      const data = await loadFirebaseShare(shareId);
+      return {
+        shareId,
+        ...data,
+        // Flatten config fields for easier access
+        surgeryName: data.config?.surgeryName || 'Unknown',
+        odsCode: data.config?.odsCode || '',
+        population: data.config?.population,
+      };
+    })
+  );
+
+  const practices = [];
+  const errors = [];
+
+  results.forEach((result, index) => {
+    if (result.status === 'fulfilled') {
+      practices.push(result.value);
+    } else {
+      errors.push({
+        shareId: shareIds[index],
+        error: result.reason.message,
+        status: result.reason.message.includes('expired') ? 'expired' : 'error',
+      });
+    }
+  });
+
+  return { practices, errors };
+};

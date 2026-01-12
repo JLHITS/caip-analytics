@@ -48,10 +48,10 @@ import BugReportModal from './components/modals/BugReportModal';
 import AboutModal from './components/modals/AboutModal';
 import Toast from './components/ui/Toast';
 import ImportButton from './components/ui/ImportButton';
-import NationalTelephony from './components/NationalTelephony';
-import NationalOnlineConsultations from './components/NationalOnlineConsultations';
-import FancyNationalLoader from './components/ui/FancyNationalLoader';
+import PracticeLookup from './components/ui/PracticeLookup';
+import NationalDemandCapacity from './components/NationalDemandCapacity';
 import TriageSlotAnalysis from './components/TriageSlotAnalysis';
+import { PracticeComparison, ComparisonBuilder } from './components/comparison';
 
 // Utility imports
 import { calculateLinearForecast, getNextMonthNames, isGP } from './utils/calculations';
@@ -150,6 +150,7 @@ export default function App() {
   // Application state management
   const [config, setConfig] = useState({
     surgeryName: '',
+    odsCode: '',
     population: 10000,
     analyseTelephony: true,
     useTelephony: true,
@@ -178,10 +179,6 @@ export default function App() {
 
   // National data loading state - only mount components when user first visits national data
   const [nationalDataVisited, setNationalDataVisited] = useState(false);
-  const [telephonyLoading, setTelephonyLoading] = useState(true);
-  const [ocLoading, setOcLoading] = useState(true);
-  const nationalDataLoading = telephonyLoading || ocLoading;
-
   // Set nationalDataVisited to true when user first selects national data
   useEffect(() => {
     if (dataSource === 'national' && !nationalDataVisited) {
@@ -195,6 +192,11 @@ export default function App() {
   const [sharedBookmarks, setSharedBookmarks] = useState([]);
   const [sharedUsageStats, setSharedUsageStats] = useState({ totalChecks: 0, recentPractices: [] });
   const latestUsageRef = useRef(sharedUsageStats);
+
+  // Practice comparison state
+  const [showComparison, setShowComparison] = useState(false);
+  const [comparisonId, setComparisonId] = useState(null);
+  const [showComparisonBuilder, setShowComparisonBuilder] = useState(false);
   const usageDocRef = useMemo(() => doc(db, 'telephonyStats', 'global'), []);
 
   // Load shared bookmarks from localStorage
@@ -318,6 +320,7 @@ export default function App() {
   const [excelLoading, setExcelLoading] = useState(false);
   const [toast, setToast] = useState(null);
   const [importLoading, setImportLoading] = useState(false);
+  const [initialNationalOdsCode, setInitialNationalOdsCode] = useState(null);
 
   // Set document title and favicon on mount
   useEffect(() => {
@@ -342,6 +345,23 @@ export default function App() {
   // Auto-select tab based on URL path
   useEffect(() => {
     const path = window.location.pathname;
+
+    // Check for comparison URL first
+    const compareMatch = path.match(/^\/compare\/([a-zA-Z0-9]+)$/);
+    if (compareMatch) {
+      setComparisonId(compareMatch[1]);
+      setShowComparison(true);
+      return;
+    }
+
+    const odsMatch = path.match(/^\/([A-Za-z0-9]{3,10})$/);
+    if (odsMatch) {
+      setInitialNationalOdsCode(odsMatch[1]);
+      setDataSource('national');
+      setMainTab('telephony');
+      return;
+    }
+
     if (path.includes('/telephony')) {
       setDataSource('national');
       setMainTab('telephony');
@@ -503,6 +523,7 @@ export default function App() {
 
       const exampleConfig = {
         surgeryName: 'Example Surgery',
+        odsCode: 'A12345',
         population: 5600,
         useTelephony: true,
         useOnline: true
@@ -1663,6 +1684,7 @@ export default function App() {
   const handleReset = () => {
     setConfig({
       surgeryName: '',
+      odsCode: '',
       population: 10000,
       analyseTelephony: true,
       useTelephony: true,
@@ -1932,6 +1954,20 @@ export default function App() {
   const dnaHeader = isFiltered ? 'DNAs (Est. Monthly)' : 'DNAs';
   const seasonalWarning = isFiltered ? <p className="text-xs text-amber-600 mb-3 italic flex items-center gap-1"><Info size={12} />* Monthly averages shown. Exact dates are not available in DNA/Unused CSVs.</p> : null;
 
+  // If showing comparison view, render that instead
+  if (showComparison && comparisonId) {
+    return (
+      <PracticeComparison
+        comparisonId={comparisonId}
+        onClose={() => {
+          setShowComparison(false);
+          setComparisonId(null);
+          window.history.pushState(null, '', '/');
+        }}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800 pb-20">
       <header className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm/50 print:hidden">
@@ -2020,13 +2056,18 @@ export default function App() {
         {!dataSource && (
           <div className="max-w-3xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="text-center mb-12">
-              <h2 className="text-3xl font-bold text-slate-900 mb-3">Welcome to CAIP Analytics</h2>
-              <p className="text-lg text-slate-600 mb-4">
-                Analyse and optimise your primary care demand, capacity, and performance metrics.
-              </p>
+              <div className="bg-gradient-to-r from-[#005EB8] to-[#2B8BD8] text-white rounded-2xl shadow-lg px-6 py-5">
+                <h2 className="text-2xl sm:text-3xl font-bold flex items-center justify-center gap-2">
+                  <Activity size={26} />
+                  Welcome to CAIP Analytics
+                </h2>
+                <p className="text-sm sm:text-base text-blue-50 mt-2">
+                  Analyse and optimise your primary care demand, capacity, and performance metrics.
+                </p>
+              </div>
               <button
                 onClick={() => setShowAbout(true)}
-                className="text-blue-600 hover:text-blue-700 font-medium inline-flex items-center gap-1 hover:underline"
+                className="mt-4 text-blue-600 hover:text-blue-700 font-medium inline-flex items-center gap-1 hover:underline"
               >
                 <Info size={16} />
                 Learn More
@@ -2067,6 +2108,7 @@ export default function App() {
                   Explore NHS England national datasets and benchmark your practice.
                 </p>
                 <div className="flex flex-wrap gap-2">
+                  <span className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-full font-medium">Appointments</span>
                   <span className="text-xs px-2 py-1 bg-cyan-50 text-cyan-700 rounded-full font-medium">Telephony</span>
                   <span className="text-xs px-2 py-1 bg-indigo-50 text-indigo-700 rounded-full font-medium">Online Consultations</span>
                 </div>
@@ -2154,20 +2196,10 @@ export default function App() {
                 )}
                 {dataSource === 'national' && (
                   <>
-                    <button
-                      onClick={() => setMainTab('telephony')}
-                      className={`flex items-center gap-2 px-6 py-3 rounded-lg font-bold transition-all ${mainTab === 'telephony' ? 'bg-cyan-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-800'}`}
-                    >
-                      <Phone size={20} />
-                      Telephony
-                    </button>
-                    <button
-                      onClick={() => setMainTab('online-consultations')}
-                      className={`flex items-center gap-2 px-6 py-3 rounded-lg font-bold transition-all ${mainTab === 'online-consultations' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-800'}`}
-                    >
-                      <Monitor size={20} />
-                      Online Consultations
-                    </button>
+                    <div className="flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg shadow-md">
+                      <Activity size={20} />
+                      <span className="font-bold">National Demand & Capacity Analysis</span>
+                    </div>
                   </>
                 )}
               </div>
@@ -2204,7 +2236,22 @@ export default function App() {
 
             <Card className="mb-6">
               <SectionHeader title="Practice Details" />
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+              {/* Practice Lookup */}
+              <div className="mb-4 pb-4 border-b border-slate-100">
+                <PracticeLookup
+                  onSelect={(practice) => {
+                    setConfig(prev => ({
+                      ...prev,
+                      odsCode: practice.odsCode,
+                      population: practice.population,
+                    }));
+                    setToast({ type: 'success', message: `Loaded ${practice.odsCode} - Population: ${practice.population.toLocaleString()}` });
+                  }}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Surgery Name</label>
                   <input
@@ -2216,6 +2263,22 @@ export default function App() {
                   />
                 </div>
                 <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    ODS Code <span className="text-slate-400 text-xs">(Optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all font-mono uppercase"
+                    placeholder="e.g. A12345"
+                    maxLength={10}
+                    value={config.odsCode}
+                    onChange={e => setConfig({ ...config, odsCode: e.target.value.toUpperCase() })}
+                  />
+                  <p className="text-xs text-slate-400 mt-1">
+                    Find at <a href="https://odsportal.digital.nhs.uk" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">ODS Portal</a>
+                  </p>
+                </div>
+                <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Patient Population</label>
                   <input
                     type="number"
@@ -2223,6 +2286,7 @@ export default function App() {
                     value={config.population}
                     onChange={e => setConfig({ ...config, population: e.target.value })}
                   />
+                  <p className="text-xs text-slate-400 mt-1">Auto-filled from NHS data, but you can adjust</p>
                 </div>
               </div>
               <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2458,6 +2522,15 @@ export default function App() {
                   linkLoading={shareLoading}
                 />
               </div>
+
+              {/* 4. Compare Practices Button */}
+              <button
+                onClick={() => setShowComparisonBuilder(true)}
+                className="flex items-center gap-2 px-6 py-3 bg-white text-emerald-600 border border-emerald-200 rounded-full hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-700 transition-all shadow-sm hover:shadow-md"
+              >
+                <Users size={18} />
+                <span className="font-semibold">Compare Practices</span>
+              </button>
             </div>
 
             <div className="flex justify-center mb-8" data-html2canvas-ignore="true">
@@ -2908,40 +2981,17 @@ export default function App() {
           </div>
         )}
 
-        {/* NATIONAL DATA - Only mount components when user first visits national data */}
-        {nationalDataVisited && (
-          <>
-            {/* NATIONAL DATA UNIFIED LOADING SCREEN */}
-            {dataSource === 'national' && nationalDataLoading && (
-              <FancyNationalLoader type="combined" />
-            )}
-
-            {/* NATIONAL TELEPHONY CONTENT - Keep mounted once visited, use CSS to hide */}
-            <div className={dataSource === 'national' && mainTab === 'telephony' && !nationalDataLoading ? '' : 'hidden'}>
-              <NationalTelephony
-                sharedPractice={sharedPractice}
-                setSharedPractice={setSharedPractice}
-                sharedBookmarks={sharedBookmarks}
-                updateSharedBookmarks={updateSharedBookmarks}
-                sharedUsageStats={sharedUsageStats}
-                recordPracticeUsage={recordPracticeUsage}
-                onLoadingChange={setTelephonyLoading}
-              />
-            </div>
-
-            {/* NATIONAL ONLINE CONSULTATIONS CONTENT - Keep mounted once visited, use CSS to hide */}
-            <div className={dataSource === 'national' && mainTab === 'online-consultations' && !nationalDataLoading ? '' : 'hidden'}>
-              <NationalOnlineConsultations
-                sharedPractice={sharedPractice}
-                setSharedPractice={setSharedPractice}
-                sharedBookmarks={sharedBookmarks}
-                updateSharedBookmarks={updateSharedBookmarks}
-                sharedUsageStats={sharedUsageStats}
-                recordPracticeUsage={recordPracticeUsage}
-                onLoadingChange={setOcLoading}
-              />
-            </div>
-          </>
+        {/* NATIONAL DATA - Unified Demand & Capacity component handles all national data */}
+        {nationalDataVisited && dataSource === 'national' && (
+          <NationalDemandCapacity
+            sharedPractice={sharedPractice}
+            setSharedPractice={setSharedPractice}
+            sharedBookmarks={sharedBookmarks}
+            updateSharedBookmarks={updateSharedBookmarks}
+            sharedUsageStats={sharedUsageStats}
+            recordPracticeUsage={recordPracticeUsage}
+            initialOdsCode={initialNationalOdsCode}
+          />
         )}
 
         {/* TRIAGE SLOT ANALYSIS CONTENT */}
@@ -2960,7 +3010,7 @@ export default function App() {
           setProcessedData(null);
           setSelectedMonth('All');
           setAiReport(null);
-          setConfig({ ...config, surgeryName: '', population: 10000 });
+          setConfig({ ...config, surgeryName: '', odsCode: '', population: 10000 });
           setFiles({ appointments: [], dna: [], unused: [], onlineRequests: [], telephony: [] });
           setRawStaffData([]);
           setRawSlotData([]);
@@ -3002,6 +3052,17 @@ export default function App() {
         onClose={() => setShowAbout(false)}
         onOpenBugReport={() => setShowBugReport(true)}
         timesUsed={sharedUsageStats?.totalChecks || 0}
+      />
+
+      <ComparisonBuilder
+        isOpen={showComparisonBuilder}
+        onClose={() => setShowComparisonBuilder(false)}
+        onComparisonCreated={(id) => {
+          setShowComparisonBuilder(false);
+          setComparisonId(id);
+          setShowComparison(true);
+          window.history.pushState(null, '', `/compare/${id}`);
+        }}
       />
 
       {toast && (
