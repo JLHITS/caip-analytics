@@ -29,6 +29,7 @@ const AboutModal = ({ isOpen, onClose, onOpenBugReport, timesUsed = 0 }) => {
 
   const fetchPracticeUsage = async () => {
     setAdminLoading(true);
+    setAdminError('');
     try {
       const snapshot = await getDocs(collection(db, 'practiceUsage'));
       const practices = snapshot.docs.map(docSnap => ({
@@ -38,7 +39,12 @@ const AboutModal = ({ isOpen, onClose, onOpenBugReport, timesUsed = 0 }) => {
       practices.sort((a, b) => (a.gpName || '').localeCompare(b.gpName || ''));
       setAdminPractices(practices);
     } catch (error) {
-      setAdminError('Failed to load practice usage list.');
+      const message = String(error?.message || '');
+      if (error?.code === 'permission-denied' || /missing or insufficient permissions/i.test(message)) {
+        setAdminError('Practice usage list blocked by Firestore rules. Allow read access for practiceUsage.');
+      } else {
+        setAdminError('Failed to load practice usage list.');
+      }
     } finally {
       setAdminLoading(false);
     }
@@ -237,16 +243,30 @@ const AboutModal = ({ isOpen, onClose, onOpenBugReport, timesUsed = 0 }) => {
           <div className="mt-6 bg-slate-50 border border-slate-200 rounded-lg p-4">
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-sm font-semibold text-slate-800">Practice Usage List</h4>
-              <button
-                type="button"
-                onClick={handleExportTxt}
-                className="text-xs font-semibold text-blue-600 hover:text-blue-700"
-              >
-                Export .txt
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={fetchPracticeUsage}
+                  className="text-xs font-semibold text-slate-600 hover:text-slate-800"
+                >
+                  Refresh
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExportTxt}
+                  disabled={adminPractices.length === 0}
+                  className={`text-xs font-semibold ${adminPractices.length === 0 ? 'text-slate-300 cursor-not-allowed' : 'text-blue-600 hover:text-blue-700'}`}
+                >
+                  Export .txt
+                </button>
+              </div>
             </div>
             {adminLoading ? (
               <p className="text-sm text-slate-500">Loading practices...</p>
+            ) : adminError ? (
+              <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                {adminError}
+              </p>
             ) : (
               <div className="max-h-64 overflow-y-auto border border-slate-200 rounded-lg bg-white">
                 <table className="w-full text-xs">
