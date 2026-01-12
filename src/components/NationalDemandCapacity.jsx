@@ -316,13 +316,12 @@ const NationalDemandCapacity = ({
       setSharedPractice(practice);
     }
 
-    setToast({ type: 'success', message: `Selected: ${practice.gpName}` });
-  }, [setSharedPractice]);
+    if (recordPracticeUsage) {
+      recordPracticeUsage(practice);
+    }
 
-  useEffect(() => {
-    if (!selectedPractice || !recordPracticeUsage) return;
-    recordPracticeUsage(selectedPractice);
-  }, [selectedPractice, recordPracticeUsage]);
+    setToast({ type: 'success', message: `Selected: ${practice.gpName}` });
+  }, [setSharedPractice, recordPracticeUsage]);
 
   const copyPracticeLink = useCallback(async () => {
     if (!selectedPractice?.odsCode) return;

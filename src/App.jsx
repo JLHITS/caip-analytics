@@ -266,8 +266,10 @@ export default function App() {
   // Update shared usage stats and persist to localStorage
   const recordPracticeUsage = (practice) => {
     if (!practice || !practice.odsCode) return;
-    if (lastRecordedOdsRef.current === practice.odsCode) return;
-    lastRecordedOdsRef.current = practice.odsCode;
+    const normalizedOds = String(practice.odsCode).trim().toUpperCase();
+    if (!normalizedOds) return;
+    if (lastRecordedOdsRef.current === normalizedOds) return;
+    lastRecordedOdsRef.current = normalizedOds;
     setSharedUsageStats((prev = { totalChecks: 0, recentPractices: [] }) => {
       const newRecentPractices = [
         {
