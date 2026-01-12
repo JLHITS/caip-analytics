@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "preprocess": "node scripts/preprocess-data.js",
-    "build": "npm run preprocess && vite build",
+    "build": "node scripts/preprocess-if-needed.js && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },
