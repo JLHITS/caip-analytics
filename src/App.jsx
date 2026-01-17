@@ -317,7 +317,7 @@ export default function App() {
           odsCode: practice.odsCode,
           name: practice.gpName,
           pcnName: practice.pcnName,
-          icbName: practice.icbName
+          icbName: practice.icbName || practice.subICBName || ''
         },
         ...(prev.recentPractices || []).filter(p => p.odsCode !== practice.odsCode)
       ].slice(0, 5);
@@ -355,7 +355,7 @@ export default function App() {
           odsCode: practice.odsCode,
           gpName: practice.gpName,
           pcnName: practice.pcnName || '',
-          icbName: practice.icbName || '',
+          icbName: practice.icbName || practice.subICBName || '',
           lastUsed: serverTimestamp(),
           count: increment(1),
         }, { merge: true });

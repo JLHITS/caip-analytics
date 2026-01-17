@@ -36,7 +36,12 @@ const AboutModal = ({ isOpen, onClose, onOpenBugReport, timesUsed = 0 }) => {
         id: docSnap.id,
         ...docSnap.data()
       }));
-      practices.sort((a, b) => (a.gpName || '').localeCompare(b.gpName || ''));
+      // Sort by lastUsed (most recent first)
+      practices.sort((a, b) => {
+        const aTime = a.lastUsed?.toDate?.() || a.lastUsed || 0;
+        const bTime = b.lastUsed?.toDate?.() || b.lastUsed || 0;
+        return bTime - aTime;
+      });
       setAdminPractices(practices);
     } catch (error) {
       const message = String(error?.message || '');
@@ -48,6 +53,20 @@ const AboutModal = ({ isOpen, onClose, onOpenBugReport, timesUsed = 0 }) => {
     } finally {
       setAdminLoading(false);
     }
+  };
+
+  // Format timestamp for display
+  const formatLastUsed = (timestamp) => {
+    if (!timestamp) return '-';
+    const date = timestamp?.toDate?.() || new Date(timestamp);
+    if (isNaN(date.getTime())) return '-';
+    return date.toLocaleString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
   const handleAdminSubmit = async (e) => {
@@ -71,9 +90,10 @@ const AboutModal = ({ isOpen, onClose, onOpenBugReport, timesUsed = 0 }) => {
       practice.gpName || 'Unknown Practice',
       practice.odsCode || practice.id || '',
       practice.pcnName || '',
-      practice.icbName || ''
+      practice.icbName || practice.subICBName || '',
+      formatLastUsed(practice.lastUsed)
     ].join('\t'));
-    const content = ['Practice Name\tODS Code\tPCN\tICB', ...lines].join('\n');
+    const content = ['Practice Name\tODS Code\tPCN\tICB\tLast Used', ...lines].join('\n');
     const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -276,12 +296,13 @@ const AboutModal = ({ isOpen, onClose, onOpenBugReport, timesUsed = 0 }) => {
                       <th className="text-left px-3 py-2">ODS</th>
                       <th className="text-left px-3 py-2">PCN</th>
                       <th className="text-left px-3 py-2">ICB</th>
+                      <th className="text-left px-3 py-2">Last Used</th>
                     </tr>
                   </thead>
                   <tbody>
                     {adminPractices.length === 0 && (
                       <tr>
-                        <td colSpan={4} className="px-3 py-3 text-slate-500 text-center">
+                        <td colSpan={5} className="px-3 py-3 text-slate-500 text-center">
                           No practice usage recorded yet.
                         </td>
                       </tr>
@@ -291,7 +312,8 @@ const AboutModal = ({ isOpen, onClose, onOpenBugReport, timesUsed = 0 }) => {
                         <td className="px-3 py-2 text-slate-800">{practice.gpName || 'Unknown Practice'}</td>
                         <td className="px-3 py-2 text-slate-600">{practice.odsCode || practice.id}</td>
                         <td className="px-3 py-2 text-slate-600">{practice.pcnName || '-'}</td>
-                        <td className="px-3 py-2 text-slate-600">{practice.icbName || '-'}</td>
+                        <td className="px-3 py-2 text-slate-600">{practice.icbName || practice.subICBName || '-'}</td>
+                        <td className="px-3 py-2 text-slate-500">{formatLastUsed(practice.lastUsed)}</td>
                       </tr>
                     ))}
                   </tbody>
