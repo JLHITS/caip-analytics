@@ -80,7 +80,7 @@ import {
 import logo from './assets/logo.png';
 import rushcliffeLogo from './assets/rushcliffe.png';
 import nottsWestLogo from './assets/nottswest.png';
-import { db } from './firebase/config';
+import { db, trackDataSourceSelected, trackTabView, trackPracticeLookup, trackExport, trackImport, trackDisclaimerAccepted, trackShareCreated, trackAIAnalysis } from './firebase/config';
 
 // Sample data imports
 import sampleAppt from './assets/sampledata/AppointmentReport.csv?url';
@@ -176,6 +176,11 @@ export default function App() {
   // Navigation state - two levels: dataSource (local/national) then subTab
   const [dataSource, setDataSource] = useState(null); // null = intro, 'local', 'national'
   const [mainTab, setMainTab] = useState('demand'); // Local: 'demand', 'triage' | National: 'telephony', 'online-consultations'
+
+  // Disclaimer state - require acceptance before using the tool
+  const [disclaimerAccepted, setDisclaimerAccepted] = useState(() => {
+    return localStorage.getItem('caip-disclaimer-accepted') === 'true';
+  });
 
   // National data loading state - only mount components when user first visits national data
   const [nationalDataVisited, setNationalDataVisited] = useState(false);
@@ -1643,6 +1648,7 @@ export default function App() {
       setShareExpiresAt(null);
       setShowShareOptions(false);
       setToast({ type: 'success', message: 'Excel file downloaded successfully!' });
+      trackExport('excel');
     } catch (error) {
       console.error('Excel export failed:', error);
       setToast({ type: 'error', message: `Export failed: ${error.message}` });
@@ -1687,6 +1693,7 @@ export default function App() {
       setShareExpiresAt(expiresAt);
       setShowShareOptions(false);
       setToast({ type: 'success', message: 'Link copied to clipboard!' });
+      trackShareCreated('firebase');
     } catch (error) {
       console.error('Share link generation failed:', error);
       setToast({ type: 'error', message: error.message });
@@ -1720,6 +1727,7 @@ export default function App() {
       setDataSource('local');
       setMainTab('demand');
       setToast({ type: 'success', message: 'Dashboard restored from Excel!' });
+      trackImport();
     } catch (error) {
       console.error('Import failed:', error);
       setToast({ type: 'error', message: `Import failed: ${error.message}` });
@@ -2137,68 +2145,87 @@ export default function App() {
 
             <h3 className="text-center text-lg font-semibold text-slate-700 mb-6">Choose your data source</h3>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-              {/* Local Data Card */}
-              <button
-                onClick={() => { setDataSource('local'); setMainTab('demand'); }}
-                className="group bg-white p-8 rounded-2xl shadow-lg border-2 border-slate-200 hover:border-blue-400 hover:shadow-xl transition-all text-left"
-              >
-                <div className="w-14 h-14 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 mb-4 group-hover:bg-blue-100 transition-colors">
-                  <Upload size={28} />
-                </div>
-                <h4 className="text-xl font-bold text-slate-900 mb-2">Local Data</h4>
-                <p className="text-slate-500 text-sm mb-4">
-                  Upload your own practice data for personalised analysis and insights.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <span className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-full font-medium">Demand & Capacity</span>
-                  <span className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-full font-medium">Triage Slots</span>
-                </div>
-              </button>
-
-              {/* National Data Card */}
-              <button
-                onClick={() => { setDataSource('national'); setMainTab('telephony'); }}
-                className="group bg-white p-8 rounded-2xl shadow-lg border-2 border-slate-200 hover:border-green-400 hover:shadow-xl transition-all text-left"
-              >
-                <div className="w-14 h-14 bg-green-50 rounded-xl flex items-center justify-center text-green-600 mb-4 group-hover:bg-green-100 transition-colors">
-                  <Users size={28} />
-                </div>
-                <h4 className="text-xl font-bold text-slate-900 mb-2">National Data</h4>
-                <p className="text-slate-500 text-sm mb-4">
-                  Explore NHS England national datasets and benchmark your practice.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <span className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-full font-medium">Appointments</span>
-                  <span className="text-xs px-2 py-1 bg-cyan-50 text-cyan-700 rounded-full font-medium">Telephony</span>
-                  <span className="text-xs px-2 py-1 bg-indigo-50 text-indigo-700 rounded-full font-medium">Online Consultations</span>
-                </div>
-              </button>
-            </div>
-
-            {/* Import Card - Below main options */}
-            <div className="max-w-2xl mx-auto">
-              <div className="bg-gradient-to-br from-slate-50 to-slate-100 p-6 rounded-xl shadow border border-slate-200">
-                <div className="flex items-start gap-4">
-                  <div className="flex-shrink-0">
-                    <div className="w-12 h-12 bg-slate-200 rounded-lg flex items-center justify-center text-slate-600">
-                      <Download size={24} />
+            {/* Cards container with relative positioning for overlay */}
+            <div className="relative">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Local Data Card */}
+                <button
+                  onClick={() => { if (disclaimerAccepted) { setDataSource('local'); setMainTab('demand'); trackDataSourceSelected('local'); } }}
+                  disabled={!disclaimerAccepted}
+                  className={`group bg-white p-6 rounded-2xl shadow-lg border-2 transition-all text-left ${
+                    disclaimerAccepted
+                      ? 'border-slate-200 hover:border-blue-400 hover:shadow-xl cursor-pointer'
+                      : 'border-slate-200'
+                  }`}
+                >
+                  <div className="flex items-center gap-4 mb-3">
+                    <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 flex-shrink-0 group-hover:bg-blue-100 transition-colors">
+                      <Upload size={24} />
                     </div>
+                    <h4 className="text-lg font-bold text-slate-900">Local Data</h4>
                   </div>
-                  <div className="flex-1">
-                    <h4 className="text-lg font-bold text-slate-900 mb-1">Import CAIP Data File</h4>
+                  <p className="text-slate-500 text-sm mb-3">
+                    Upload your practice data for in-depth analysis including utilisation rates and detailed telephony metrics.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <span className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-full font-medium">Demand & Capacity</span>
+                    <span className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-full font-medium">Triage Slots</span>
+                  </div>
+                </button>
+
+                {/* National Data Card */}
+                <button
+                  onClick={() => { if (disclaimerAccepted) { setDataSource('national'); setMainTab('demand-capacity'); trackDataSourceSelected('national'); } }}
+                  disabled={!disclaimerAccepted}
+                  className={`group bg-white p-6 rounded-2xl shadow-lg border-2 transition-all text-left ${
+                    disclaimerAccepted
+                      ? 'border-slate-200 hover:border-green-400 hover:shadow-xl cursor-pointer'
+                      : 'border-slate-200'
+                  }`}
+                >
+                  <div className="flex items-center gap-4 mb-3">
+                    <div className="w-12 h-12 bg-green-50 rounded-xl flex items-center justify-center text-green-600 flex-shrink-0 group-hover:bg-green-100 transition-colors">
+                      <Users size={24} />
+                    </div>
+                    <h4 className="text-lg font-bold text-slate-900">National Data</h4>
+                  </div>
+                  <p className="text-slate-500 text-sm mb-3">
+                    Explore NHS England datasets, benchmark against national averages, and compare with other practices.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <span className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-full font-medium">Appointments</span>
+                    <span className="text-xs px-2 py-1 bg-cyan-50 text-cyan-700 rounded-full font-medium">Telephony</span>
+                    <span className="text-xs px-2 py-1 bg-indigo-50 text-indigo-700 rounded-full font-medium">Online Consultations</span>
+                  </div>
+                </button>
+              </div>
+
+              {/* Disclaimer Overlay - positioned over the cards */}
+              {!disclaimerAccepted && (
+                <div className="absolute inset-0 bg-white/80 backdrop-blur-sm rounded-2xl flex items-center justify-center">
+                  <div className="bg-white border border-amber-200 rounded-xl p-6 shadow-lg max-w-md mx-4">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center text-amber-600 flex-shrink-0">
+                        <AlertTriangle size={20} />
+                      </div>
+                      <h4 className="text-base font-bold text-slate-900">Before you continue</h4>
+                    </div>
                     <p className="text-sm text-slate-600 mb-4">
-                      Have a previously exported .xlsx file? Import it to restore your dashboard and continue your analysis.
+                      This tool is designed to support GP practices and PCNs with demand and capacity analysis for decision-making purposes. It is <strong>not intended for performance monitoring or management oversight</strong>.
                     </p>
-                    <ImportButton
-                      onImport={handleImportExcel}
-                      loading={importLoading}
-                      label="Import Dashboard"
-                      variant="secondary"
-                    />
+                    <button
+                      onClick={() => {
+                        setDisclaimerAccepted(true);
+                        localStorage.setItem('caip-disclaimer-accepted', 'true');
+                        trackDisclaimerAccepted();
+                      }}
+                      className="w-full px-4 py-2.5 rounded-lg font-medium text-sm bg-blue-600 text-white hover:bg-blue-700 transition-all"
+                    >
+                      I understand
+                    </button>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
         )}
@@ -2210,13 +2237,13 @@ export default function App() {
             <div className="flex justify-center mb-4" data-html2canvas-ignore="true">
               <div className="bg-slate-100 p-1 rounded-lg inline-flex">
                 <button
-                  onClick={() => { setDataSource('local'); setMainTab('demand'); }}
+                  onClick={() => { setDataSource('local'); setMainTab('demand'); trackDataSourceSelected('local'); }}
                   className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${dataSource === 'local' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}
                 >
                   Local Data
                 </button>
                 <button
-                  onClick={() => { setDataSource('national'); setMainTab('telephony'); }}
+                  onClick={() => { setDataSource('national'); setMainTab('demand-capacity'); trackDataSourceSelected('national'); }}
                   className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${dataSource === 'national' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}
                 >
                   National Data
@@ -2230,7 +2257,7 @@ export default function App() {
                 {dataSource === 'local' && (
                   <>
                     <button
-                      onClick={() => setMainTab('demand')}
+                      onClick={() => { setMainTab('demand'); trackTabView('local', 'demand'); }}
                       className={`flex items-center gap-2 px-6 py-3 rounded-lg font-bold transition-all ${mainTab === 'demand' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-800'}`}
                     >
                       <BarChart3 size={20} />
@@ -2242,7 +2269,7 @@ export default function App() {
                       </span>
                     </button>
                     <button
-                      onClick={() => setMainTab('triage')}
+                      onClick={() => { setMainTab('triage'); trackTabView('local', 'triage'); }}
                       className={`flex items-center gap-2 px-6 py-3 rounded-lg font-bold transition-all ${mainTab === 'triage' ? 'bg-purple-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-800'}`}
                     >
                       <Activity size={20} />
@@ -2295,6 +2322,29 @@ export default function App() {
               <p className="text-slate-500">Upload your TPP SystmOne extracts (no patient data required) and X-on Surgery Connect management reports to get started.</p>
             </div>
 
+            {/* Import CAIP Data File - at start of form */}
+            <div className="bg-gradient-to-br from-slate-50 to-slate-100 p-5 rounded-xl shadow border border-slate-200 mb-6">
+              <div className="flex items-start gap-4">
+                <div className="flex-shrink-0">
+                  <div className="w-11 h-11 bg-slate-200 rounded-lg flex items-center justify-center text-slate-600">
+                    <Download size={22} />
+                  </div>
+                </div>
+                <div className="flex-1">
+                  <h4 className="text-base font-bold text-slate-900 mb-1">Import CAIP Data File</h4>
+                  <p className="text-sm text-slate-600 mb-3">
+                    Have a previously exported .xlsx file? Import it to restore your dashboard and continue your analysis.
+                  </p>
+                  <ImportButton
+                    onImport={handleImportExcel}
+                    loading={importLoading}
+                    label="Import Dashboard"
+                    variant="secondary"
+                  />
+                </div>
+              </div>
+            </div>
+
             <Card className="mb-6">
               <SectionHeader title="Practice Details" />
 
@@ -2308,6 +2358,7 @@ export default function App() {
                       population: practice.population,
                     }));
                     setToast({ type: 'success', message: `Loaded ${practice.odsCode} - Population: ${practice.population.toLocaleString()}` });
+                    trackPracticeLookup(practice.odsCode, 'local');
                   }}
                 />
               </div>
@@ -3088,6 +3139,7 @@ export default function App() {
         onProceed={() => {
           setShowAIConsent(false);
           runAIAnalysis();
+          trackAIAnalysis();
         }}
       />
 
