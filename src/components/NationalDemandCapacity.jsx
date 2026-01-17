@@ -83,6 +83,163 @@ const InlineInfoTooltip = ({ text }) => {
   );
 };
 
+/**
+ * National Spectrum Visualizer - Shows where a practice sits on the national spectrum
+ * Uses a rainbow gradient from red (lowest) to violet (highest) based on actual national data
+ */
+const NationalSpectrumVisualizer = ({ value, allValues, label, rank, total }) => {
+  // Calculate percentile position (0-100)
+  const sortedValues = [...allValues].filter(v => v > 0).sort((a, b) => a - b);
+  const minVal = sortedValues[0] || 0;
+  const maxVal = sortedValues[sortedValues.length - 1] || 1;
+
+  // Find percentile - what percentage of practices are below this value
+  const belowCount = sortedValues.filter(v => v < value).length;
+  const percentile = sortedValues.length > 0 ? (belowCount / sortedValues.length) * 100 : 50;
+
+  // Get percentile labels (p10, p25, p50, p75, p90)
+  const getPercentileValue = (p) => {
+    const idx = Math.floor((p / 100) * (sortedValues.length - 1));
+    return sortedValues[idx] || 0;
+  };
+
+  const p10 = getPercentileValue(10);
+  const p25 = getPercentileValue(25);
+  const p50 = getPercentileValue(50);
+  const p75 = getPercentileValue(75);
+  const p90 = getPercentileValue(90);
+
+  // Rainbow gradient colors
+  const gradientStops = [
+    { pos: 0, color: '#dc2626' },    // Red - lowest
+    { pos: 15, color: '#ea580c' },   // Orange
+    { pos: 30, color: '#f59e0b' },   // Amber
+    { pos: 45, color: '#84cc16' },   // Lime
+    { pos: 55, color: '#22c55e' },   // Green - good
+    { pos: 65, color: '#14b8a6' },   // Teal
+    { pos: 75, color: '#06b6d4' },   // Cyan
+    { pos: 85, color: '#3b82f6' },   // Blue - better
+    { pos: 92, color: '#8b5cf6' },   // Violet
+    { pos: 100, color: '#a855f7' },  // Purple - highest
+  ];
+
+  // Get color at percentile
+  const getColorAtPercentile = (pct) => {
+    for (let i = gradientStops.length - 1; i >= 0; i--) {
+      if (pct >= gradientStops[i].pos) {
+        if (i === gradientStops.length - 1) return gradientStops[i].color;
+        const next = gradientStops[i + 1];
+        const t = (pct - gradientStops[i].pos) / (next.pos - gradientStops[i].pos);
+        return gradientStops[i].color; // Simplified - just return the stop color
+      }
+    }
+    return gradientStops[0].color;
+  };
+
+  const markerColor = getColorAtPercentile(percentile);
+
+  // Format percentage
+  const formatPct = (v) => v?.toFixed(2) + '%';
+
+  return (
+    <div className="p-5 bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl border border-slate-200">
+      <div className="flex items-center justify-between mb-3">
+        <h4 className="font-semibold text-slate-700">{label}</h4>
+        <div className="text-right">
+          <span className="text-2xl font-bold" style={{ color: markerColor }}>{formatPct(value)}</span>
+          {rank && total && (
+            <p className="text-xs text-slate-500">Rank #{rank} of {total.toLocaleString()}</p>
+          )}
+        </div>
+      </div>
+
+      {/* Spectrum Bar */}
+      <div className="relative mt-4 mb-6">
+        {/* Rainbow gradient bar */}
+        <div
+          className="h-4 rounded-full shadow-inner overflow-hidden"
+          style={{
+            background: `linear-gradient(to right, ${gradientStops.map(s => `${s.color} ${s.pos}%`).join(', ')})`
+          }}
+        />
+
+        {/* Marker for practice position */}
+        <div
+          className="absolute top-1/2 -translate-y-1/2 transition-all duration-500"
+          style={{ left: `${Math.max(2, Math.min(98, percentile))}%` }}
+        >
+          {/* Marker pin */}
+          <div className="relative">
+            <div
+              className="w-6 h-6 -ml-3 rounded-full border-4 border-white shadow-lg transform -translate-y-0"
+              style={{ backgroundColor: markerColor }}
+            />
+            {/* Arrow pointing down */}
+            <div
+              className="absolute left-1/2 -translate-x-1/2 -bottom-2 w-0 h-0"
+              style={{
+                borderLeft: '6px solid transparent',
+                borderRight: '6px solid transparent',
+                borderTop: `8px solid ${markerColor}`,
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Percentile markers */}
+        <div className="absolute -bottom-5 left-0 right-0 flex justify-between text-[9px] text-slate-400 px-1">
+          <span>0%</span>
+          <span style={{ position: 'absolute', left: '25%', transform: 'translateX(-50%)' }}>25th</span>
+          <span style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)' }}>50th</span>
+          <span style={{ position: 'absolute', left: '75%', transform: 'translateX(-50%)' }}>75th</span>
+          <span>100%</span>
+        </div>
+      </div>
+
+      {/* Stats row */}
+      <div className="mt-8 grid grid-cols-5 gap-2 text-center">
+        <div className="p-2 bg-white rounded-lg border border-slate-100">
+          <p className="text-[10px] text-slate-400 uppercase tracking-wide">Min</p>
+          <p className="text-xs font-semibold text-slate-600">{formatPct(minVal)}</p>
+        </div>
+        <div className="p-2 bg-white rounded-lg border border-slate-100">
+          <p className="text-[10px] text-slate-400 uppercase tracking-wide">P25</p>
+          <p className="text-xs font-semibold text-slate-600">{formatPct(p25)}</p>
+        </div>
+        <div className="p-2 bg-white rounded-lg border border-amber-200 bg-amber-50">
+          <p className="text-[10px] text-amber-600 uppercase tracking-wide">Median</p>
+          <p className="text-xs font-bold text-amber-700">{formatPct(p50)}</p>
+        </div>
+        <div className="p-2 bg-white rounded-lg border border-slate-100">
+          <p className="text-[10px] text-slate-400 uppercase tracking-wide">P75</p>
+          <p className="text-xs font-semibold text-slate-600">{formatPct(p75)}</p>
+        </div>
+        <div className="p-2 bg-white rounded-lg border border-slate-100">
+          <p className="text-[10px] text-slate-400 uppercase tracking-wide">Max</p>
+          <p className="text-xs font-semibold text-slate-600">{formatPct(maxVal)}</p>
+        </div>
+      </div>
+
+      {/* Percentile interpretation */}
+      <div className="mt-4 text-center">
+        <p className="text-sm">
+          <span className="text-slate-500">Your practice is at the </span>
+          <span className="font-bold" style={{ color: markerColor }}>
+            {percentile.toFixed(0)}th percentile
+          </span>
+          <span className="text-slate-500"> nationally</span>
+        </p>
+        <p className="text-xs text-slate-400 mt-1">
+          {percentile >= 75 ? '🌟 Top quartile performance' :
+           percentile >= 50 ? '✓ Above median' :
+           percentile >= 25 ? '↗ Below median, room to improve' :
+           '⚠️ Lower quartile - consider reviewing capacity'}
+        </p>
+      </div>
+    </div>
+  );
+};
+
 const NationalDemandCapacity = ({
   sharedPractice,
   setSharedPractice,
@@ -113,8 +270,8 @@ const NationalDemandCapacity = ({
   const [selectedMonth, setSelectedMonth] = useState('November 2025');
   const compareMode = true; // Always compare with previous months
   const defaultEndMonth = MONTHS_NEWEST_FIRST[0];
-  const defaultStartMonth = MONTHS_NEWEST_FIRST[Math.min(5, MONTHS_NEWEST_FIRST.length - 1)];
-  const [timeRangePreset, setTimeRangePreset] = useState('last6');
+  const defaultStartMonth = MONTHS_NEWEST_FIRST[Math.min(11, MONTHS_NEWEST_FIRST.length - 1)];
+  const [timeRangePreset, setTimeRangePreset] = useState('last12');
   const [customStartMonth, setCustomStartMonth] = useState(defaultStartMonth);
   const [customEndMonth, setCustomEndMonth] = useState(defaultEndMonth);
 
@@ -648,6 +805,7 @@ const NationalDemandCapacity = ({
         odsCode: p.odsCode,
         pcnCode: p.pcnCode,
         subICBCode: p.subICBCode,
+        listSize: p.listSize || 0,
         gpApptPerDayPct: metrics.gpApptPerDayPct || 0,
         gpApptOrOCPerDayPct: metrics.gpApptOrOCPerDayPct || 0,
       };
@@ -674,6 +832,12 @@ const NationalDemandCapacity = ({
     const sortedPcnGpOc = [...pcnPractices].sort((a, b) => b.gpApptOrOCPerDayPct - a.gpApptOrOCPerDayPct);
     const gpOcPcnRank = sortedPcnGpOc.findIndex(p => p.odsCode === practice.odsCode) + 1;
 
+    // Extract all national values for spectrum visualization (exclude small practices < 1000 patients)
+    const MIN_POPULATION_FOR_SPECTRUM = 1000;
+    const spectrumPractices = allMetricsWithOds.filter(m => m.listSize >= MIN_POPULATION_FOR_SPECTRUM);
+    const allGpApptPerDayPctValues = spectrumPractices.map(m => m.gpApptPerDayPct);
+    const allGpOcPerDayPctValues = spectrumPractices.map(m => m.gpApptOrOCPerDayPct);
+
     return {
       ...practice,
       ...metrics,
@@ -688,6 +852,9 @@ const NationalDemandCapacity = ({
       totalPractices: sortedNational.length,
       icbPracticeCount: sortedICB.length,
       pcnPracticeCount: sortedPCN.length,
+      // National distribution for spectrum visualization
+      allGpApptPerDayPctValues,
+      allGpOcPerDayPctValues,
     };
   }, [selectedPractice, appointmentData, selectedMonth, telephonyByOds, ocByOds, populationData]);
 
@@ -1477,6 +1644,26 @@ const NationalDemandCapacity = ({
                   </div>
                 </div>
               </Card>
+
+              {/* National Spectrum Visualizations */}
+              {practiceMetrics.allGpApptPerDayPctValues?.length > 0 && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <NationalSpectrumVisualizer
+                    value={practiceMetrics.gpApptPerDayPct}
+                    allValues={practiceMetrics.allGpApptPerDayPctValues}
+                    label="Patients with GP Appointment per Day (%)"
+                    rank={practiceMetrics.nationalRank}
+                    total={practiceMetrics.totalPractices}
+                  />
+                  <NationalSpectrumVisualizer
+                    value={practiceMetrics.gpApptOrOCPerDayPct}
+                    allValues={practiceMetrics.allGpOcPerDayPctValues}
+                    label="Patients with GP Appt or Medical OC per Day (%)"
+                    rank={practiceMetrics.gpOcNationalRank}
+                    total={practiceMetrics.totalPractices}
+                  />
+                </div>
+              )}
 
               {/* Performance Band Charts */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
