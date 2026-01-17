@@ -8,6 +8,9 @@ import {
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
+// Analytics imports
+import { trackEvent, trackPracticeLookup, trackTabView } from '../firebase/config';
+
 // Component imports
 import Card from './ui/Card';
 import MetricCard from './ui/MetricCard';
@@ -320,6 +323,9 @@ const NationalDemandCapacity = ({
       recordPracticeUsage(practice);
     }
 
+    // Track practice lookup
+    trackPracticeLookup(practice.odsCode, 'national');
+
     setToast({ type: 'success', message: `Selected: ${practice.gpName}` });
   }, [setSharedPractice, recordPracticeUsage]);
 
@@ -452,13 +458,18 @@ const NationalDemandCapacity = ({
     if (!practicesToAdd || practicesToAdd.length === 0) return;
     const existing = new Set(comparePractices.map(p => p.odsCode));
     const merged = [...comparePractices];
+    let addedCount = 0;
     practicesToAdd.forEach(practice => {
       if (!existing.has(practice.odsCode)) {
         merged.push(practice);
         existing.add(practice.odsCode);
+        addedCount++;
       }
     });
     setComparePractices(merged);
+    if (addedCount > 0) {
+      trackEvent('compare_practices_added', { count: addedCount, total: merged.length });
+    }
   }, [comparePractices]);
 
   const compareTrendMonths = useMemo(() => {
@@ -738,6 +749,7 @@ const NationalDemandCapacity = ({
     if (isBookmarked) {
       updateSharedBookmarks(sharedBookmarks.filter(b => b.odsCode !== selectedPractice.odsCode));
       setToast({ type: 'info', message: 'Removed from bookmarks' });
+      trackEvent('bookmark_removed', { ods_code: selectedPractice.odsCode });
     } else {
       updateSharedBookmarks([...sharedBookmarks, {
         odsCode: selectedPractice.odsCode,
@@ -745,6 +757,7 @@ const NationalDemandCapacity = ({
         addedAt: new Date().toISOString(),
       }]);
       setToast({ type: 'success', message: 'Added to bookmarks' });
+      trackEvent('bookmark_added', { ods_code: selectedPractice.odsCode });
     }
   }, [selectedPractice, isBookmarked, sharedBookmarks, updateSharedBookmarks]);
 
@@ -1090,7 +1103,12 @@ const NationalDemandCapacity = ({
           return (
             <button
               key={tab.id}
-              onClick={() => !isDisabled && setActiveSubTab(tab.id)}
+              onClick={() => {
+                if (!isDisabled) {
+                  setActiveSubTab(tab.id);
+                  trackTabView('national', tab.id);
+                }
+              }}
               disabled={isDisabled}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
                 isActive

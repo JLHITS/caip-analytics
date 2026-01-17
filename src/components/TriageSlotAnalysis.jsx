@@ -7,6 +7,7 @@ import {
   History, ChevronRight, ChevronLeft, Inbox, ArrowUpRight, ArrowDownRight, Share2
 } from 'lucide-react';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
+import { trackEvent, trackTabView, trackExport, trackShareCreated } from '../firebase/config';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -926,6 +927,7 @@ export default function TriageSlotAnalysis() {
       setData(analysis);
       setFiles(uploadedFiles.map(f => f.name));
       setActiveTab('overview');
+      trackEvent('triage_data_uploaded', { file_count: uploadedFiles.length, row_count: allRows.length });
     } catch (err) {
       setError(err.message);
       setData(null);
@@ -949,6 +951,7 @@ export default function TriageSlotAnalysis() {
       setData(analysis);
       setFiles(['Rapid Health December Data Example - 20260106.xlsx (Sample)']);
       setActiveTab('overview');
+      trackEvent('triage_example_loaded');
     } catch (err) {
       setError('Failed to load example data: ' + err.message);
     } finally {
@@ -995,6 +998,7 @@ export default function TriageSlotAnalysis() {
       setShareUrl(generatedUrl);
       setShareExpiresAt(expiresAt);
       setToast({ type: 'success', message: 'Link copied to clipboard!' });
+      trackShareCreated('triage-slots');
     } catch (error) {
       console.error('Share link generation failed:', error);
       setToast({ type: 'error', message: error.message });

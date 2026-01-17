@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Search, TrendingUp, TrendingDown, ExternalLink, Info, Star, ChevronDown, ChevronUp, Minus, Monitor, Users, Trophy, Clock, BarChart3, Activity } from 'lucide-react';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
+import { trackEvent } from '../firebase/config';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -340,6 +341,7 @@ const NationalOnlineConsultations = ({
 
     if (isAlreadyBookmarked) {
       newBookmarks = bookmarkedPractices.filter(p => p.odsCode !== practice.odsCode);
+      trackEvent('bookmark_removed', { ods_code: practice.odsCode, source: 'online-consultations' });
     } else {
       newBookmarks = [...bookmarkedPractices, {
         odsCode: practice.odsCode,
@@ -350,6 +352,7 @@ const NationalOnlineConsultations = ({
         icbName: practice.icbName,
         timestamp: new Date().toISOString()
       }];
+      trackEvent('bookmark_added', { ods_code: practice.odsCode, source: 'online-consultations' });
     }
 
     setBookmarkedPractices(newBookmarks);
