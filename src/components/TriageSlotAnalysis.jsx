@@ -27,9 +27,23 @@ import ShareModal from './modals/ShareModal';
 import Toast from './ui/Toast';
 import { restoreTriageSlotsFromExcel, validateExcelFile } from '../utils/excelUtils';
 import { createFirebaseShare, loadFirebaseShare } from '../utils/shareUtils';
+import { parseSystmConnectData, analyzeSystmConnectData } from '../utils/systmConnectParser';
+import SystmConnectAnalysis from './SystmConnectAnalysis';
 
 // Sample data import
 import sampleTriageData from '../assets/Rapid Health December Data Example  - 20260106.xlsx?url';
+
+// Triage system logos
+import rhLogo from '../assets/rh.png';
+import tppLogo from '../assets/tpp.webp';
+import accurxLogo from '../assets/accurx.webp';
+
+// System options
+const TRIAGE_SYSTEMS = [
+  { id: 'rapidhealth', name: 'Rapid Health', logo: rhLogo, enabled: true },
+  { id: 'systmconnect', name: 'SystmConnect', logo: tppLogo, enabled: true },
+  { id: 'accurx', name: 'Accurx', logo: accurxLogo, enabled: false, comingSoon: true },
+];
 
 // Register Chart.js components
 ChartJS.register(
@@ -815,6 +829,13 @@ export default function TriageSlotAnalysis() {
   const [shareLoading, setShareLoading] = useState(false);
   const [toast, setToast] = useState(null);
 
+  // Triage system selection (rapidhealth, systmconnect, accurx)
+  const [selectedSystem, setSelectedSystem] = useState('rapidhealth');
+
+  // SystmConnect specific state
+  const [systmConnectData, setSystmConnectData] = useState(null);
+  const [systmConnectDataQuality, setSystmConnectDataQuality] = useState(null);
+
   // Slot capacity inputs (user-configurable)
   const [slotCapacity, setSlotCapacity] = useState({
     Monday: { GREEN: 10, YELLOW: 8, AMBER: 6, RED: 4 },
@@ -910,32 +931,63 @@ export default function TriageSlotAnalysis() {
     setError(null);
 
     try {
-      let allRows = [];
+      if (selectedSystem === 'systmconnect') {
+        // Parse SystmConnect data
+        let allRows = [];
+        let combinedDataQuality = { totalRows: 0, missingDates: 0, invalidDurations: 0, missingOutcomes: 0, missingType: 0, unparsedDates: 0 };
 
-      for (const file of uploadedFiles) {
-        const arrayBuffer = await file.arrayBuffer();
-        const workbook = XLSX.read(arrayBuffer);
-        const rows = parseTriageData(workbook);
-        allRows = allRows.concat(rows);
+        for (const file of uploadedFiles) {
+          const arrayBuffer = await file.arrayBuffer();
+          const workbook = XLSX.read(arrayBuffer);
+          const { rows, dataQuality } = parseSystmConnectData(workbook);
+          allRows = allRows.concat(rows);
+          // Aggregate data quality
+          combinedDataQuality.totalRows += dataQuality.totalRows;
+          combinedDataQuality.missingDates += dataQuality.missingDates;
+          combinedDataQuality.invalidDurations += dataQuality.invalidDurations;
+          combinedDataQuality.missingOutcomes += dataQuality.missingOutcomes;
+          combinedDataQuality.missingType += dataQuality.missingType;
+        }
+
+        if (allRows.length === 0) {
+          throw new Error('No valid data found in uploaded files');
+        }
+
+        const analyzed = analyzeSystmConnectData(allRows);
+        setSystmConnectData({ rows: allRows, analyzed });
+        setSystmConnectDataQuality(combinedDataQuality);
+        setFiles(uploadedFiles.map(f => f.name));
+        trackEvent('systmconnect_data_uploaded', { file_count: uploadedFiles.length, row_count: allRows.length });
+      } else {
+        // Parse Rapid Health data
+        let allRows = [];
+
+        for (const file of uploadedFiles) {
+          const arrayBuffer = await file.arrayBuffer();
+          const workbook = XLSX.read(arrayBuffer);
+          const rows = parseTriageData(workbook);
+          allRows = allRows.concat(rows);
+        }
+
+        if (allRows.length === 0) {
+          throw new Error('No valid data found in uploaded files');
+        }
+
+        const analysis = analyzeData(allRows);
+        setData(analysis);
+        setFiles(uploadedFiles.map(f => f.name));
+        setActiveTab('overview');
+        trackEvent('triage_data_uploaded', { file_count: uploadedFiles.length, row_count: allRows.length });
       }
-
-      if (allRows.length === 0) {
-        throw new Error('No valid data found in uploaded files');
-      }
-
-      const analysis = analyzeData(allRows);
-      setData(analysis);
-      setFiles(uploadedFiles.map(f => f.name));
-      setActiveTab('overview');
-      trackEvent('triage_data_uploaded', { file_count: uploadedFiles.length, row_count: allRows.length });
     } catch (err) {
       setError(err.message);
       setData(null);
+      setSystmConnectData(null);
       setFiles([]);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [selectedSystem]);
 
   // Load example data
   const loadExampleData = useCallback(async () => {
@@ -962,6 +1014,8 @@ export default function TriageSlotAnalysis() {
   // Reset data
   const handleReset = useCallback(() => {
     setData(null);
+    setSystmConnectData(null);
+    setSystmConnectDataQuality(null);
     setFiles([]);
     setError(null);
     setActiveTab('overview');
@@ -1174,8 +1228,8 @@ export default function TriageSlotAnalysis() {
     return analysis;
   }, [data, slotCapacity, adjustedCapacityNeededByDay]);
 
-  // Render upload form
-  if (!data) {
+  // Render upload form (show when no data is loaded for any system)
+  if (!data && !systmConnectData) {
     return (
       <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
         {/* Header */}
@@ -1203,18 +1257,56 @@ export default function TriageSlotAnalysis() {
               </div>
               <h3 className="text-xl font-bold text-slate-900 mb-2">Upload your Triage Data</h3>
               <p className="text-slate-500 text-sm">
-                Upload one or more Rapid Health Smart Triage exports to analyse your demand patterns and optimise slot allocation.
+                Upload your triage system exports to analyse demand patterns and optimise outcomes.
               </p>
-              <p className="text-amber-600 text-xs mt-2 flex items-center justify-center gap-1">
-                <AlertCircle size={14} />
-                Only Rapid Health Smart Triage exports are currently supported
-              </p>
+            </div>
+
+            {/* System Selection Toggle */}
+            <div className="mb-6">
+              <p className="text-xs text-slate-500 text-center mb-3 font-medium uppercase tracking-wide">Select your triage system</p>
+              <div className="flex justify-center gap-2">
+                {TRIAGE_SYSTEMS.map((system) => (
+                  <button
+                    key={system.id}
+                    onClick={() => system.enabled && setSelectedSystem(system.id)}
+                    disabled={!system.enabled}
+                    className={`relative flex flex-col items-center gap-2 px-4 py-3 rounded-xl border-2 transition-all min-w-[100px] ${
+                      selectedSystem === system.id
+                        ? 'border-purple-500 bg-purple-50 shadow-md'
+                        : system.enabled
+                        ? 'border-slate-200 bg-white hover:border-purple-300 hover:bg-purple-25'
+                        : 'border-slate-100 bg-slate-50 cursor-not-allowed opacity-60'
+                    }`}
+                  >
+                    <img
+                      src={system.logo}
+                      alt={system.name}
+                      className={`h-8 w-auto object-contain ${!system.enabled ? 'grayscale' : ''}`}
+                    />
+                    <span className={`text-xs font-medium ${
+                      selectedSystem === system.id ? 'text-purple-700' : 'text-slate-600'
+                    }`}>
+                      {system.name}
+                    </span>
+                    {system.comingSoon && (
+                      <span className="absolute -top-2 -right-2 text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-bold uppercase">
+                        Soon
+                      </span>
+                    )}
+                    {selectedSystem === system.id && (
+                      <div className="absolute -top-1 -right-1 w-5 h-5 bg-purple-500 rounded-full flex items-center justify-center">
+                        <CheckCircle size={12} className="text-white" />
+                      </div>
+                    )}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="border-2 border-dashed border-slate-200 rounded-xl p-8 text-center hover:border-purple-400 transition-colors">
               <input
                 type="file"
-                accept=".xlsx,.xls"
+                accept={selectedSystem === 'systmconnect' ? '.xlsx,.xls,.csv' : '.xlsx,.xls'}
                 multiple
                 onChange={handleFileUpload}
                 className="hidden"
@@ -1230,7 +1322,13 @@ export default function TriageSlotAnalysis() {
                   Click to upload or drag and drop
                 </p>
                 <p className="text-slate-400 text-sm">
-                  XLSX or XLS files (single or multiple)
+                  {selectedSystem === 'systmconnect'
+                    ? 'XLSX, XLS or CSV files (single or multiple)'
+                    : 'XLSX or XLS files (single or multiple)'}
+                </p>
+                <p className="text-xs text-purple-500 mt-2">
+                  {selectedSystem === 'rapidhealth' && 'Rapid Health Smart Triage extract format'}
+                  {selectedSystem === 'systmconnect' && 'TPP SystmOne SystmConnect extract format'}
                 </p>
               </label>
             </div>
@@ -1250,23 +1348,71 @@ export default function TriageSlotAnalysis() {
             )}
           </Card>
 
-          {/* Example Data Button */}
-          <div className="flex justify-center">
-            <button
-              onClick={loadExampleData}
-              disabled={isLoading}
-              className="flex items-center gap-2 px-4 py-2 text-purple-600 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg transition-all font-medium shadow-sm hover:shadow"
-            >
-              {isLoading ? <Loader2 size={16} className="animate-spin" /> : <PlayCircle size={16} />}
-              See Example
-            </button>
-          </div>
+          {/* Example Data Button (only for Rapid Health) */}
+          {selectedSystem === 'rapidhealth' && (
+            <div className="flex justify-center">
+              <button
+                onClick={loadExampleData}
+                disabled={isLoading}
+                className="flex items-center gap-2 px-4 py-2 text-purple-600 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg transition-all font-medium shadow-sm hover:shadow"
+              >
+                {isLoading ? <Loader2 size={16} className="animate-spin" /> : <PlayCircle size={16} />}
+                See Example
+              </button>
+            </div>
+          )}
         </div>
       </div>
     );
   }
 
-  // Render analysis dashboard
+  // Render SystmConnect analysis dashboard
+  if (systmConnectData) {
+    return (
+      <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+        {/* Header */}
+        <Card className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white mb-6">
+          <div className="text-center">
+            <h2 className="text-2xl font-bold flex items-center justify-center gap-2">
+              <Activity size={28} />
+              SystmConnect Analysis
+              <span className="text-xs uppercase tracking-wide px-2 py-0.5 rounded-full font-bold bg-white/20 text-white">
+                Beta
+              </span>
+            </h2>
+            <p className="text-sm text-purple-100 mt-1">
+              TPP SystmOne Online Consultation Analysis
+            </p>
+          </div>
+        </Card>
+
+        {/* File info and actions */}
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2 text-sm text-slate-600">
+            <FileText size={16} />
+            <span>{files.join(', ')}</span>
+          </div>
+          <button
+            onClick={handleReset}
+            className="flex items-center gap-1 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+          >
+            <X size={16} />
+            Reset
+          </button>
+        </div>
+
+        <SystmConnectAnalysis
+          data={systmConnectData}
+          dataQuality={systmConnectDataQuality}
+          onReset={handleReset}
+        />
+
+        {toast && <Toast {...toast} onClose={() => setToast(null)} />}
+      </div>
+    );
+  }
+
+  // Render Rapid Health analysis dashboard
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Header */}
