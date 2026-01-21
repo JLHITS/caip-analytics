@@ -953,11 +953,25 @@ export default function TriageSlotAnalysis() {
           throw new Error('No valid data found in uploaded files');
         }
 
-        const analyzed = analyzeSystmConnectData(allRows);
-        setSystmConnectData({ rows: allRows, analyzed });
+        // Deduplicate rows based on key fields (submittedDt + odsCode + age + type + outcome)
+        const seen = new Set();
+        const deduplicatedRows = allRows.filter(row => {
+          const key = `${row.submittedDt?.getTime() || ''}-${row.odsCode}-${row.age}-${row.type}-${row.clinicalProblemType || row.adminActivityType || ''}-${row.outcome || ''}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+
+        const duplicatesRemoved = allRows.length - deduplicatedRows.length;
+        if (duplicatesRemoved > 0) {
+          console.log(`SystmConnect: Removed ${duplicatesRemoved} duplicate rows`);
+        }
+
+        const analyzed = analyzeSystmConnectData(deduplicatedRows);
+        setSystmConnectData({ rows: deduplicatedRows, analyzed, fileCount: uploadedFiles.length, duplicatesRemoved });
         setSystmConnectDataQuality(combinedDataQuality);
         setFiles(uploadedFiles.map(f => f.name));
-        trackEvent('systmconnect_data_uploaded', { file_count: uploadedFiles.length, row_count: allRows.length });
+        trackEvent('systmconnect_data_uploaded', { file_count: uploadedFiles.length, row_count: deduplicatedRows.length, duplicates_removed: duplicatesRemoved });
       } else {
         // Parse Rapid Health data
         let allRows = [];
@@ -1382,6 +1396,12 @@ export default function TriageSlotAnalysis() {
             </h2>
             <p className="text-sm text-purple-100 mt-1">
               TPP SystmOne Online Consultation Analysis
+              {systmConnectData.fileCount > 1 && (
+                <span className="ml-2">
+                  ({systmConnectData.fileCount} files combined, {systmConnectData.rows?.length?.toLocaleString()} total rows
+                  {systmConnectData.duplicatesRemoved > 0 && `, ${systmConnectData.duplicatesRemoved} duplicates removed`})
+                </span>
+              )}
             </p>
           </div>
         </Card>
