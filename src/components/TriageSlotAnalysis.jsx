@@ -1281,7 +1281,7 @@ export default function TriageSlotAnalysis() {
                     <img
                       src={system.logo}
                       alt={system.name}
-                      className={`h-8 w-auto object-contain ${!system.enabled ? 'grayscale' : ''}`}
+                      className={`h-10 w-10 object-cover rounded-lg ${!system.enabled ? 'grayscale' : ''}`}
                     />
                     <span className={`text-xs font-medium ${
                       selectedSystem === system.id ? 'text-purple-700' : 'text-slate-600'

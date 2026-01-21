@@ -229,29 +229,62 @@ export const parseSystmConnectData = (workbook, customOutcomeMapping = {}) => {
     throw new Error('File format does not match SystmConnect extract. Please ensure you are uploading the correct file.');
   }
 
-  // Find column indices (case-insensitive, partial match)
-  const findCol = (name) => headers.findIndex(h =>
-    String(h || '').toLowerCase().includes(name.toLowerCase())
-  );
+  // Find column indices - try exact match first, then partial match
+  const findCol = (name, excludePatterns = []) => {
+    const lowerName = name.toLowerCase();
+    const normalizedHeaders = headers.map(h => String(h || '').toLowerCase().trim());
+
+    // Try exact match first
+    let idx = normalizedHeaders.findIndex(h => h === lowerName);
+    if (idx !== -1) return idx;
+
+    // Try partial match, excluding certain patterns
+    idx = normalizedHeaders.findIndex(h => {
+      if (!h.includes(lowerName)) return false;
+      // Check exclusions
+      for (const exclude of excludePatterns) {
+        if (h.includes(exclude.toLowerCase())) return false;
+      }
+      return true;
+    });
+    return idx;
+  };
+
+  // Find column with multiple possible names
+  const findColMultiple = (names, excludePatterns = []) => {
+    for (const name of names) {
+      const idx = findCol(name, excludePatterns);
+      if (idx !== -1) return idx;
+    }
+    return -1;
+  };
+
+  // Log headers for debugging
+  console.log('SystmConnect Parser - Found headers:', headers);
 
   const cols = {
     id: findCol('id'),
-    odsCode: findCol('ods code'),
-    submitted: findCol('submitted'),
-    accessMethod: findCol('access method'),
-    submissionSource: findCol('submission source'),
-    patientName: findCol('patient name'),
+    odsCode: findColMultiple(['ods code', 'odscode', 'ods']),
+    accessMethod: findColMultiple(['access method', 'accessmethod', 'access']),
+    submissionSource: findColMultiple(['submission source', 'source']),
+    patientName: findColMultiple(['patient name', 'patientname', 'name']),
     age: findCol('age'),
-    sex: findCol('sex'),
-    submissionStarted: findCol('submission started'),
-    submissionCompleted: findCol('submission completed'),
+    sex: findColMultiple(['sex', 'gender']),
+    // Primary date - 'Submission started' is the main timestamp
+    submissionStarted: findColMultiple(['submission started', 'started']),
+    submissionCompleted: findColMultiple(['submission completed', 'completed'], ['outcome']),
     type: findCol('type'),
-    clinicalProblemType: findCol('clinical problem type'),
-    adminActivityType: findCol('admin activity type'),
-    responsePreference: findCol('response preference'),
-    outcome: findCol('outcome'),
-    outcomeRecorded: findCol('outcome recorded'),
+    clinicalProblemType: findColMultiple(['clinical problem type', 'clinical problem', 'problem type']),
+    adminActivityType: findColMultiple(['admin activity type', 'admin activity', 'activity type']),
+    responsePreference: findColMultiple(['response preference', 'preference']),
+    outcome: findCol('outcome', ['recorded']),
+    outcomeRecorded: findColMultiple(['outcome recorded', 'outcome date']),
   };
+
+  // Use 'Submission started' as the primary submitted date
+  cols.submitted = cols.submissionStarted;
+
+  console.log('SystmConnect Parser - Column indices:', cols);
 
   const rows = [];
   const dataQuality = {
