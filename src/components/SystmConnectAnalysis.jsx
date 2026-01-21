@@ -12,6 +12,7 @@ import {
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import Card from './ui/Card';
 import { DEFAULT_OUTCOME_GROUPS, AGE_BANDS } from '../utils/systmConnectParser';
+import { trackEvent, trackTabView, trackExport } from '../firebase/config';
 
 // Days order for consistent display
 const DAYS_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -1240,6 +1241,7 @@ const ExportsTab = ({ data, filteredData }) => {
     a.download = 'outcome-mapping.json';
     a.click();
     URL.revokeObjectURL(url);
+    trackExport('systmconnect_outcome_mapping', 'json');
   }, []);
 
   const exportDailyVolumes = () => {
@@ -1255,6 +1257,7 @@ const ExportsTab = ({ data, filteredData }) => {
         filteredData.byDate[d].appointments,
       ])
     );
+    trackExport('systmconnect_daily_volumes', 'csv');
   };
 
   const exportOutcomeGroups = () => {
@@ -1269,6 +1272,7 @@ const ExportsTab = ({ data, filteredData }) => {
           ((count / filteredData.totalRequests) * 100).toFixed(2),
         ])
     );
+    trackExport('systmconnect_outcome_groups', 'csv');
   };
 
   const exportSLASummary = () => {
@@ -1280,6 +1284,7 @@ const ExportsTab = ({ data, filteredData }) => {
         value.toFixed(2),
       ])
     );
+    trackExport('systmconnect_sla_summary', 'csv');
   };
 
   return (
@@ -1333,6 +1338,15 @@ export default function SystmConnectAnalysis({ data, dataQuality, onReset }) {
   const [activeTab, setActiveTab] = useState('overview');
   const [filters, setFilters] = useState({});
   const [listSize, setListSize] = useState(null);
+
+  // Track filter usage
+  const handleFilterChange = useCallback((newFilters) => {
+    setFilters(newFilters);
+    const activeFilters = Object.entries(newFilters).filter(([, v]) => v && v !== 'All').map(([k]) => k);
+    if (activeFilters.length > 0) {
+      trackEvent('systmconnect_filter_applied', { filters: activeFilters.join(',') });
+    }
+  }, []);
 
   // Filter rows based on current filters
   const filteredRows = useMemo(() => {
@@ -1615,7 +1629,7 @@ export default function SystmConnectAnalysis({ data, dataQuality, onReset }) {
       <FilterPanel
         data={data?.analyzed || {}}
         filters={filters}
-        setFilters={setFilters}
+        setFilters={handleFilterChange}
         listSize={listSize}
         setListSize={setListSize}
       />
@@ -1633,7 +1647,10 @@ export default function SystmConnectAnalysis({ data, dataQuality, onReset }) {
         {availableTabs.map(tab => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => {
+              setActiveTab(tab.id);
+              trackTabView('systmconnect', tab.id);
+            }}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
               activeTab === tab.id
                 ? 'bg-purple-600 text-white shadow-md'
