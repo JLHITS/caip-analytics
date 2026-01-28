@@ -18,6 +18,7 @@ import Toast from './ui/Toast';
 import FancyNationalLoader from './ui/FancyNationalLoader';
 import NationalTelephony from './NationalTelephony';
 import NationalOnlineConsultations from './NationalOnlineConsultations';
+import NationalWorkforce from './NationalWorkforce';
 
 // Utility imports
 import { parseNationalAppointmentsData, searchAppointmentPractices } from '../utils/parseNationalAppointments';
@@ -257,12 +258,13 @@ const NationalDemandCapacity = ({
   const [appointmentsLoading, setAppointmentsLoading] = useState(true);
   const [telephonyLoading, setTelephonyLoading] = useState(true);
   const [ocLoading, setOcLoading] = useState(true);
+  const [workforceLoading, setWorkforceLoading] = useState(true);
   const [loadingMonth, setLoadingMonth] = useState(null);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [loadingStage, setLoadingStage] = useState('appointments'); // 'appointments', 'telephony', 'oc'
 
   // Master loading state - true until all data sources are loaded
-  const isLoading = appointmentsLoading || telephonyLoading || ocLoading;
+  const isLoading = appointmentsLoading || telephonyLoading || ocLoading || workforceLoading;
 
   // Data states
   const [appointmentData, setAppointmentData] = useState({}); // { month: parsedData }
@@ -310,6 +312,7 @@ const NationalDemandCapacity = ({
     { id: 'appointments', label: 'Appointments', icon: Calendar, color: 'blue' },
     { id: 'telephony', label: 'Telephony', icon: Phone, color: 'blue' },
     { id: 'online-consultations', label: 'Online Consultations', icon: Monitor, color: 'blue' },
+    { id: 'workforce', label: 'Workforce', icon: UserCheck, color: 'blue' },
     { id: 'forecasting', label: 'Forecasting', icon: TrendingUp, color: 'blue' },
     { id: 'compare', label: 'Compare', icon: Users, color: 'blue' },
   ];
@@ -1003,11 +1006,16 @@ const NationalDemandCapacity = ({
   const appointmentProgress = appointmentsLoading ? loadingProgress : 100;
   const telephonyProgress = telephonyLoading ? 0 : 100;
   const ocProgress = ocLoading ? 0 : 100;
-  const overallProgress = (appointmentProgress * 0.5) + (telephonyProgress * 0.25) + (ocProgress * 0.25);
+  const workforceProgress = workforceLoading ? 0 : 100;
+  const overallProgress = (appointmentProgress * 0.45) +
+    (telephonyProgress * 0.2) +
+    (ocProgress * 0.2) +
+    (workforceProgress * 0.15);
 
   const currentStage = appointmentsLoading ? 'Loading Appointments' :
                        telephonyLoading ? 'Loading Telephony' :
-                       ocLoading ? 'Loading Online Consultations' : 'Ready';
+                       ocLoading ? 'Loading Online Consultations' :
+                       workforceLoading ? 'Loading Workforce' : 'Ready';
 
   const gpBandSeries = historicalData.length > 0
     ? historicalData
@@ -1048,6 +1056,10 @@ const NationalDemandCapacity = ({
               <span className={`flex items-center gap-1 ${!ocLoading ? 'text-green-600' : ocLoading && !telephonyLoading ? 'text-blue-600' : 'text-slate-400'}`}>
                 <Monitor size={12} />
                 {ocLoading ? 'Pending' : '✓'}
+              </span>
+              <span className={`flex items-center gap-1 ${!workforceLoading ? 'text-green-600' : workforceLoading && !ocLoading ? 'text-blue-600' : 'text-slate-400'}`}>
+                <UserCheck size={12} />
+                {workforceLoading ? 'Pending' : '✓'}
               </span>
             </div>
             <p className="text-sm text-slate-600 text-center font-medium">
@@ -1268,7 +1280,7 @@ const NationalDemandCapacity = ({
           const Icon = tab.icon;
           const isActive = activeSubTab === tab.id;
           // Disable data tabs until a practice is selected (Compare always enabled)
-          const requiresPractice = ['appointments', 'telephony', 'online-consultations', 'forecasting'].includes(tab.id);
+          const requiresPractice = ['appointments', 'telephony', 'online-consultations', 'workforce', 'forecasting'].includes(tab.id);
           const isDisabled = requiresPractice && !selectedPractice;
 
           return (
@@ -3022,6 +3034,20 @@ const NationalDemandCapacity = ({
           parentSelectedMonth={selectedMonth}
           parentCompareMode={compareMode}
           parentTimeRangeMonths={timeRangeMonths}
+        />
+      </div>
+
+      {/* ========================================
+          WORKFORCE TAB - Always mounted (hidden with CSS) for background data loading
+          ======================================== */}
+      <div className={activeSubTab === 'workforce' && selectedPractice ? '' : 'hidden'}>
+        <NationalWorkforce
+          selectedPractice={selectedPractice || sharedPractice}
+          selectedMonth={selectedMonth}
+          appointmentData={appointmentData}
+          telephonyData={telephonyData}
+          ocData={ocData}
+          onLoadingChange={setWorkforceLoading}
         />
       </div>
 

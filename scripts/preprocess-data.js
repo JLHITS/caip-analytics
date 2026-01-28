@@ -7,9 +7,16 @@
  */
 
 import * as XLSX from 'xlsx';
+import Papa from 'papaparse';
 import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import {
+  inferMonthFromFilename,
+  buildWorkforceDataset,
+  parseWorkforceDefinitionsRows,
+  summarizeRoleMapping,
+} from '../src/utils/workforceParser.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -795,10 +802,98 @@ writeFileSync(
 );
 console.log(`  Saved online-consultations.json (${Object.keys(ocData).length} months)\n`);
 
+// ============================================
+// WORKFORCE DATA
+// ============================================
+
+function parseWorkforceDefinitionsFile(filePath) {
+  const buffer = readFileSync(filePath);
+  const workbook = XLSX.read(buffer, { type: 'buffer' });
+  const sheetName = workbook.SheetNames[0];
+  const sheet = workbook.Sheets[sheetName];
+  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+  return parseWorkforceDefinitionsRows(rows);
+}
+
+console.log('Processing Workforce data...');
+const workforceDir = join(ASSETS_DIR, 'workforce');
+const workforceFiles = existsSync(workforceDir)
+  ? readdirSync(workforceDir).filter(f => f.toLowerCase().endsWith('.csv'))
+  : [];
+const workforceDefinitionFile = existsSync(workforceDir)
+  ? readdirSync(workforceDir).find(f => f.toLowerCase().endsWith('.xlsx'))
+  : null;
+
+if (workforceDefinitionFile) {
+  try {
+    const definitionsPath = join(workforceDir, workforceDefinitionFile);
+    const definitions = parseWorkforceDefinitionsFile(definitionsPath);
+    const definitionsOutput = {
+      generatedAt: new Date().toISOString(),
+      sourceFile: workforceDefinitionFile,
+      mapping: summarizeRoleMapping(),
+      ...definitions,
+    };
+    writeFileSync(
+      join(OUTPUT_DIR, 'workforce-definitions.json'),
+      JSON.stringify(definitionsOutput),
+      'utf-8'
+    );
+    console.log('  ✓ workforce-definitions.json');
+  } catch (err) {
+    console.error(`  ✗ Error parsing workforce definitions:`, err.message);
+  }
+} else {
+  console.warn('  ⚠ No workforce definitions XLSX found.');
+}
+
+const workforceOutputDir = join(OUTPUT_DIR, 'workforce');
+if (!existsSync(workforceOutputDir)) {
+  mkdirSync(workforceOutputDir, { recursive: true });
+}
+
+const workforceIndex = {
+  months: [],
+  files: {},
+  metadata: {
+    generatedAt: new Date().toISOString(),
+  },
+};
+
+for (const file of workforceFiles) {
+  try {
+    const filePath = join(workforceDir, file);
+    const csvText = readFileSync(filePath, 'utf-8');
+    const parsed = Papa.parse(csvText, { header: true, skipEmptyLines: true });
+    const month = inferMonthFromFilename(file) || 'Unknown';
+    const data = buildWorkforceDataset(parsed.data, month);
+    const fileKey = monthToFilename(month);
+    const outputPath = join(workforceOutputDir, `${fileKey}.json`);
+    writeFileSync(outputPath, JSON.stringify(data), 'utf-8');
+    workforceIndex.months.push(month);
+    workforceIndex.files[month] = `workforce/${fileKey}.json`;
+    console.log(`  ✓ ${month} - ${data.practices.length} practices`);
+  } catch (err) {
+    console.error(`  ✗ Error parsing workforce CSV ${file}:`, err.message);
+  }
+}
+
+if (workforceIndex.months.length > 0) {
+  writeFileSync(
+    join(OUTPUT_DIR, 'workforce-index.json'),
+    JSON.stringify(workforceIndex),
+    'utf-8'
+  );
+  console.log(`  Saved workforce-index.json (${workforceIndex.months.length} months)\n`);
+} else {
+  console.warn('  ⚠ No workforce CSV files found.');
+}
+
 // Summary
 console.log('='.repeat(50));
 console.log('Preprocessing complete!');
 console.log(`  Appointments: ${appointmentsIndex.months.length} months`);
 console.log(`  Telephony: ${Object.keys(telephonyData).length} months`);
 console.log(`  Online Consultations: ${Object.keys(ocData).length} months`);
+console.log(`  Workforce: ${workforceIndex.months.length} months`);
 console.log('='.repeat(50));

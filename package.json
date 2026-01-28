@@ -8,6 +8,7 @@
     "preprocess": "node scripts/preprocess-data.js",
     "build": "node scripts/preprocess-if-needed.js && vite build",
     "lint": "eslint .",
+    "test": "node --test",
     "preview": "vite preview"
   },
   "dependencies": {

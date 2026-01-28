@@ -21,6 +21,8 @@ const dataCache = {
   appointments: null,
   telephony: null,
   onlineConsultations: null,
+  workforce: null,
+  workforceDefinitions: null,
 };
 
 const LFS_PREFIX = 'version https://git-lfs.github.com/spec/v1';
@@ -135,20 +137,83 @@ export async function loadOnlineConsultationsData() {
 }
 
 /**
+ * Load workforce data from pre-processed JSON
+ * @returns {Promise<Object>} Workforce data by month
+ */
+export async function loadWorkforceData() {
+  if (dataCache.workforce) {
+    return dataCache.workforce;
+  }
+
+  const indexResult = await fetchJsonIfAvailable('/data/workforce-index.json');
+  if (indexResult?.data) {
+    const indexData = indexResult.data;
+    const months = Array.isArray(indexData.months) ? indexData.months : Object.keys(indexData.files || {});
+    const fileMap = indexData.files || {};
+
+    try {
+      const entries = await Promise.all(months.map(async (month) => {
+        const relativePath = fileMap[month] || `workforce/${month.replace(/\\s+/g, '_')}.json`;
+        const monthResult = await fetchJsonIfAvailable(`/data/${relativePath}`);
+        if (!monthResult?.data) {
+          throw new Error(`Workforce JSON unavailable for ${month}`);
+        }
+        return [month, monthResult.data];
+      }));
+
+      const data = Object.fromEntries(entries);
+      data.metadata = { ...(indexData.metadata || {}), months, files: fileMap };
+      dataCache.workforce = data;
+      return data;
+    } catch {
+      return null;
+    }
+  }
+
+  const legacyResult = await fetchJsonIfAvailable('/data/workforce.json');
+  if (legacyResult?.data) {
+    dataCache.workforce = legacyResult.data;
+    return legacyResult.data;
+  }
+
+  return null;
+}
+
+/**
+ * Load workforce data dictionary from pre-processed JSON
+ * @returns {Promise<Object>} Workforce definitions
+ */
+export async function loadWorkforceDefinitions() {
+  if (dataCache.workforceDefinitions) {
+    return dataCache.workforceDefinitions;
+  }
+
+  const result = await fetchJsonIfAvailable('/data/workforce-definitions.json');
+  if (result?.data) {
+    dataCache.workforceDefinitions = result.data;
+    return result.data;
+  }
+
+  return null;
+}
+
+/**
  * Load all data sources in parallel
  * @returns {Promise<Object>} All data sources
  */
 export async function loadAllNationalData() {
-  const [appointments, telephony, onlineConsultations] = await Promise.all([
+  const [appointments, telephony, onlineConsultations, workforce] = await Promise.all([
     loadAppointmentsData(),
     loadTelephonyData(),
     loadOnlineConsultationsData(),
+    loadWorkforceData(),
   ]);
 
   return {
     appointments,
     telephony,
     onlineConsultations,
+    workforce,
   };
 }
 
@@ -277,12 +342,16 @@ export function clearDataCache() {
   dataCache.appointments = null;
   dataCache.telephony = null;
   dataCache.onlineConsultations = null;
+  dataCache.workforce = null;
+  dataCache.workforceDefinitions = null;
 }
 
 export default {
   loadAppointmentsData,
   loadTelephonyData,
   loadOnlineConsultationsData,
+  loadWorkforceData,
+  loadWorkforceDefinitions,
   loadAllNationalData,
   getPracticeData,
   searchPractices,

@@ -14,3 +14,27 @@ The React Compiler is not enabled on this template because of its impact on dev 
 ## Expanding the ESLint configuration
 
 If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+
+## Workforce Module (National Data)
+
+The Workforce tab uses NHS England "General Practice workforce" practice-level data. Raw assets live in `src/assets/workforce/`:
+
+- Workforce snapshot CSVs (monthly).
+- Definitions XLSX (column metadata).
+
+During `npm run preprocess` / `npm run build`, `scripts/preprocess-data.js` generates:
+
+- `public/data/workforce-index.json` (month index)
+- `public/data/workforce/<Month>.json` (normalized workforce data)
+- `public/data/workforce-definitions.json` (data dictionary + mapping)
+
+Key logic:
+
+- Schema + role mapping: `src/utils/workforceSchema.js`
+- Parsing + normalization: `src/utils/workforceParser.js`
+- Metrics + capacity model: `src/utils/workforceMetrics.js`
+- UI: `src/components/NationalWorkforce.jsx`
+
+Tests (no need to run unless desired):
+
+- `npm test` (Node's built-in test runner)

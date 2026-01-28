@@ -2212,6 +2212,7 @@ export default function App() {
                     <span className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-full font-medium">Appointments</span>
                     <span className="text-xs px-2 py-1 bg-cyan-50 text-cyan-700 rounded-full font-medium">Telephony</span>
                     <span className="text-xs px-2 py-1 bg-indigo-50 text-indigo-700 rounded-full font-medium">Online Consultations</span>
+                    <span className="text-xs px-2 py-1 bg-emerald-50 text-emerald-700 rounded-full font-medium">Workforce</span>
                   </div>
                 </button>
               </div>
