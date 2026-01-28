@@ -63,26 +63,26 @@ const formatRatio = (value) => {
 
 /**
  * National Spectrum Visualizer - Shows where a practice sits on the national workforce spectrum
- * Uses rainbow gradient matching the GP appointment spectrums (red=lowest → purple=highest)
  * For patients per WTE metrics, lower is better (more capacity per patient)
+ * Purple=lowest (best) → Red=highest (worst)
  */
 const WorkforceSpectrumVisualizer = ({ value, allValues, label, rank, total, isLowerBetter = true }) => {
   const sortedValues = [...allValues].filter(v => v > 0).sort((a, b) => a - b);
   const belowCount = sortedValues.filter(v => v < value).length;
   const percentile = sortedValues.length > 0 ? (belowCount / sortedValues.length) * 100 : 50;
 
-  // Rainbow gradient matching NationalDemandCapacity spectrum (red=lowest → purple=highest)
+  // Rainbow gradient: Purple (lowest/best) → Red (highest/worst) for patients per WTE
   const gradientStops = [
-    { pos: 0, color: '#dc2626' },    // Red - lowest
-    { pos: 15, color: '#ea580c' },   // Orange
-    { pos: 30, color: '#f59e0b' },   // Amber
-    { pos: 45, color: '#84cc16' },   // Lime
-    { pos: 55, color: '#22c55e' },   // Green - good
-    { pos: 65, color: '#14b8a6' },   // Teal
-    { pos: 75, color: '#06b6d4' },   // Cyan
-    { pos: 85, color: '#3b82f6' },   // Blue - better
-    { pos: 92, color: '#8b5cf6' },   // Violet
-    { pos: 100, color: '#a855f7' },  // Purple - highest
+    { pos: 0, color: '#a855f7' },    // Purple - lowest (best)
+    { pos: 8, color: '#8b5cf6' },    // Violet
+    { pos: 15, color: '#3b82f6' },   // Blue
+    { pos: 25, color: '#06b6d4' },   // Cyan
+    { pos: 35, color: '#14b8a6' },   // Teal
+    { pos: 45, color: '#22c55e' },   // Green
+    { pos: 55, color: '#84cc16' },   // Lime
+    { pos: 70, color: '#f59e0b' },   // Amber
+    { pos: 85, color: '#ea580c' },   // Orange
+    { pos: 100, color: '#dc2626' },  // Red - highest (worst)
   ];
 
   // Get color at percentile
@@ -425,15 +425,21 @@ const NationalWorkforce = ({
     const records = practiceData?.workforce?.records || [];
     if (records.length === 0) return [];
 
+    const listSize = practiceData?.listSize || 0;
+
     // Build detailed breakdown including role labels
-    const breakdown = records.map((record) => ({
-      roleGroup: record.roleGroup,
-      label: ROLE_LABELS[record.roleGroup] || record.roleGroup,
-      wte: record.wte || 0,
-      headcount: record.headcount,
-      isGP: GP_ROLE_GROUPS.includes(record.roleGroup),
-      isClinical: CLINICAL_ROLE_GROUPS.includes(record.roleGroup),
-    }));
+    const breakdown = records.map((record) => {
+      const wte = record.wte || 0;
+      return {
+        roleGroup: record.roleGroup,
+        label: ROLE_LABELS[record.roleGroup] || record.roleGroup,
+        wte,
+        headcount: record.headcount,
+        isGP: GP_ROLE_GROUPS.includes(record.roleGroup),
+        isClinical: CLINICAL_ROLE_GROUPS.includes(record.roleGroup),
+        patientsPerWte: wte > 0 && listSize > 0 ? listSize / wte : null,
+      };
+    });
 
     // Filter
     let filtered = breakdown;
@@ -803,6 +809,17 @@ const NationalWorkforce = ({
                         )}
                       </div>
                     </th>
+                    <th
+                      className="px-4 py-3 text-right cursor-pointer hover:bg-slate-100 transition-colors"
+                      onClick={() => handleBreakdownSort('patientsPerWte')}
+                    >
+                      <div className="flex items-center justify-end gap-1">
+                        Patients per WTE
+                        {breakdownSort.field === 'patientsPerWte' && (
+                          breakdownSort.direction === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
+                        )}
+                      </div>
+                    </th>
                     <th className="px-4 py-3 text-center">Category</th>
                     <th className="px-4 py-3 text-right">% of Total WTE</th>
                   </tr>
@@ -810,7 +827,7 @@ const NationalWorkforce = ({
                 <tbody>
                   {breakdownTableData.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-4 py-8 text-center text-slate-400">
+                      <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
                         No role data available
                       </td>
                     </tr>
@@ -823,6 +840,9 @@ const NationalWorkforce = ({
                         </td>
                         <td className="px-4 py-3 text-right font-mono text-slate-600">
                           {row.headcount !== null ? formatNumber(row.headcount, 0) : '-'}
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono text-slate-600">
+                          {row.patientsPerWte !== null ? formatNumber(row.patientsPerWte, 0) : '-'}
                         </td>
                         <td className="px-4 py-3 text-center">
                           {row.isGP && (
@@ -850,6 +870,11 @@ const NationalWorkforce = ({
                     </td>
                     <td className="px-4 py-3 text-right font-mono text-slate-700">
                       {totals.totalHeadcount !== null ? formatNumber(totals.totalHeadcount, 0) : '-'}
+                    </td>
+                    <td className="px-4 py-3 text-right font-mono text-slate-700">
+                      {totals.totalWte > 0 && practiceData?.listSize > 0
+                        ? formatNumber(practiceData.listSize / totals.totalWte, 0)
+                        : '-'}
                     </td>
                     <td className="px-4 py-3"></td>
                     <td className="px-4 py-3 text-right font-mono text-slate-700">100%</td>
