@@ -1,6 +1,6 @@
 ﻿import React, { useEffect, useMemo, useState } from 'react';
 import { Bar, Doughnut } from 'react-chartjs-2';
-import { AlertTriangle, BarChart3, Info, SlidersHorizontal, TrendingUp, Users } from 'lucide-react';
+import { AlertTriangle, BarChart3, ChevronDown, ChevronUp, GitCompare, Info, LineChart, SlidersHorizontal, Table2, TrendingUp, Users } from 'lucide-react';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 
@@ -39,9 +39,12 @@ import workforceDefinitionsUrl from '../assets/workforce/0 General Practice Deta
 
 const TAB_OPTIONS = [
   { id: 'overview', label: 'Overview', icon: BarChart3 },
+  { id: 'breakdown', label: 'Breakdown', icon: Table2 },
   { id: 'demand', label: 'Workforce vs Demand', icon: TrendingUp },
   { id: 'capacity', label: 'Capacity & Utilisation', icon: SlidersHorizontal },
   { id: 'risk', label: 'Risk & Planning', icon: AlertTriangle },
+  { id: 'compare', label: 'Compare', icon: GitCompare },
+  { id: 'forecasting', label: 'Forecasting', icon: LineChart, disabled: true, comingSoon: true },
 ];
 
 const formatNumber = (value, decimals = 1) => {
@@ -62,26 +65,26 @@ const formatRatio = (value) => {
 
 /**
  * National Spectrum Visualizer - Shows where a practice sits on the national workforce spectrum
- * Uses a gradient from green (best/lowest) to red (worst/highest) for patients per WTE metrics
+ * Uses rainbow gradient matching the GP appointment spectrums (red=lowest → purple=highest)
+ * For patients per WTE metrics, lower is better (more capacity per patient)
  */
 const WorkforceSpectrumVisualizer = ({ value, allValues, label, rank, total, isLowerBetter = true }) => {
   const sortedValues = [...allValues].filter(v => v > 0).sort((a, b) => a - b);
   const belowCount = sortedValues.filter(v => v < value).length;
   const percentile = sortedValues.length > 0 ? (belowCount / sortedValues.length) * 100 : 50;
 
-  // For workforce metrics, lower is typically better (fewer patients per WTE = more capacity)
-  // So we invert the color scale - low percentile (fewer patients) = green
-  const displayPercentile = isLowerBetter ? percentile : (100 - percentile);
-
-  // Gradient stops: Green (best) -> Yellow -> Orange -> Red (worst)
+  // Rainbow gradient matching NationalDemandCapacity spectrum (red=lowest → purple=highest)
   const gradientStops = [
-    { pos: 0, color: '#22c55e' },    // Green - best (lowest patients per WTE)
-    { pos: 25, color: '#84cc16' },   // Lime
-    { pos: 40, color: '#facc15' },   // Yellow
-    { pos: 55, color: '#f59e0b' },   // Amber
-    { pos: 70, color: '#f97316' },   // Orange
-    { pos: 85, color: '#ef4444' },   // Red
-    { pos: 100, color: '#dc2626' },  // Dark red - worst (highest patients per WTE)
+    { pos: 0, color: '#dc2626' },    // Red - lowest
+    { pos: 15, color: '#ea580c' },   // Orange
+    { pos: 30, color: '#f59e0b' },   // Amber
+    { pos: 45, color: '#84cc16' },   // Lime
+    { pos: 55, color: '#22c55e' },   // Green - good
+    { pos: 65, color: '#14b8a6' },   // Teal
+    { pos: 75, color: '#06b6d4' },   // Cyan
+    { pos: 85, color: '#3b82f6' },   // Blue - better
+    { pos: 92, color: '#8b5cf6' },   // Violet
+    { pos: 100, color: '#a855f7' },  // Purple - highest
   ];
 
   // Get color at percentile
@@ -94,7 +97,7 @@ const WorkforceSpectrumVisualizer = ({ value, allValues, label, rank, total, isL
     return gradientStops[0].color;
   };
 
-  const markerColor = getColorAtPercentile(displayPercentile);
+  const markerColor = getColorAtPercentile(percentile);
 
   // Get percentile values for markers
   const getPercentileValue = (p) => {
@@ -132,7 +135,7 @@ const WorkforceSpectrumVisualizer = ({ value, allValues, label, rank, total, isL
         {/* Marker for practice position */}
         <div
           className="absolute top-1/2 -translate-y-1/2 transition-all duration-500"
-          style={{ left: `${Math.max(2, Math.min(98, displayPercentile))}%` }}
+          style={{ left: `${Math.max(2, Math.min(98, percentile))}%` }}
         >
           <div className="relative">
             <div
@@ -153,11 +156,11 @@ const WorkforceSpectrumVisualizer = ({ value, allValues, label, rank, total, isL
 
       {/* Percentile markers */}
       <div className="flex justify-between text-[10px] text-slate-400 px-1">
-        <span>{isLowerBetter ? 'Best' : 'Worst'}</span>
+        <span>{isLowerBetter ? 'Best (lowest)' : 'Lowest'}</span>
         <span>p25: {formatNumber(p25, 0)}</span>
         <span>Median: {formatNumber(p50, 0)}</span>
         <span>p75: {formatNumber(p75, 0)}</span>
-        <span>{isLowerBetter ? 'Worst' : 'Best'}</span>
+        <span>{isLowerBetter ? 'Worst (highest)' : 'Highest'}</span>
       </div>
     </div>
   );
@@ -222,6 +225,8 @@ const NationalWorkforce = ({
   const [definitions, setDefinitions] = useState(null);
   const [showDictionary, setShowDictionary] = useState(false);
   const [dictionaryFilter, setDictionaryFilter] = useState('');
+  const [breakdownSort, setBreakdownSort] = useState({ field: 'wte', direction: 'desc' });
+  const [breakdownFilter, setBreakdownFilter] = useState('');
   const [assumptions, setAssumptions] = useState(() => ({
     workingDaysPerMonth: defaultCapacityAssumptions.workingDaysPerMonth,
     appointmentsPerWtePerDay: { ...defaultCapacityAssumptions.appointmentsPerWtePerDay },
@@ -349,8 +354,7 @@ const NationalWorkforce = ({
       { label: 'GP', value: totals?.totalWteGP || 0, color: NHS_BLUE },
       { label: 'Nurse', value: roleTotals?.[ROLE_GROUPS.NURSE]?.wte || 0, color: NHS_GREEN },
       { label: 'HCA', value: roleTotals?.[ROLE_GROUPS.HCA]?.wte || 0, color: NHS_AQUA },
-      { label: 'ARRS (Core)', value: totals?.totalWteARRSRoles || 0, color: NHS_AMBER },
-      { label: 'Other Clinical', value: roleTotals?.[ROLE_GROUPS.OTHER]?.wte || 0, color: NHS_GREY },
+      { label: 'Other Clinical', value: roleTotals?.[ROLE_GROUPS.OTHER]?.wte || 0, color: NHS_AMBER },
       { label: 'Admin/Reception', value: adminWte + receptionWte + managerWte, color: NHS_RED },
     ];
   }, [totals, roleTotals]);
@@ -417,6 +421,61 @@ const NationalWorkforce = ({
       String(entry.description || '').toLowerCase().includes(term)
     ));
   }, [definitions, dictionaryFilter]);
+
+  // Breakdown table data - sorted and filtered role data
+  const breakdownTableData = useMemo(() => {
+    const records = practiceData?.workforce?.records || [];
+    if (records.length === 0) return [];
+
+    // Build detailed breakdown including role labels
+    const breakdown = records.map((record) => ({
+      roleGroup: record.roleGroup,
+      label: ROLE_LABELS[record.roleGroup] || record.roleGroup,
+      wte: record.wte || 0,
+      headcount: record.headcount,
+      isGP: GP_ROLE_GROUPS.includes(record.roleGroup),
+      isClinical: CLINICAL_ROLE_GROUPS.includes(record.roleGroup),
+    }));
+
+    // Filter
+    let filtered = breakdown;
+    if (breakdownFilter) {
+      const term = breakdownFilter.toLowerCase();
+      filtered = breakdown.filter((row) =>
+        row.label.toLowerCase().includes(term) ||
+        row.roleGroup.toLowerCase().includes(term)
+      );
+    }
+
+    // Sort
+    const { field, direction } = breakdownSort;
+    const sorted = [...filtered].sort((a, b) => {
+      let aVal = a[field];
+      let bVal = b[field];
+
+      // Handle nulls
+      if (aVal === null || aVal === undefined) aVal = -Infinity;
+      if (bVal === null || bVal === undefined) bVal = -Infinity;
+
+      // Handle strings
+      if (typeof aVal === 'string') {
+        return direction === 'asc'
+          ? aVal.localeCompare(bVal)
+          : bVal.localeCompare(aVal);
+      }
+
+      return direction === 'asc' ? aVal - bVal : bVal - aVal;
+    });
+
+    return sorted;
+  }, [practiceData, breakdownSort, breakdownFilter]);
+
+  const handleBreakdownSort = (field) => {
+    setBreakdownSort((prev) => ({
+      field,
+      direction: prev.field === field && prev.direction === 'desc' ? 'asc' : 'desc',
+    }));
+  };
 
   // Expose workforce metrics to parent component for cross-over display
   useEffect(() => {
@@ -504,19 +563,28 @@ const NationalWorkforce = ({
         {TAB_OPTIONS.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
+          const isDisabled = tab.disabled;
           return (
             <button
               key={tab.id}
               type="button"
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => !isDisabled && setActiveTab(tab.id)}
+              disabled={isDisabled}
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
-                isActive
+                isDisabled
+                  ? 'text-slate-400 cursor-not-allowed opacity-60'
+                  : isActive
                   ? 'bg-white text-blue-700 shadow-sm border border-blue-200'
                   : 'text-slate-500 hover:text-slate-700 hover:bg-white/60'
               }`}
             >
               <Icon size={14} />
               {tab.label}
+              {tab.comingSoon && (
+                <span className="ml-1 text-[9px] bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded-full">
+                  Coming Soon
+                </span>
+              )}
             </button>
           );
         })}
@@ -531,7 +599,7 @@ const NationalWorkforce = ({
 
       {activeTab === 'overview' && (
         <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
             <MetricCard
               title="Total WTE"
               value={formatNumber(totals.totalWte, 1)}
@@ -543,12 +611,6 @@ const NationalWorkforce = ({
               value={formatNumber(totals.totalWteGP, 2)}
               icon={Users}
               info={buildDefinitionTooltip(definitions, ['TOTAL_GP_FTE']) || 'Derived from GP partner, salaried, locum, and registrar WTE.'}
-            />
-            <MetricCard
-              title="ARRS WTE"
-              value={formatNumber(totals.totalWteARRS, 2)}
-              icon={TrendingUp}
-              info="Sum of core ARRS role WTE plus ARRS-other roles (dietitians, podiatrists, social prescribers, etc.)."
             />
             <MetricCard
               title="Admin WTE"
@@ -628,10 +690,6 @@ const NationalWorkforce = ({
                   <span className="font-semibold text-slate-800">{formatRatio(derivedMetrics.adminToClinicalRatio)}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-slate-600">ARRS % of clinical</span>
-                  <span className="font-semibold text-slate-800">{formatPercent(derivedMetrics.arrsPctClinical, 1)}</span>
-                </div>
-                <div className="flex items-center justify-between">
                   <span className="text-slate-600">Skill-mix index</span>
                   <span className="font-semibold text-slate-800">
                     {formatPercent(
@@ -697,6 +755,145 @@ const NationalWorkforce = ({
               </div>
             )}
           </Card>
+        </div>
+      )}
+
+      {activeTab === 'breakdown' && (
+        <div className="space-y-6">
+          <Card>
+            <div className="flex items-center justify-between gap-4 mb-4">
+              <div>
+                <h3 className="font-semibold text-slate-700">Staff Breakdown by Role</h3>
+                <p className="text-xs text-slate-500">
+                  Latest workforce data for {effectiveMonth} - WTE and headcount by role category
+                </p>
+              </div>
+              <input
+                type="text"
+                value={breakdownFilter}
+                onChange={(e) => setBreakdownFilter(e.target.value)}
+                placeholder="Filter roles..."
+                className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm w-48"
+              />
+            </div>
+
+            <div className="overflow-auto border border-slate-200 rounded-lg">
+              <table className="min-w-full text-sm">
+                <thead className="bg-slate-50 text-slate-600">
+                  <tr>
+                    <th
+                      className="px-4 py-3 text-left cursor-pointer hover:bg-slate-100 transition-colors"
+                      onClick={() => handleBreakdownSort('label')}
+                    >
+                      <div className="flex items-center gap-1">
+                        Role
+                        {breakdownSort.field === 'label' && (
+                          breakdownSort.direction === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
+                        )}
+                      </div>
+                    </th>
+                    <th
+                      className="px-4 py-3 text-right cursor-pointer hover:bg-slate-100 transition-colors"
+                      onClick={() => handleBreakdownSort('wte')}
+                    >
+                      <div className="flex items-center justify-end gap-1">
+                        WTE
+                        {breakdownSort.field === 'wte' && (
+                          breakdownSort.direction === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
+                        )}
+                      </div>
+                    </th>
+                    <th
+                      className="px-4 py-3 text-right cursor-pointer hover:bg-slate-100 transition-colors"
+                      onClick={() => handleBreakdownSort('headcount')}
+                    >
+                      <div className="flex items-center justify-end gap-1">
+                        Headcount
+                        {breakdownSort.field === 'headcount' && (
+                          breakdownSort.direction === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
+                        )}
+                      </div>
+                    </th>
+                    <th className="px-4 py-3 text-center">Category</th>
+                    <th className="px-4 py-3 text-right">% of Total WTE</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {breakdownTableData.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-8 text-center text-slate-400">
+                        No role data available
+                      </td>
+                    </tr>
+                  ) : (
+                    breakdownTableData.map((row) => (
+                      <tr key={row.roleGroup} className="border-t border-slate-100 hover:bg-slate-50">
+                        <td className="px-4 py-3 font-medium text-slate-700">{row.label}</td>
+                        <td className="px-4 py-3 text-right font-mono text-slate-600">
+                          {formatNumber(row.wte, 2)}
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono text-slate-600">
+                          {row.headcount !== null ? formatNumber(row.headcount, 0) : '-'}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          {row.isGP && (
+                            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">GP</span>
+                          )}
+                          {row.isClinical && !row.isGP && (
+                            <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Clinical</span>
+                          )}
+                          {!row.isClinical && (
+                            <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">Admin</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono text-slate-500">
+                          {totals.totalWte > 0 ? formatPercent((row.wte / totals.totalWte) * 100, 1) : '-'}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+                <tfoot className="bg-slate-50 font-semibold">
+                  <tr className="border-t-2 border-slate-200">
+                    <td className="px-4 py-3 text-slate-700">Total</td>
+                    <td className="px-4 py-3 text-right font-mono text-slate-700">
+                      {formatNumber(totals.totalWte, 2)}
+                    </td>
+                    <td className="px-4 py-3 text-right font-mono text-slate-700">
+                      {totals.totalHeadcount !== null ? formatNumber(totals.totalHeadcount, 0) : '-'}
+                    </td>
+                    <td className="px-4 py-3"></td>
+                    <td className="px-4 py-3 text-right font-mono text-slate-700">100%</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </Card>
+
+          {/* Summary cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Card className="bg-blue-50 border-blue-200">
+              <h4 className="text-sm font-semibold text-blue-700 mb-2">GP Roles</h4>
+              <p className="text-2xl font-bold text-blue-600">{formatNumber(totals.totalWteGP, 2)} WTE</p>
+              <p className="text-xs text-blue-500 mt-1">
+                {totals.totalWte > 0 ? formatPercent((totals.totalWteGP / totals.totalWte) * 100, 1) : '-'} of total
+              </p>
+            </Card>
+            <Card className="bg-green-50 border-green-200">
+              <h4 className="text-sm font-semibold text-green-700 mb-2">Clinical Roles</h4>
+              <p className="text-2xl font-bold text-green-600">{formatNumber(totals.totalWteClinical, 2)} WTE</p>
+              <p className="text-xs text-green-500 mt-1">
+                {totals.totalWte > 0 ? formatPercent((totals.totalWteClinical / totals.totalWte) * 100, 1) : '-'} of total
+              </p>
+            </Card>
+            <Card className="bg-slate-50 border-slate-200">
+              <h4 className="text-sm font-semibold text-slate-700 mb-2">Non-Clinical Roles</h4>
+              <p className="text-2xl font-bold text-slate-600">{formatNumber(totals.totalWteNonClinical, 2)} WTE</p>
+              <p className="text-xs text-slate-500 mt-1">
+                {totals.totalWte > 0 ? formatPercent((totals.totalWteNonClinical / totals.totalWte) * 100, 1) : '-'} of total
+              </p>
+            </Card>
+          </div>
         </div>
       )}
 
@@ -990,6 +1187,22 @@ const NationalWorkforce = ({
                 </p>
               </div>
             </div>
+          </Card>
+        </div>
+      )}
+
+      {activeTab === 'compare' && (
+        <div className="space-y-6">
+          <Card className="text-center py-12">
+            <GitCompare size={48} className="mx-auto text-slate-300 mb-4" />
+            <h3 className="text-lg font-semibold text-slate-600">Practice Comparison</h3>
+            <p className="text-sm text-slate-400 max-w-md mx-auto mt-2">
+              Compare workforce metrics across multiple practices. This feature allows you to benchmark
+              staffing levels, capacity, and demand metrics against peers.
+            </p>
+            <p className="text-xs text-slate-400 mt-4">
+              Use the Demand & Capacity section for full comparison functionality with shareable links.
+            </p>
           </Card>
         </div>
       )}

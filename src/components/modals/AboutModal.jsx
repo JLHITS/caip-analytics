@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Info, X, ExternalLink, Clock, Lock } from 'lucide-react';
+import { Info, X, ExternalLink, Clock, Lock, Coffee } from 'lucide-react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { NHS_BLUE } from '../../constants/colors';
@@ -172,6 +172,25 @@ const AboutModal = ({ isOpen, onClose, onOpenBugReport, timesUsed = 0 }) => {
             It is a tool that practice can use to provide data analytics and presentations of your local clinical system data,
             or nationally available data provided by NHS England. This app is completely free to use.
           </p>
+
+          <div className="bg-gradient-to-r from-yellow-50 to-amber-50 border border-yellow-200 rounded-lg p-4 flex items-center gap-3">
+            <div className="p-3 bg-white rounded-full border border-yellow-100">
+              <Coffee className="text-yellow-600" size={20} />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm text-yellow-800 font-semibold">Support the project</p>
+              <p className="text-xs text-yellow-700 mt-0.5">If you find CAIP.app useful, consider buying me a coffee!</p>
+            </div>
+            <a
+              href="https://buymeacoffee.com/jgomez"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-4 py-2 bg-[#FFDD00] hover:bg-[#ffce00] text-slate-900 text-sm font-bold rounded-lg transition-colors shadow-sm flex items-center gap-2"
+            >
+              <Coffee size={16} />
+              Buy me a coffee
+            </a>
+          </div>
 
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <p className="font-semibold text-blue-900 mb-2">Supported platforms for LOCAL data demand and capacity analysis</p>
