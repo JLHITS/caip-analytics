@@ -874,15 +874,19 @@ const NationalDemandCapacity = ({
       acc.gpApptPerDayPct += metrics.gpApptPerDayPct || 0;
       acc.gpApptOrOCPerDayPct += metrics.gpApptOrOCPerDayPct || 0;
       acc.gpApptsPer1000 += metrics.gpApptsPer1000 || 0;
+      acc.dnaPct += metrics.dnaPct || 0;
+      acc.sameDayPct += metrics.sameDayPct || 0;
       acc.count += 1;
       return acc;
-    }, { gpApptPerDayPct: 0, gpApptOrOCPerDayPct: 0, gpApptsPer1000: 0, count: 0 });
+    }, { gpApptPerDayPct: 0, gpApptOrOCPerDayPct: 0, gpApptsPer1000: 0, dnaPct: 0, sameDayPct: 0, count: 0 });
 
     if (totals.count === 0) return null;
     return {
       gpApptPerDayPct: totals.gpApptPerDayPct / totals.count,
       gpApptOrOCPerDayPct: totals.gpApptOrOCPerDayPct / totals.count,
       gpApptsPer1000: totals.gpApptsPer1000 / totals.count,
+      dnaPct: totals.dnaPct / totals.count,
+      sameDayPct: totals.sameDayPct / totals.count,
     };
   }, [appointmentData, selectedMonth, selectedPractice, telephonyByOds, ocByOds]);
 
@@ -1381,11 +1385,12 @@ const NationalDemandCapacity = ({
                   icon={Clock}
                 />
                 <MetricCard
-                  title="GP Appts/Call"
-                  value={practiceMetrics.hasTelephonyData
+                  title="GP Appts/Demand"
+                  value={practiceMetrics.hasTelephonyData || practiceMetrics.hasOCData
                     ? formatMetricValue(practiceMetrics.gpApptsPerCall, 'decimal2')
                     : 'N/A'}
-                  subtext={practiceMetrics.hasTelephonyData ? 'Per answered call' : 'No telephony data'}
+                  subtext={practiceMetrics.hasTelephonyData || practiceMetrics.hasOCData ? 'Per call + Medical OC' : 'No demand data'}
+                  info="GP Appointments divided by (Inbound Calls + Medical OC submissions)"
                   icon={Phone}
                 />
               </div>
@@ -1602,14 +1607,34 @@ const NationalDemandCapacity = ({
           {appointmentSubTab === 'gp-metrics' && (
             <>
               <Card>
-                <h3 className="font-bold text-slate-700 mb-4 flex items-center gap-2">
-                  <UserCheck size={18} className="text-blue-600" />
-                  GP Appointment Metrics
-                </h3>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-bold text-slate-700 flex items-center gap-2">
+                    <UserCheck size={18} className="text-blue-600" />
+                    GP Appointment Metrics
+                  </h3>
+                  <span className="text-sm px-3 py-1 bg-blue-100 text-blue-700 rounded-full font-medium">
+                    Latest: {selectedMonth}
+                  </span>
+                </div>
                 <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
                   <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
                     <p className="text-sm text-blue-600 font-medium">GP Appointments</p>
-                    <p className="text-3xl font-bold text-blue-800">{practiceMetrics.gpAppointments?.toLocaleString()}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-3xl font-bold text-blue-800">{practiceMetrics.gpAppointments?.toLocaleString()}</p>
+                      {historicalData.length >= 2 && (() => {
+                        const prev = historicalData[historicalData.length - 2]?.gpAppointments;
+                        const curr = practiceMetrics.gpAppointments;
+                        if (prev && curr) {
+                          const diff = curr - prev;
+                          return diff !== 0 ? (
+                            <span className={`flex items-center text-xs ${diff > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              {diff > 0 ? <ArrowUp size={12} /> : <ArrowDown size={12} />}
+                            </span>
+                          ) : null;
+                        }
+                        return null;
+                      })()}
+                    </div>
                     <p className="text-xs text-blue-500">{formatMetricValue(practiceMetrics.gpPct, 'percent1')} of total</p>
                   </div>
                   <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
@@ -1617,24 +1642,84 @@ const NationalDemandCapacity = ({
                       <span>Patients with GP Appointment per Day (%)</span>
                       <InlineInfoTooltip text="Percentage of registered patients each working day who attended a GP appointment" />
                     </div>
-                    <p className="text-3xl font-bold text-blue-800">{formatMetricValue(practiceMetrics.gpApptPerDayPct, 'percent2')}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-3xl font-bold text-blue-800">{formatMetricValue(practiceMetrics.gpApptPerDayPct, 'percent2')}</p>
+                      {historicalData.length >= 2 && (() => {
+                        const prev = historicalData[historicalData.length - 2]?.gpApptPerDayPct;
+                        const curr = practiceMetrics.gpApptPerDayPct;
+                        if (prev && curr) {
+                          const diff = curr - prev;
+                          return Math.abs(diff) > 0.01 ? (
+                            <span className={`flex items-center text-xs ${diff > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              {diff > 0 ? <ArrowUp size={12} /> : <ArrowDown size={12} />}
+                            </span>
+                          ) : null;
+                        }
+                        return null;
+                      })()}
+                    </div>
                   </div>
                   <div className="p-4 bg-purple-50 rounded-lg border border-purple-100">
                     <div className="flex items-center gap-1 text-sm text-purple-600 font-medium">
                       <span>Patients with GP Appointment or Medical Online Consultation per Day (%)</span>
                       <InlineInfoTooltip text="Percentage of registered patients each working day who attended a GP appointment and/or Medical Online Consultation (any outcome)" />
                     </div>
-                    <p className="text-3xl font-bold text-purple-800">{formatMetricValue(practiceMetrics.gpApptOrOCPerDayPct, 'percent2')}</p>
-                    <p className="text-xs text-purple-500">Includes clinical OC</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-3xl font-bold text-purple-800">{formatMetricValue(practiceMetrics.gpApptOrOCPerDayPct, 'percent2')}</p>
+                      {historicalData.length >= 2 && (() => {
+                        const prev = historicalData[historicalData.length - 2]?.gpApptOrOCPerDayPct;
+                        const curr = practiceMetrics.gpApptOrOCPerDayPct;
+                        if (prev && curr) {
+                          const diff = curr - prev;
+                          return Math.abs(diff) > 0.01 ? (
+                            <span className={`flex items-center text-xs ${diff > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              {diff > 0 ? <ArrowUp size={12} /> : <ArrowDown size={12} />}
+                            </span>
+                          ) : null;
+                        }
+                        return null;
+                      })()}
+                    </div>
+                    <p className="text-xs text-purple-500">Includes Medical OC</p>
                   </div>
                   <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
                     <p className="text-sm text-blue-600 font-medium">GP per 1000 Patients</p>
-                    <p className="text-3xl font-bold text-blue-800">{formatMetricValue(practiceMetrics.gpApptsPer1000, 'decimal1')}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-3xl font-bold text-blue-800">{formatMetricValue(practiceMetrics.gpApptsPer1000, 'decimal1')}</p>
+                      {historicalData.length >= 2 && (() => {
+                        const prev = historicalData[historicalData.length - 2]?.gpApptsPer1000;
+                        const curr = practiceMetrics.gpApptsPer1000;
+                        if (prev && curr) {
+                          const diff = curr - prev;
+                          return Math.abs(diff) > 0.5 ? (
+                            <span className={`flex items-center text-xs ${diff > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              {diff > 0 ? <ArrowUp size={12} /> : <ArrowDown size={12} />}
+                            </span>
+                          ) : null;
+                        }
+                        return null;
+                      })()}
+                    </div>
                     <p className="text-xs text-blue-500">Monthly rate</p>
                   </div>
                   <div className="p-4 bg-purple-50 rounded-lg border border-purple-100">
                     <p className="text-sm text-purple-600 font-medium">GP + Medical OC per 1000</p>
-                    <p className="text-3xl font-bold text-purple-800">{formatMetricValue(practiceMetrics.gpApptOrOCPer1000, 'decimal1')}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-3xl font-bold text-purple-800">{formatMetricValue(practiceMetrics.gpApptOrOCPer1000, 'decimal1')}</p>
+                      {historicalData.length >= 2 && (() => {
+                        const prev = historicalData[historicalData.length - 2]?.gpApptOrOCPer1000;
+                        const curr = practiceMetrics.gpApptOrOCPer1000;
+                        if (prev && curr) {
+                          const diff = curr - prev;
+                          return Math.abs(diff) > 0.5 ? (
+                            <span className={`flex items-center text-xs ${diff > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              {diff > 0 ? <ArrowUp size={12} /> : <ArrowDown size={12} />}
+                            </span>
+                          ) : null;
+                        }
+                        return null;
+                      })()}
+                    </div>
                     <p className="text-xs text-purple-500">Monthly rate</p>
                   </div>
                   <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
@@ -1755,11 +1840,31 @@ const NationalDemandCapacity = ({
           {/* OTHER STAFF SUB-TAB */}
           {appointmentSubTab === 'other-staff' && (
             <>
+              {/* Info notice about local data */}
+              <Card className="bg-blue-50 border-blue-200">
+                <div className="flex items-start gap-3">
+                  <Info className="text-blue-600 flex-shrink-0 mt-0.5" size={18} />
+                  <div>
+                    <h4 className="font-medium text-blue-800">More Detail Available in Local Data</h4>
+                    <p className="text-sm text-blue-700 mt-1">
+                      National GPAD data groups all non-GP staff together. For a detailed breakdown by role
+                      (ANP, Pharmacist, Nurse, etc.) use the <strong>Local Data</strong> analysis with your
+                      practice's appointment or triage slot extract.
+                    </p>
+                  </div>
+                </div>
+              </Card>
+
               <Card>
-                <h3 className="font-bold text-slate-700 mb-4 flex items-center gap-2">
-                  <Users size={18} className="text-green-600" />
-                  Other Practice Staff Metrics
-                </h3>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-bold text-slate-700 flex items-center gap-2">
+                    <Users size={18} className="text-green-600" />
+                    Other Practice Staff Metrics
+                  </h3>
+                  <span className="text-sm px-3 py-1 bg-green-100 text-green-700 rounded-full font-medium">
+                    Latest: {selectedMonth}
+                  </span>
+                </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="p-4 bg-green-50 rounded-lg border border-green-100">
                     <p className="text-sm text-green-600 font-medium">Other Staff Appointments</p>
@@ -1789,6 +1894,22 @@ const NationalDemandCapacity = ({
           {/* BREAKDOWN SUB-TAB */}
           {appointmentSubTab === 'breakdown' && (
             <>
+              {/* GPAD Data Disclaimer */}
+              <Card className="bg-amber-50 border-amber-200">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="text-amber-600 flex-shrink-0 mt-0.5" size={18} />
+                  <div>
+                    <h4 className="font-medium text-amber-800">About This Data</h4>
+                    <p className="text-sm text-amber-700 mt-1">
+                      This breakdown is sourced from NHS Digital's <strong>Appointments in General Practice (GPAD)</strong> dataset.
+                      Categories are based on SNOMED codes mapped by NHS Digital. Some appointment types may be categorised
+                      differently to how your practice records them locally. For more accurate categorisation, use your
+                      practice's local appointment extract.
+                    </p>
+                  </div>
+                </div>
+              </Card>
+
               <Card>
                 <h3 className="font-bold text-slate-700 mb-2 flex items-center gap-2">
                   <BarChart3 size={18} className="text-blue-600" />
@@ -1992,17 +2113,58 @@ const NationalDemandCapacity = ({
           {appointmentSubTab === 'dna' && (
             <>
               <Card>
-                <h3 className="font-bold text-slate-700 mb-4 flex items-center gap-2">
-                  <AlertTriangle size={18} className="text-red-600" />
-                  DNA (Did Not Attend) Analysis
-                </h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-bold text-slate-700 flex items-center gap-2">
+                    <AlertTriangle size={18} className="text-red-600" />
+                    DNA (Did Not Attend) Analysis
+                  </h3>
+                  <span className="text-sm px-3 py-1 bg-red-100 text-red-700 rounded-full font-medium">
+                    Latest: {selectedMonth}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                   <div className={`p-4 rounded-lg border ${practiceMetrics.dnaPct > 5 ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-200'}`}>
-                    <p className="text-sm text-slate-600 font-medium">DNA Rate</p>
-                    <p className={`text-3xl font-bold ${practiceMetrics.dnaPct > 5 ? 'text-red-600' : 'text-slate-800'}`}>
-                      {formatMetricValue(practiceMetrics.dnaPct, 'percent1')}
-                    </p>
+                    <p className="text-sm text-slate-600 font-medium">Total DNA Rate</p>
+                    <div className="flex items-center gap-2">
+                      <p className={`text-3xl font-bold ${practiceMetrics.dnaPct > 5 ? 'text-red-600' : 'text-slate-800'}`}>
+                        {formatMetricValue(practiceMetrics.dnaPct, 'percent1')}
+                      </p>
+                      {historicalData.length >= 2 && (() => {
+                        const prev = historicalData[historicalData.length - 2]?.dnaPct;
+                        const curr = practiceMetrics.dnaPct;
+                        if (prev && curr) {
+                          const diff = curr - prev;
+                          // For DNA, lower is better, so down arrow is green
+                          return Math.abs(diff) > 0.1 ? (
+                            <span className={`flex items-center text-xs ${diff < 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              {diff < 0 ? <ArrowDown size={12} /> : <ArrowUp size={12} />}
+                            </span>
+                          ) : null;
+                        }
+                        return null;
+                      })()}
+                    </div>
                     <p className="text-xs text-slate-500">Target: &lt;5%</p>
+                  </div>
+                  {/* PCN DNA Comparison */}
+                  <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
+                    <p className="text-sm text-purple-600 font-medium">PCN Average DNA</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-3xl font-bold text-purple-800">
+                        {pcnAverages?.dnaPct ? formatMetricValue(pcnAverages.dnaPct, 'percent1') : 'N/A'}
+                      </p>
+                      {pcnAverages?.dnaPct && practiceMetrics.dnaPct && (() => {
+                        const diff = practiceMetrics.dnaPct - pcnAverages.dnaPct;
+                        // For DNA, lower is better
+                        return Math.abs(diff) > 0.1 ? (
+                          <span className={`flex items-center text-xs ${diff < 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            {diff < 0 ? <ArrowDown size={12} /> : <ArrowUp size={12} />}
+                            <span className="ml-0.5">{Math.abs(diff).toFixed(1)}%</span>
+                          </span>
+                        ) : <span className="text-xs text-slate-500">same</span>;
+                      })()}
+                    </div>
+                    <p className="text-xs text-purple-500">{selectedPractice?.pcnName?.slice(0, 25) || 'PCN'}...</p>
                   </div>
                   <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
                     <p className="text-sm text-slate-600 font-medium">DNA Count</p>
@@ -2027,12 +2189,12 @@ const NationalDemandCapacity = ({
                 <h3 className="font-bold text-slate-700 mb-4">DNA Impact</h3>
                 <div className="p-4 bg-amber-50 rounded-lg border border-amber-200">
                   <p className="text-amber-800">
-                    <span className="font-bold">{practiceMetrics.dna?.toLocaleString()}</span> missed appointments represent
+                    <span className="font-bold">{practiceMetrics.dna?.toLocaleString()}</span> missed GP appointments represent
                     wasted capacity equivalent to approximately{' '}
                     <span className="font-bold">
-                      {Math.round((practiceMetrics.dna || 0) * 10 / 60)} GP hours
+                      {Math.round((practiceMetrics.dna || 0) * 15 / 60)} GP hours
                     </span>{' '}
-                    per month (assuming 10 min average appointment).
+                    per month (assuming 15 min average GP appointment).
                   </p>
                 </div>
               </Card>
@@ -2415,20 +2577,6 @@ const NationalDemandCapacity = ({
                       <th className="px-3 py-2 text-right">
                         <button
                           onClick={() => setCompareSort(prev => ({
-                            key: 'gpPer1000',
-                            direction: prev.key === 'gpPer1000' && prev.direction === 'asc' ? 'desc' : 'asc',
-                          }))}
-                          className="inline-flex items-center gap-1 font-semibold text-slate-700 hover:text-slate-900"
-                        >
-                          GP/1000
-                          {compareSort.key === 'gpPer1000' && (
-                            compareSort.direction === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
-                          )}
-                        </button>
-                      </th>
-                      <th className="px-3 py-2 text-right">
-                        <button
-                          onClick={() => setCompareSort(prev => ({
                             key: 'gpOcPer1000',
                             direction: prev.key === 'gpOcPer1000' && prev.direction === 'asc' ? 'desc' : 'asc',
                           }))}
@@ -2485,26 +2633,12 @@ const NationalDemandCapacity = ({
                       <th className="px-3 py-2 text-right">
                         <button
                           onClick={() => setCompareSort(prev => ({
-                            key: 'topWaitPct',
-                            direction: prev.key === 'topWaitPct' && prev.direction === 'asc' ? 'desc' : 'asc',
-                          }))}
-                          className="inline-flex items-center gap-1 font-semibold text-slate-700 hover:text-slate-900"
-                        >
-                          Top Booking Wait %
-                          {compareSort.key === 'topWaitPct' && (
-                            compareSort.direction === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
-                          )}
-                        </button>
-                      </th>
-                      <th className="px-3 py-2 text-right">
-                        <button
-                          onClick={() => setCompareSort(prev => ({
                             key: 'gpApptsPerCall',
                             direction: prev.key === 'gpApptsPerCall' && prev.direction === 'asc' ? 'desc' : 'asc',
                           }))}
                           className="inline-flex items-center gap-1 font-semibold text-slate-700 hover:text-slate-900"
                         >
-                          GP Appts/Call
+                          GP Appts/Demand
                           {compareSort.key === 'gpApptsPerCall' && (
                             compareSort.direction === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
                           )}
@@ -2576,9 +2710,6 @@ const NationalDemandCapacity = ({
                             {formatMetricValue(metrics?.gpApptOrOCPerDayPct, 'percent2')}
                           </td>
                           <td className="px-3 py-2 text-right">
-                            {formatMetricValue(metrics?.gpApptsPer1000, 'decimal1')}
-                          </td>
-                          <td className="px-3 py-2 text-right">
                             {formatMetricValue(metrics?.gpApptOrOCPer1000, 'decimal1')}
                           </td>
                           <td className="px-3 py-2 text-right">
@@ -2589,9 +2720,6 @@ const NationalDemandCapacity = ({
                           </td>
                           <td className="px-3 py-2 text-right">
                             {formatMetricValue(metrics?.faceToFacePct, 'percent1')}
-                          </td>
-                          <td className="px-3 py-2 text-right">
-                            {row.topWaitLabel ? `${row.topWaitLabel} ${formatMetricValue(row.topWaitValue, 'percent1')}` : 'N/A'}
                           </td>
                           <td className="px-3 py-2 text-right">
                             {metrics?.hasTelephonyData

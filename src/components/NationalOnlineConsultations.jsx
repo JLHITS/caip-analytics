@@ -909,7 +909,7 @@ const NationalOnlineConsultations = ({
               <h3 className="text-lg font-bold text-slate-800 mb-4">Submission Type Breakdown</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="text-center p-4 bg-blue-50 rounded-lg">
-                  <p className="text-xs text-slate-600 uppercase">Clinical</p>
+                  <p className="text-xs text-slate-600 uppercase">Medical</p>
                   <p className="text-2xl font-bold text-blue-700">{selectedPractice.clinicalSubmissions.toLocaleString()}</p>
                   <p className="text-sm text-blue-600">{(selectedPractice.clinicalPct * 100).toFixed(1)}%</p>
                   <p className="text-xs text-slate-500">National: {(data.national.clinicalPct * 100).toFixed(1)}%</p>
@@ -926,6 +926,58 @@ const NationalOnlineConsultations = ({
                   <p className="text-sm text-gray-600">{(selectedPractice.otherPct * 100).toFixed(1)}%</p>
                   <p className="text-xs text-slate-500">National: {(data.national.otherPct * 100).toFixed(1)}%</p>
                 </div>
+              </div>
+            </Card>
+
+            {/* System Supplier Market Share - moved to overview with themed colors */}
+            <Card>
+              <h3 className="text-lg font-bold text-slate-800 mb-4">Online Consultation System Suppliers</h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {(() => {
+                  const supplierStats = getSupplierStats(data.practices);
+                  // Supplier color themes
+                  const supplierColors = {
+                    'Accurx': { bg: 'bg-teal-50', border: 'border-teal-200', text: 'text-teal-700' },
+                    'eConsult': { bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-700' },
+                    'TPP': { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700' },
+                    'SystmOne': { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700' },
+                    'Anima': { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-700' },
+                    'Continuum': { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-700' },
+                    'Silicon Practice': { bg: 'bg-pink-50', border: 'border-pink-200', text: 'text-pink-700' },
+                    'FootFall': { bg: 'bg-pink-50', border: 'border-pink-200', text: 'text-pink-700' },
+                    'Patchs': { bg: 'bg-sky-50', border: 'border-sky-200', text: 'text-sky-700' },
+                    'Evergreen': { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-700' },
+                  };
+                  const getColors = (name) => {
+                    for (const key of Object.keys(supplierColors)) {
+                      if (name.toLowerCase().includes(key.toLowerCase())) {
+                        return supplierColors[key];
+                      }
+                    }
+                    return { bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-700' };
+                  };
+                  return supplierStats.slice(0, 8).map((supplier) => {
+                    const colors = getColors(supplier.name);
+                    // Count unique PCNs and ICBs
+                    const pcns = new Set();
+                    const icbs = new Set();
+                    data.practices.forEach(p => {
+                      const pSupplier = p.supplier || (p.suppliers && p.suppliers.length > 0 ? p.suppliers.join(', ') : '');
+                      if (pSupplier.toLowerCase().includes(supplier.name.toLowerCase())) {
+                        if (p.pcnCode) pcns.add(p.pcnCode);
+                        if (p.icbCode) icbs.add(p.icbCode);
+                      }
+                    });
+                    return (
+                      <div key={supplier.name} className={`text-center p-3 ${colors.bg} ${colors.border} border rounded-lg`}>
+                        <p className="text-xs text-slate-600 truncate font-medium">{supplier.name}</p>
+                        <p className={`text-xl font-bold ${colors.text}`}>{supplier.practiceCount.toLocaleString()}</p>
+                        <p className="text-xs text-slate-500">practices</p>
+                        <p className="text-[10px] text-slate-400 mt-1">{pcns.size} PCNs / {icbs.size} ICBs</p>
+                      </div>
+                    );
+                  });
+                })()}
               </div>
             </Card>
 
@@ -1099,7 +1151,7 @@ const NationalOnlineConsultations = ({
                     labels: practiceHistory.map(d => d.month),
                     datasets: [
                       {
-                        label: 'Clinical %',
+                        label: 'Medical %',
                         data: practiceHistory.map(d => d.clinicalPct),
                         borderColor: 'rgb(59, 130, 246)',
                         backgroundColor: 'rgba(59, 130, 246, 0.1)',
@@ -1514,7 +1566,7 @@ const NationalOnlineConsultations = ({
               </Card>
 
               <Card className="bg-gradient-to-br from-blue-50 to-white border-blue-200">
-                <p className="text-xs text-slate-600 font-semibold uppercase">Clinical / 1000</p>
+                <p className="text-xs text-slate-600 font-semibold uppercase">Medical / 1000</p>
                 <p className="text-3xl font-bold text-blue-700 mt-1">{selectedPractice.clinicalPer1000.toFixed(1)}</p>
                 <p className="text-xs text-slate-500 mt-1">{(selectedPractice.clinicalPct * 100).toFixed(0)}% of total</p>
               </Card>
@@ -1541,7 +1593,7 @@ const NationalOnlineConsultations = ({
                 <div className="h-64">
                   <Doughnut
                     data={{
-                      labels: ['Clinical', 'Administrative', 'Other'],
+                      labels: ['Medical', 'Administrative', 'Other'],
                       datasets: [{
                         data: [
                           selectedPractice.clinicalPer1000,
@@ -1574,7 +1626,7 @@ const NationalOnlineConsultations = ({
                 <div className="space-y-4">
                   <div className="p-4 bg-blue-50 rounded-lg">
                     <div className="flex justify-between items-center">
-                      <span className="font-medium text-blue-800">Clinical</span>
+                      <span className="font-medium text-blue-800">Medical</span>
                       <span className="text-blue-700 font-bold">{selectedPractice.clinicalPer1000.toFixed(1)} / 1000</span>
                     </div>
                     <p className="text-xs text-slate-600 mt-1">Rank #{rankedByClinical.findIndex(p => p.odsCode === selectedPractice.odsCode) + 1} nationally</p>
@@ -1596,9 +1648,9 @@ const NationalOnlineConsultations = ({
               </div>
             </Card>
 
-            {/* Top 20 by Clinical Rate */}
+            {/* Top 20 by Medical Rate */}
             <Card className="bg-gradient-to-br from-blue-50 to-white border-blue-200">
-              <h3 className="text-lg font-bold text-blue-900 mb-4">Top 20 Practices (Clinical Submissions / 1000)</h3>
+              <h3 className="text-lg font-bold text-blue-900 mb-4">Top 20 Practices (Medical Submissions / 1000)</h3>
               <div className="overflow-x-auto -mx-4 sm:mx-0">
                 <div className="inline-block min-w-full align-middle">
                   <div className="overflow-hidden sm:rounded-lg">
@@ -1608,9 +1660,9 @@ const NationalOnlineConsultations = ({
                           <th className="text-left p-3 font-semibold text-blue-900">Rank</th>
                           <th className="text-left p-3 font-semibold text-blue-900">Practice</th>
                           <th className="text-left p-3 font-semibold text-blue-900">PCN</th>
-                          <th className="text-right p-3 font-semibold text-blue-900">Clinical/1000</th>
+                          <th className="text-right p-3 font-semibold text-blue-900">Medical/1000</th>
                           <th className="text-right p-3 font-semibold text-blue-900">Total Rate</th>
-                          <th className="text-right p-3 font-semibold text-blue-900">Clinical %</th>
+                          <th className="text-right p-3 font-semibold text-blue-900">Medical %</th>
                         </tr>
                       </thead>
                       <tbody>

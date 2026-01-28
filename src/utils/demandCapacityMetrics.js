@@ -77,12 +77,23 @@ export function calculatePatientsWithGPApptOrOCPerDay(gpAppts, ocSubmissions, po
 }
 
 /**
- * Calculate GP Appointments per Answered Call
+ * Calculate GP Appointments per Answered Call (legacy)
  * Formula: GP Appointments / Answered Calls
  */
 export function calculateGPApptsPerAnsweredCall(gpAppts, answeredCalls) {
   if (!answeredCalls || answeredCalls === 0) return null;
   return gpAppts / answeredCalls;
+}
+
+/**
+ * Calculate GP Appointments per Demand Channel
+ * Formula: GP Appointments / (Inbound Calls + Medical OC Submissions)
+ * This better reflects total demand as it includes both phone and digital channels
+ */
+export function calculateGPApptsPerDemandChannel(gpAppts, inboundCalls, medicalOcSubmissions) {
+  const totalDemand = (inboundCalls || 0) + (medicalOcSubmissions || 0);
+  if (totalDemand === 0) return null;
+  return gpAppts / totalDemand;
 }
 
 /**
@@ -164,8 +175,9 @@ export function calculatePracticeMetrics(apptData, telephonyData, ocData, popula
     missedCallsPer1000: calculatePer1000(missedCalls, population),
 
     // Conversion/Efficiency Metrics
-    gpApptsPerCall: calculateGPApptsPerAnsweredCall(gpAppts, answeredCalls),
-    totalApptsPerCall: calculateGPApptsPerAnsweredCall(totalAppts, answeredCalls),
+    // gpApptsPerCall now uses (inbound calls + medical OC) to reflect total demand
+    gpApptsPerCall: calculateGPApptsPerDemandChannel(gpAppts, inboundCalls, ocClinicalSubmissions),
+    totalApptsPerCall: calculateGPApptsPerDemandChannel(totalAppts, inboundCalls, ocClinicalSubmissions),
 
     // Rate Metrics
     dnaPct,
