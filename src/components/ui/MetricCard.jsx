@@ -21,10 +21,10 @@ const MetricCard = ({ title, value, subtext, icon: Icon, color = 'text-slate-700
 
   return (
     <Card className="flex flex-col justify-between h-full">
-      <div className="flex justify-between items-start mb-4">
-        <div>
+      <div className="flex items-start justify-between gap-3 mb-4">
+        <div className="min-w-0 flex-1">
           <div className="flex items-start gap-1.5">
-            <p className="text-sm font-medium text-slate-500 uppercase tracking-wider">{title}</p>
+            <p className="text-sm font-medium text-slate-500 uppercase tracking-wider break-words">{title}</p>
             {info && (
               <div ref={infoRef} className="relative">
                 <button
@@ -45,7 +45,7 @@ const MetricCard = ({ title, value, subtext, icon: Icon, color = 'text-slate-700
           </div>
           <h3 className={`text-2xl font-bold mt-1 ${color}`}>{value}</h3>
         </div>
-        <div className={`p-3 rounded-xl bg-slate-50 ${color}`}>
+        <div className={`p-3 rounded-xl bg-slate-50 shrink-0 ${color}`}>
           {Icon && <Icon size={24} />}
         </div>
       </div>
