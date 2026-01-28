@@ -291,6 +291,9 @@ const NationalDemandCapacity = ({
   // Sub-tab navigation
   const [activeSubTab, setActiveSubTab] = useState('appointments');
 
+  // Workforce cross-over metrics (exposed from NationalWorkforce component)
+  const [workforceMetrics, setWorkforceMetrics] = useState(null);
+
   // Compare tab state
   const [comparePractices, setComparePractices] = useState([]);
   const [compareSearchQuery, setCompareSearchQuery] = useState('');
@@ -1406,6 +1409,48 @@ const NationalDemandCapacity = ({
                   icon={Phone}
                 />
               </div>
+
+              {/* Workforce Cross-over Metrics - Only show when workforce data is available */}
+              {workforceMetrics?.hasWorkforceData && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <MetricCard
+                    title="GP Appts / GP WTE"
+                    value={workforceMetrics.appointmentsPerGpWte
+                      ? formatMetricValue(workforceMetrics.appointmentsPerGpWte, 'integer')
+                      : 'N/A'}
+                    subtext={`${formatMetricValue(workforceMetrics.gpWte, 'decimal1')} GP WTE`}
+                    info="GP appointments per GP WTE for the month"
+                    icon={UserCheck}
+                  />
+                  <MetricCard
+                    title="Appts / Clinical WTE"
+                    value={workforceMetrics.appointmentsPerClinicalWte
+                      ? formatMetricValue(workforceMetrics.appointmentsPerClinicalWte, 'integer')
+                      : 'N/A'}
+                    subtext={`${formatMetricValue(workforceMetrics.clinicalWte, 'decimal1')} Clinical WTE`}
+                    info="Total appointments per clinical WTE for the month"
+                    icon={Users}
+                  />
+                  <MetricCard
+                    title="GP+OC / GP WTE"
+                    value={workforceMetrics.gpApptsAndOcPerGpWte
+                      ? formatMetricValue(workforceMetrics.gpApptsAndOcPerGpWte, 'integer')
+                      : 'N/A'}
+                    subtext="GP Appts + Medical OC"
+                    info="GP appointments plus Medical Online Consultations per GP WTE"
+                    icon={Activity}
+                  />
+                  <MetricCard
+                    title="GP+OC / Clin WTE"
+                    value={workforceMetrics.gpApptsAndOcPerClinicalWte
+                      ? formatMetricValue(workforceMetrics.gpApptsAndOcPerClinicalWte, 'integer')
+                      : 'N/A'}
+                    subtext="GP Appts + Medical OC"
+                    info="GP appointments plus Medical Online Consultations per clinical WTE"
+                    icon={Activity}
+                  />
+                </div>
+              )}
 
               {/* Appointment Mode & Staff Breakdown */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -3009,6 +3054,7 @@ const NationalDemandCapacity = ({
           parentSelectedMonth={selectedMonth}
           parentCompareMode={compareMode}
           parentTimeRangeMonths={timeRangeMonths}
+          workforceMetrics={workforceMetrics}
         />
       </div>
 
@@ -3034,6 +3080,7 @@ const NationalDemandCapacity = ({
           parentSelectedMonth={selectedMonth}
           parentCompareMode={compareMode}
           parentTimeRangeMonths={timeRangeMonths}
+          workforceMetrics={workforceMetrics}
         />
       </div>
 
@@ -3048,6 +3095,7 @@ const NationalDemandCapacity = ({
           telephonyData={telephonyData}
           ocData={ocData}
           onLoadingChange={setWorkforceLoading}
+          onMetricsChange={setWorkforceMetrics}
         />
       </div>
 

@@ -60,6 +60,109 @@ const formatRatio = (value) => {
   return `${value.toFixed(2)}:1`;
 };
 
+/**
+ * National Spectrum Visualizer - Shows where a practice sits on the national workforce spectrum
+ * Uses a gradient from green (best/lowest) to red (worst/highest) for patients per WTE metrics
+ */
+const WorkforceSpectrumVisualizer = ({ value, allValues, label, rank, total, isLowerBetter = true }) => {
+  const sortedValues = [...allValues].filter(v => v > 0).sort((a, b) => a - b);
+  const belowCount = sortedValues.filter(v => v < value).length;
+  const percentile = sortedValues.length > 0 ? (belowCount / sortedValues.length) * 100 : 50;
+
+  // For workforce metrics, lower is typically better (fewer patients per WTE = more capacity)
+  // So we invert the color scale - low percentile (fewer patients) = green
+  const displayPercentile = isLowerBetter ? percentile : (100 - percentile);
+
+  // Gradient stops: Green (best) -> Yellow -> Orange -> Red (worst)
+  const gradientStops = [
+    { pos: 0, color: '#22c55e' },    // Green - best (lowest patients per WTE)
+    { pos: 25, color: '#84cc16' },   // Lime
+    { pos: 40, color: '#facc15' },   // Yellow
+    { pos: 55, color: '#f59e0b' },   // Amber
+    { pos: 70, color: '#f97316' },   // Orange
+    { pos: 85, color: '#ef4444' },   // Red
+    { pos: 100, color: '#dc2626' },  // Dark red - worst (highest patients per WTE)
+  ];
+
+  // Get color at percentile
+  const getColorAtPercentile = (pct) => {
+    for (let i = gradientStops.length - 1; i >= 0; i--) {
+      if (pct >= gradientStops[i].pos) {
+        return gradientStops[i].color;
+      }
+    }
+    return gradientStops[0].color;
+  };
+
+  const markerColor = getColorAtPercentile(displayPercentile);
+
+  // Get percentile values for markers
+  const getPercentileValue = (p) => {
+    const idx = Math.floor((p / 100) * (sortedValues.length - 1));
+    return sortedValues[idx] || 0;
+  };
+
+  const p25 = getPercentileValue(25);
+  const p50 = getPercentileValue(50);
+  const p75 = getPercentileValue(75);
+
+  return (
+    <div className="p-5 bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl border border-slate-200">
+      <div className="flex items-center justify-between mb-3">
+        <h4 className="font-semibold text-slate-700">{label}</h4>
+        <div className="text-right">
+          <span className="text-2xl font-bold" style={{ color: markerColor }}>
+            {formatNumber(value, 0)}
+          </span>
+          {rank && total && (
+            <p className="text-xs text-slate-500">Rank #{rank} of {total.toLocaleString()}</p>
+          )}
+        </div>
+      </div>
+
+      {/* Spectrum Bar */}
+      <div className="relative mt-4 mb-6">
+        <div
+          className="h-4 rounded-full shadow-inner overflow-hidden"
+          style={{
+            background: `linear-gradient(to right, ${gradientStops.map(s => `${s.color} ${s.pos}%`).join(', ')})`
+          }}
+        />
+
+        {/* Marker for practice position */}
+        <div
+          className="absolute top-1/2 -translate-y-1/2 transition-all duration-500"
+          style={{ left: `${Math.max(2, Math.min(98, displayPercentile))}%` }}
+        >
+          <div className="relative">
+            <div
+              className="w-6 h-6 -ml-3 rounded-full border-4 border-white shadow-lg"
+              style={{ backgroundColor: markerColor }}
+            />
+            <div
+              className="absolute left-1/2 -translate-x-1/2 -bottom-2 w-0 h-0"
+              style={{
+                borderLeft: '6px solid transparent',
+                borderRight: '6px solid transparent',
+                borderTop: `8px solid ${markerColor}`,
+              }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Percentile markers */}
+      <div className="flex justify-between text-[10px] text-slate-400 px-1">
+        <span>{isLowerBetter ? 'Best' : 'Worst'}</span>
+        <span>p25: {formatNumber(p25, 0)}</span>
+        <span>Median: {formatNumber(p50, 0)}</span>
+        <span>p75: {formatNumber(p75, 0)}</span>
+        <span>{isLowerBetter ? 'Worst' : 'Best'}</span>
+      </div>
+    </div>
+  );
+};
+
 const buildDefinitionTooltip = (definitions, columns = []) => {
   if (!definitions?.byColumn || columns.length === 0) return null;
   const lines = columns
@@ -111,6 +214,7 @@ const NationalWorkforce = ({
   telephonyData,
   ocData,
   onLoadingChange,
+  onMetricsChange,
 }) => {
   const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState(true);
@@ -251,6 +355,58 @@ const NationalWorkforce = ({
     ];
   }, [totals, roleTotals]);
 
+  // Calculate national distribution for patients per WTE spectrum visualization
+  const nationalWorkforceDistribution = useMemo(() => {
+    if (!monthData?.practices || !selectedPractice) return null;
+
+    const MIN_POPULATION = 1000; // Exclude small practices
+    const MIN_GP_WTE = 0.5; // Exclude practices with negligible GP WTE
+
+    // Calculate patients per GP WTE for all practices
+    const allPracticeMetrics = monthData.practices
+      .map((practice) => {
+        const listSize = practice.listSize || 0;
+        const gpWte = practice.workforce?.totals?.totalWteGP || 0;
+        const clinicalWte = practice.workforce?.totals?.totalWteClinical || 0;
+
+        if (listSize < MIN_POPULATION || gpWte < MIN_GP_WTE) return null;
+
+        return {
+          odsCode: practice.odsCode,
+          patientsPerGpWte: gpWte > 0 ? listSize / gpWte : null,
+          patientsPerClinicalWte: clinicalWte > 0 ? listSize / clinicalWte : null,
+        };
+      })
+      .filter(Boolean);
+
+    // Extract all values for spectrum
+    const allPatientsPerGpWte = allPracticeMetrics
+      .map((m) => m.patientsPerGpWte)
+      .filter((v) => v !== null && v > 0);
+    const allPatientsPerClinicalWte = allPracticeMetrics
+      .map((m) => m.patientsPerClinicalWte)
+      .filter((v) => v !== null && v > 0);
+
+    // Calculate ranks (lower is better for patients per WTE)
+    const sortedByGp = [...allPracticeMetrics]
+      .filter((m) => m.patientsPerGpWte)
+      .sort((a, b) => a.patientsPerGpWte - b.patientsPerGpWte);
+    const gpRank = sortedByGp.findIndex((m) => m.odsCode === selectedPractice.odsCode) + 1;
+
+    const sortedByClinical = [...allPracticeMetrics]
+      .filter((m) => m.patientsPerClinicalWte)
+      .sort((a, b) => a.patientsPerClinicalWte - b.patientsPerClinicalWte);
+    const clinicalRank = sortedByClinical.findIndex((m) => m.odsCode === selectedPractice.odsCode) + 1;
+
+    return {
+      allPatientsPerGpWte,
+      allPatientsPerClinicalWte,
+      gpRank: gpRank > 0 ? gpRank : null,
+      clinicalRank: clinicalRank > 0 ? clinicalRank : null,
+      totalPractices: allPracticeMetrics.length,
+    };
+  }, [monthData, selectedPractice]);
+
   const dictionaryRows = useMemo(() => {
     const entries = definitions?.columns || [];
     if (!dictionaryFilter) return entries;
@@ -261,6 +417,59 @@ const NationalWorkforce = ({
       String(entry.description || '').toLowerCase().includes(term)
     ));
   }, [definitions, dictionaryFilter]);
+
+  // Expose workforce metrics to parent component for cross-over display
+  useEffect(() => {
+    if (!onMetricsChange || !practiceData) {
+      onMetricsChange?.(null);
+      return;
+    }
+
+    // Calculate Appts + Medical OC per WTE metrics
+    const gpAppts = apptPractice?.staffBreakdown?.gpAppointments || 0;
+    const medicalOc = ocPractice?.clinicalSubmissions || 0;
+    const totalAppts = apptPractice?.totalAppointments || 0;
+    const gpWte = totals?.totalWteGP || 0;
+    const clinicalWte = totals?.totalWteClinical || 0;
+    const adminWte = totals?.totalWteNonClinical || 0;
+
+    const crossoverMetrics = {
+      // Core WTE values
+      gpWte,
+      clinicalWte,
+      adminWte,
+      totalWte: totals?.totalWte || 0,
+
+      // Appointments per WTE
+      appointmentsPerGpWte: demandMetrics.appointmentsPerGpWte,
+      appointmentsPerClinicalWte: demandMetrics.appointmentsPerClinicalWte,
+
+      // Appts + Medical OC per WTE (new combined metrics)
+      gpApptsAndOcPerGpWte: gpWte > 0 ? (gpAppts + medicalOc) / gpWte : null,
+      gpApptsAndOcPerClinicalWte: clinicalWte > 0 ? (gpAppts + medicalOc) / clinicalWte : null,
+      totalApptsAndOcPerClinicalWte: clinicalWte > 0 ? (totalAppts + medicalOc) / clinicalWte : null,
+
+      // Telephony per WTE
+      callsAnsweredPerAdminWte: demandMetrics.callsAnsweredPerAdminWte,
+      callsMissedPerAdminWte: demandMetrics.callsMissedPerAdminWte,
+
+      // OC per WTE
+      ocPerGpWte: demandMetrics.ocPerGpWte,
+      ocPerClinicalWte: demandMetrics.ocPerClinicalWte,
+
+      // Derived ratios
+      patientsPerGpWte: derivedMetrics.patientsPerGpWte,
+      patientsPerClinicalWte: derivedMetrics.patientsPerClinicalWte,
+
+      // Capacity model
+      capacityUtilization: capacityModel?.utilization,
+
+      // Data availability
+      hasWorkforceData: Boolean(practiceData),
+    };
+
+    onMetricsChange(crossoverMetrics);
+  }, [onMetricsChange, practiceData, totals, demandMetrics, derivedMetrics, capacityModel, apptPractice, ocPractice]);
 
   if (loading) {
     return null;
@@ -290,39 +499,35 @@ const NationalWorkforce = ({
 
   return (
     <div className="space-y-6">
-      <Card>
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h2 className="text-xl font-bold text-slate-800">Workforce Dashboard</h2>
-            <p className="text-sm text-slate-500">
-              Practice-level workforce snapshot aligned to {effectiveMonth || 'latest month'}
-              {monthMismatch && (
-                <span className="ml-2 text-amber-600">(Demand data selected: {selectedMonth})</span>
-              )}
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {TAB_OPTIONS.map((tab) => {
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
-                    activeTab === tab.id
-                      ? 'bg-blue-600 text-white shadow'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  <Icon size={16} />
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
+      {/* Sub-Tab Navigation - Pill-style secondary tabs matching other national data tabs */}
+      <div className="flex flex-wrap gap-1.5 bg-slate-50 p-1 rounded-lg border border-slate-200">
+        {TAB_OPTIONS.map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+                isActive
+                  ? 'bg-white text-blue-700 shadow-sm border border-blue-200'
+                  : 'text-slate-500 hover:text-slate-700 hover:bg-white/60'
+              }`}
+            >
+              <Icon size={14} />
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Month alignment notice */}
+      {monthMismatch && (
+        <div className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
+          Workforce data shown for {effectiveMonth} (demand data selected: {selectedMonth})
         </div>
-      </Card>
+      )}
 
       {activeTab === 'overview' && (
         <div className="space-y-6">
@@ -364,6 +569,28 @@ const NationalWorkforce = ({
               info="Registered patients per total clinical WTE."
             />
           </div>
+
+          {/* National Spectrum Visualizations for Patients per WTE */}
+          {nationalWorkforceDistribution?.allPatientsPerGpWte?.length > 0 && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <WorkforceSpectrumVisualizer
+                value={derivedMetrics.patientsPerGpWte}
+                allValues={nationalWorkforceDistribution.allPatientsPerGpWte}
+                label="Patients per GP WTE"
+                rank={nationalWorkforceDistribution.gpRank}
+                total={nationalWorkforceDistribution.totalPractices}
+                isLowerBetter={true}
+              />
+              <WorkforceSpectrumVisualizer
+                value={derivedMetrics.patientsPerClinicalWte}
+                allValues={nationalWorkforceDistribution.allPatientsPerClinicalWte}
+                label="Patients per Clinical WTE"
+                rank={nationalWorkforceDistribution.clinicalRank}
+                total={nationalWorkforceDistribution.totalPractices}
+                isLowerBetter={true}
+              />
+            </div>
+          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card>
@@ -560,6 +787,9 @@ const NationalWorkforce = ({
               <SlidersHorizontal size={18} className="text-slate-500" />
               <h3 className="font-semibold text-slate-700">Capacity Assumptions</h3>
             </div>
+            <p className="text-xs text-slate-500 mb-4">
+              Adjust these assumptions to model what-if scenarios. Changes will update the theoretical capacity calculations below.
+            </p>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
               <label className="flex flex-col gap-1">
                 <span className="text-slate-500">Working days per month</span>
@@ -595,6 +825,41 @@ const NationalWorkforce = ({
                 </label>
               ))}
             </div>
+          </Card>
+
+          {/* Capacity Summary - shows current calculations based on assumptions */}
+          <Card className="bg-gradient-to-br from-blue-50 to-white border-blue-200">
+            <h3 className="font-semibold text-slate-700 mb-4">Capacity Summary</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+              <div>
+                <p className="text-xs text-slate-500 uppercase">Working Days</p>
+                <p className="text-2xl font-bold text-blue-600">{capacityModel.workingDays}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 uppercase">Theoretical Capacity</p>
+                <p className="text-2xl font-bold text-blue-600">{formatNumber(capacityModel.totalTheoretical, 0)}</p>
+                <p className="text-xs text-slate-400">appointments</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 uppercase">Actual Appointments</p>
+                <p className="text-2xl font-bold text-green-600">{formatNumber(capacityModel.totalActual, 0)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 uppercase">Utilisation</p>
+                <p className={`text-2xl font-bold ${
+                  capacityModel.utilization > 1 ? 'text-red-600' :
+                  capacityModel.utilization > 0.85 ? 'text-amber-600' : 'text-green-600'
+                }`}>
+                  {formatPercent(capacityModel.utilization ? capacityModel.utilization * 100 : null, 0)}
+                </p>
+              </div>
+            </div>
+            {capacityModel.utilization > 1 && (
+              <div className="mt-4 p-3 bg-red-100 border border-red-200 rounded-lg text-sm text-red-700">
+                <strong>Over capacity:</strong> Actual appointments exceed theoretical capacity by {formatNumber((capacityModel.utilization - 1) * 100, 0)}%.
+                Consider adjusting assumptions or reviewing workforce levels.
+              </div>
+            )}
           </Card>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

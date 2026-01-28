@@ -112,6 +112,7 @@ const NationalOnlineConsultations = ({
   parentSelectedMonth, // Optional: controlled month from parent component
   parentCompareMode, // Optional: controlled compare mode from parent component
   parentTimeRangeMonths, // Optional: controlled time range months from parent component
+  workforceMetrics, // Optional: workforce cross-over metrics from parent
 }) => {
   const [allMonthsData, setAllMonthsData] = useState({});
   const [loading, setLoading] = useState(true);
@@ -928,6 +929,38 @@ const NationalOnlineConsultations = ({
                 </div>
               </div>
             </Card>
+
+            {/* Workforce Cross-over Metrics - Only show when workforce data available */}
+            {workforceMetrics?.hasWorkforceData && (
+              <Card className="bg-gradient-to-br from-slate-50 to-white border-slate-200">
+                <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                  <Users size={20} className="text-blue-600" />
+                  Workforce Context
+                </h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="text-center p-3 bg-white rounded-lg border border-slate-100">
+                    <p className="text-xs text-slate-500 uppercase font-medium">GP WTE</p>
+                    <p className="text-2xl font-bold text-slate-800">{workforceMetrics.gpWte?.toFixed(1) || 'N/A'}</p>
+                    <p className="text-[10px] text-slate-400">Full-time equivalent</p>
+                  </div>
+                  <div className="text-center p-3 bg-white rounded-lg border border-slate-100">
+                    <p className="text-xs text-slate-500 uppercase font-medium">Medical OC / GP WTE</p>
+                    <p className="text-2xl font-bold text-indigo-600">{workforceMetrics.ocPerGpWte?.toFixed(0) || 'N/A'}</p>
+                    <p className="text-[10px] text-slate-400">Submissions per GP WTE</p>
+                  </div>
+                  <div className="text-center p-3 bg-white rounded-lg border border-slate-100">
+                    <p className="text-xs text-slate-500 uppercase font-medium">OC / Clinical WTE</p>
+                    <p className="text-2xl font-bold text-purple-600">{workforceMetrics.ocPerClinicalWte?.toFixed(0) || 'N/A'}</p>
+                    <p className="text-[10px] text-slate-400">Submissions per clinical WTE</p>
+                  </div>
+                  <div className="text-center p-3 bg-white rounded-lg border border-slate-100">
+                    <p className="text-xs text-slate-500 uppercase font-medium">GP+OC / GP WTE</p>
+                    <p className="text-2xl font-bold text-teal-600">{workforceMetrics.gpApptsAndOcPerGpWte?.toFixed(0) || 'N/A'}</p>
+                    <p className="text-[10px] text-slate-400">GP Appts + Medical OC</p>
+                  </div>
+                </div>
+              </Card>
+            )}
 
             {/* System Supplier Market Share - moved to overview with themed colors */}
             <Card>

@@ -73,6 +73,7 @@ const NationalTelephony = ({
   parentSelectedMonth, // Optional: controlled month from parent component
   parentCompareMode, // Optional: controlled compare mode from parent component
   parentTimeRangeMonths, // Optional: controlled time range months from parent component
+  workforceMetrics, // Optional: workforce cross-over metrics from parent
 }) => {
   const [allMonthsData, setAllMonthsData] = useState({}); // Store all months data
   const [searchTerm, setSearchTerm] = useState('');
@@ -1180,6 +1181,38 @@ const NationalTelephony = ({
                 </div>
               </Card>
             </div>
+
+            {/* Workforce Cross-over Metrics - Only show when workforce data available */}
+            {workforceMetrics?.hasWorkforceData && (
+              <Card className="bg-gradient-to-br from-slate-50 to-white border-slate-200">
+                <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                  <Users size={20} className="text-blue-600" />
+                  Workforce Context
+                </h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="text-center p-3 bg-white rounded-lg border border-slate-100">
+                    <p className="text-xs text-slate-500 uppercase font-medium">Admin WTE</p>
+                    <p className="text-2xl font-bold text-slate-800">{workforceMetrics.adminWte?.toFixed(1) || 'N/A'}</p>
+                    <p className="text-[10px] text-slate-400">Non-clinical staff</p>
+                  </div>
+                  <div className="text-center p-3 bg-white rounded-lg border border-slate-100">
+                    <p className="text-xs text-slate-500 uppercase font-medium">Calls / Admin WTE</p>
+                    <p className="text-2xl font-bold text-blue-600">{workforceMetrics.callsAnsweredPerAdminWte?.toFixed(0) || 'N/A'}</p>
+                    <p className="text-[10px] text-slate-400">Answered calls per WTE</p>
+                  </div>
+                  <div className="text-center p-3 bg-white rounded-lg border border-slate-100">
+                    <p className="text-xs text-slate-500 uppercase font-medium">Missed / Admin WTE</p>
+                    <p className="text-2xl font-bold text-amber-600">{workforceMetrics.callsMissedPerAdminWte?.toFixed(0) || 'N/A'}</p>
+                    <p className="text-[10px] text-slate-400">Missed calls per WTE</p>
+                  </div>
+                  <div className="text-center p-3 bg-white rounded-lg border border-slate-100">
+                    <p className="text-xs text-slate-500 uppercase font-medium">Patients / GP WTE</p>
+                    <p className="text-2xl font-bold text-slate-700">{workforceMetrics.patientsPerGpWte?.toFixed(0) || 'N/A'}</p>
+                    <p className="text-[10px] text-slate-400">Practice capacity</p>
+                  </div>
+                </div>
+              </Card>
+            )}
               </>
             )}
 

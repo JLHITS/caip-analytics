@@ -4,7 +4,7 @@ import Card from './Card';
 
 // Display metric with icon, value, and optional subtext
 // Used for key performance indicators on dashboard
-const MetricCard = ({ title, value, subtext, icon: Icon, color = 'text-slate-700', info }) => {
+const MetricCard = ({ title, value, subtext, icon: Icon, color = 'text-slate-700', info, className = '' }) => {
   const [showInfo, setShowInfo] = useState(false);
   const infoRef = useRef(null);
 
@@ -20,7 +20,7 @@ const MetricCard = ({ title, value, subtext, icon: Icon, color = 'text-slate-700
   }, [showInfo]);
 
   return (
-    <Card className="flex flex-col justify-between h-full">
+    <Card className={`flex flex-col justify-between h-full overflow-hidden ${className}`}>
       <div className="flex items-start justify-between gap-3 mb-4">
         <div className="min-w-0 flex-1">
           <div className="flex items-start gap-1.5">
@@ -36,7 +36,7 @@ const MetricCard = ({ title, value, subtext, icon: Icon, color = 'text-slate-700
                   <Info size={14} />
                 </button>
                 {showInfo && (
-                  <div className="absolute left-0 z-50 mt-2 w-64 rounded-lg border border-slate-200 bg-white p-2 text-xs text-slate-600 shadow-lg">
+                  <div className="absolute left-0 bottom-full mb-2 z-[100] w-64 rounded-lg border border-slate-200 bg-white p-2 text-xs text-slate-600 shadow-lg">
                     {info}
                   </div>
                 )}
