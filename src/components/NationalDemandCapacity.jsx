@@ -316,8 +316,8 @@ const NationalDemandCapacity = ({
     { id: 'telephony', label: 'Telephony', icon: Phone, color: 'blue' },
     { id: 'online-consultations', label: 'Online Consultations', icon: Monitor, color: 'blue' },
     { id: 'workforce', label: 'Workforce', icon: UserCheck, color: 'blue' },
-    { id: 'forecasting', label: 'Forecasting', icon: TrendingUp, color: 'blue' },
     { id: 'compare', label: 'Compare', icon: Users, color: 'blue' },
+    { id: 'forecasting', label: 'Forecasting', icon: TrendingUp, color: 'blue', disabled: true, comingSoon: true },
   ];
 
   // ========================================
@@ -1283,8 +1283,8 @@ const NationalDemandCapacity = ({
           const Icon = tab.icon;
           const isActive = activeSubTab === tab.id;
           // Disable data tabs until a practice is selected (Compare always enabled)
-          const requiresPractice = ['appointments', 'telephony', 'online-consultations', 'workforce', 'forecasting'].includes(tab.id);
-          const isDisabled = requiresPractice && !selectedPractice;
+          const requiresPractice = ['appointments', 'telephony', 'online-consultations', 'workforce'].includes(tab.id);
+          const isDisabled = tab.disabled || (requiresPractice && !selectedPractice);
 
           return (
             <button
@@ -1300,13 +1300,16 @@ const NationalDemandCapacity = ({
                 isActive
                   ? 'bg-white text-blue-600 shadow-sm'
                   : isDisabled
-                  ? 'text-slate-400 cursor-not-allowed'
+                  ? 'text-slate-400 cursor-not-allowed opacity-60'
                   : 'text-slate-600 hover:text-slate-800 hover:bg-white/50'
               }`}
-              title={isDisabled ? 'Select a practice first' : ''}
+              title={tab.disabled ? '' : isDisabled ? 'Select a practice first' : ''}
             >
               <Icon size={18} />
               {tab.label}
+              {tab.comingSoon && (
+                <span className="text-[10px] bg-slate-200 text-slate-500 px-2 py-0.5 rounded-full">Coming Soon</span>
+              )}
             </button>
           );
         })}

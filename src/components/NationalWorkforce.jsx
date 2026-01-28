@@ -1,6 +1,6 @@
 ﻿import React, { useEffect, useMemo, useState } from 'react';
 import { Bar, Doughnut } from 'react-chartjs-2';
-import { AlertTriangle, BarChart3, ChevronDown, ChevronUp, GitCompare, Info, LineChart, SlidersHorizontal, Table2, TrendingUp, Users } from 'lucide-react';
+import { AlertTriangle, BarChart3, ChevronDown, ChevronUp, Info, SlidersHorizontal, Table2, TrendingUp, Users } from 'lucide-react';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 
@@ -43,8 +43,6 @@ const TAB_OPTIONS = [
   { id: 'demand', label: 'Workforce vs Demand', icon: TrendingUp },
   { id: 'capacity', label: 'Capacity & Utilisation', icon: SlidersHorizontal },
   { id: 'risk', label: 'Risk & Planning', icon: AlertTriangle },
-  { id: 'compare', label: 'Compare', icon: GitCompare },
-  { id: 'forecasting', label: 'Forecasting', icon: LineChart, disabled: true, comingSoon: true },
 ];
 
 const formatNumber = (value, decimals = 1) => {
@@ -563,28 +561,19 @@ const NationalWorkforce = ({
         {TAB_OPTIONS.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
-          const isDisabled = tab.disabled;
           return (
             <button
               key={tab.id}
               type="button"
-              onClick={() => !isDisabled && setActiveTab(tab.id)}
-              disabled={isDisabled}
+              onClick={() => setActiveTab(tab.id)}
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
-                isDisabled
-                  ? 'text-slate-400 cursor-not-allowed opacity-60'
-                  : isActive
+                isActive
                   ? 'bg-white text-blue-700 shadow-sm border border-blue-200'
                   : 'text-slate-500 hover:text-slate-700 hover:bg-white/60'
               }`}
             >
               <Icon size={14} />
               {tab.label}
-              {tab.comingSoon && (
-                <span className="ml-1 text-[9px] bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded-full">
-                  Coming Soon
-                </span>
-              )}
             </button>
           );
         })}
@@ -1191,21 +1180,6 @@ const NationalWorkforce = ({
         </div>
       )}
 
-      {activeTab === 'compare' && (
-        <div className="space-y-6">
-          <Card className="text-center py-12">
-            <GitCompare size={48} className="mx-auto text-slate-300 mb-4" />
-            <h3 className="text-lg font-semibold text-slate-600">Practice Comparison</h3>
-            <p className="text-sm text-slate-400 max-w-md mx-auto mt-2">
-              Compare workforce metrics across multiple practices. This feature allows you to benchmark
-              staffing levels, capacity, and demand metrics against peers.
-            </p>
-            <p className="text-xs text-slate-400 mt-4">
-              Use the Demand & Capacity section for full comparison functionality with shareable links.
-            </p>
-          </Card>
-        </div>
-      )}
     </div>
   );
 };
