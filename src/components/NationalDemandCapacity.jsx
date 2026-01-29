@@ -1282,8 +1282,8 @@ const NationalDemandCapacity = ({
         {SUB_TABS.map(tab => {
           const Icon = tab.icon;
           const isActive = activeSubTab === tab.id;
-          // Disable data tabs until a practice is selected (Compare always enabled)
-          const requiresPractice = ['appointments', 'telephony', 'online-consultations', 'workforce'].includes(tab.id);
+          // Disable data tabs until a practice is selected
+          const requiresPractice = ['appointments', 'telephony', 'online-consultations', 'workforce', 'compare'].includes(tab.id);
           const isDisabled = tab.disabled || (requiresPractice && !selectedPractice);
 
           return (
@@ -1293,6 +1293,10 @@ const NationalDemandCapacity = ({
                 if (!isDisabled) {
                   setActiveSubTab(tab.id);
                   trackTabView('national', tab.id);
+                  // Auto-add selected practice to comparison when entering Compare tab
+                  if (tab.id === 'compare' && selectedPractice && !comparePractices.some(p => p.odsCode === selectedPractice.odsCode)) {
+                    setComparePractices(prev => [selectedPractice, ...prev]);
+                  }
                 }
               }}
               disabled={isDisabled}
@@ -1329,12 +1333,38 @@ const NationalDemandCapacity = ({
 
       {/* No Practice Selected Message - z-0 ensures it stays below search dropdown */}
       {!selectedPractice && (
-        <Card className="text-center py-12 relative z-0">
-          <Search className="mx-auto text-slate-300 mb-4" size={48} />
-          <h3 className="text-xl font-bold text-slate-700 mb-2">Select a Practice</h3>
-          <p className="text-slate-500">
-            Search for a practice by name or ODS code to view their demand and capacity analysis
-          </p>
+        <Card className="relative z-0 py-8">
+          <div className="flex flex-col md:flex-row items-center gap-8 max-w-4xl mx-auto">
+            <div className="flex-shrink-0">
+              <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center">
+                <Search className="text-blue-500" size={40} />
+              </div>
+            </div>
+            <div className="text-center md:text-left flex-1">
+              <h3 className="text-xl font-bold text-slate-700 mb-2">Select a Practice to Begin</h3>
+              <p className="text-slate-500 mb-4">
+                Search for a practice by name or ODS code using the search bar above. Once selected, you'll have access to:
+              </p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                <div className="flex items-center gap-2 text-slate-600">
+                  <Calendar size={16} className="text-blue-500" />
+                  <span>Appointments</span>
+                </div>
+                <div className="flex items-center gap-2 text-slate-600">
+                  <Phone size={16} className="text-blue-500" />
+                  <span>Telephony</span>
+                </div>
+                <div className="flex items-center gap-2 text-slate-600">
+                  <Monitor size={16} className="text-blue-500" />
+                  <span>Online Consultations</span>
+                </div>
+                <div className="flex items-center gap-2 text-slate-600">
+                  <UserCheck size={16} className="text-blue-500" />
+                  <span>Workforce</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </Card>
       )}
 
