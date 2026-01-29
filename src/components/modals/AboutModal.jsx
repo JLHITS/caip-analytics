@@ -173,6 +173,8 @@ const AboutModal = ({ isOpen, onClose, onOpenBugReport, timesUsed = 0 }) => {
             or nationally available data provided by NHS England. This app is completely free to use.
           </p>
 
+{/* Hidden for now - set to true to re-enable */}
+          {false && (
           <div className="bg-gradient-to-r from-yellow-50 to-amber-50 border border-yellow-200 rounded-lg p-4 flex items-center gap-3">
             <div className="p-3 bg-white rounded-full border border-yellow-100">
               <Coffee className="text-yellow-600" size={20} />
@@ -192,6 +194,7 @@ const AboutModal = ({ isOpen, onClose, onOpenBugReport, timesUsed = 0 }) => {
               Buy me a coffee
             </a>
           </div>
+          )}
 
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <p className="font-semibold text-blue-900 mb-2">Supported platforms for LOCAL data demand and capacity analysis</p>

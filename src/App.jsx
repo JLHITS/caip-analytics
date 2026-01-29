@@ -2101,6 +2101,8 @@ export default function App() {
             >
               <LinkedInIcon size={16} className="text-[#0A66C2]" />
             </a>
+{/* Hidden for now - set to true to re-enable */}
+            {false && (
             <a
               href="https://buymeacoffee.com/jgomez"
               target="_blank"
@@ -2111,6 +2113,7 @@ export default function App() {
             >
               <CoffeeIcon size={16} className="text-[#FFDD00]" />
             </a>
+            )}
             <div className="h-8 w-px bg-slate-200 mx-2 hidden sm:block"></div>
             <div className="hidden lg:flex items-center gap-3 bg-white dark:bg-slate-700 px-4 py-2 rounded-full border border-slate-200 dark:border-slate-600 shadow-sm">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Made in</span>
