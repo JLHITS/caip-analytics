@@ -40,3 +40,4 @@ export const trackImport = () => trackEvent('import_dashboard');
 export const trackDisclaimerAccepted = () => trackEvent('disclaimer_accepted');
 export const trackShareCreated = (type) => trackEvent('share_created', { type });
 export const trackAIAnalysis = () => trackEvent('ai_analysis_requested');
+export const trackCoffeeClick = (source) => trackEvent('coffee_click', { source });

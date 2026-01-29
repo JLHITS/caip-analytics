@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Info, X, ExternalLink, Clock, Lock, Coffee } from 'lucide-react';
 import { collection, getDocs } from 'firebase/firestore';
-import { db } from '../../firebase/config';
+import { db, trackCoffeeClick } from '../../firebase/config';
 import { NHS_BLUE } from '../../constants/colors';
 
 // About modal - displays information about CAIP.app
@@ -186,6 +186,7 @@ const AboutModal = ({ isOpen, onClose, onOpenBugReport, timesUsed = 0 }) => {
               target="_blank"
               rel="noopener noreferrer"
               className="px-4 py-2 bg-[#FFDD00] hover:bg-[#ffce00] text-slate-900 text-sm font-bold rounded-lg transition-colors shadow-sm flex items-center gap-2"
+              onClick={() => trackCoffeeClick('about_modal')}
             >
               <Coffee size={16} />
               Buy me a coffee

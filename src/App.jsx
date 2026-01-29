@@ -94,7 +94,7 @@ import {
 import logo from './assets/logo.png';
 import rushcliffeLogo from './assets/rushcliffe.png';
 import nottsWestLogo from './assets/nottswest.png';
-import { db, trackDataSourceSelected, trackTabView, trackPracticeLookup, trackExport, trackImport, trackDisclaimerAccepted, trackShareCreated, trackAIAnalysis } from './firebase/config';
+import { db, trackDataSourceSelected, trackTabView, trackPracticeLookup, trackExport, trackImport, trackDisclaimerAccepted, trackShareCreated, trackAIAnalysis, trackCoffeeClick } from './firebase/config';
 
 // Sample data imports
 import sampleAppt from './assets/sampledata/AppointmentReport.csv?url';
@@ -2107,6 +2107,7 @@ export default function App() {
               rel="noopener noreferrer"
               className="p-1.5 text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:border-yellow-400 transition-all"
               title="Buy me a coffee"
+              onClick={() => trackCoffeeClick('header')}
             >
               <CoffeeIcon size={16} className="text-[#FFDD00]" />
             </a>
