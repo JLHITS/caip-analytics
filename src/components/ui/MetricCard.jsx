@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Info } from 'lucide-react';
 import Card from './Card';
 
@@ -6,46 +6,24 @@ import Card from './Card';
 // Used for key performance indicators on dashboard
 const MetricCard = ({ title, value, subtext, icon: Icon, color = 'text-slate-700', info, className = '' }) => {
   const [showInfo, setShowInfo] = useState(false);
-  const [tooltipPosition, setTooltipPosition] = useState({ top: 0, left: 0, positionAbove: true });
-  const infoRef = useRef(null);
-  const tooltipRef = useRef(null);
-
-  const calculatePosition = useCallback(() => {
-    if (!infoRef.current) return;
-    const rect = infoRef.current.getBoundingClientRect();
-    const tooltipHeight = 100; // Approximate tooltip height
-    const spaceAbove = rect.top;
-    const positionAbove = spaceAbove > tooltipHeight + 16;
-
-    setTooltipPosition({
-      top: positionAbove ? rect.top - 8 : rect.bottom + 8,
-      left: Math.min(rect.left, window.innerWidth - 300),
-      positionAbove
-    });
-  }, []);
+  const containerRef = useRef(null);
 
   useEffect(() => {
     if (!showInfo) return;
-    calculatePosition();
     const handleClickOutside = (event) => {
-      if (infoRef.current && !infoRef.current.contains(event.target) &&
-          tooltipRef.current && !tooltipRef.current.contains(event.target)) {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
         setShowInfo(false);
       }
     };
-    // Delay attaching click-outside listener to avoid catching the opening click
+    // Delay to avoid catching the opening click
     const timeoutId = setTimeout(() => {
       document.addEventListener('mousedown', handleClickOutside);
-    }, 10);
-    window.addEventListener('scroll', calculatePosition, true);
-    window.addEventListener('resize', calculatePosition);
+    }, 0);
     return () => {
       clearTimeout(timeoutId);
       document.removeEventListener('mousedown', handleClickOutside);
-      window.removeEventListener('scroll', calculatePosition, true);
-      window.removeEventListener('resize', calculatePosition);
     };
-  }, [showInfo, calculatePosition]);
+  }, [showInfo]);
 
   return (
     <Card className={`flex flex-col justify-between h-full ${className}`}>
@@ -54,7 +32,7 @@ const MetricCard = ({ title, value, subtext, icon: Icon, color = 'text-slate-700
           <div className="flex items-start gap-1.5">
             <p className="text-sm font-medium text-slate-500 uppercase tracking-wider break-words leading-tight">{title}</p>
             {info && (
-              <div ref={infoRef} className="relative shrink-0">
+              <div ref={containerRef} className="relative shrink-0">
                 <button
                   type="button"
                   onClick={() => setShowInfo(!showInfo)}
@@ -64,15 +42,7 @@ const MetricCard = ({ title, value, subtext, icon: Icon, color = 'text-slate-700
                   <Info size={14} />
                 </button>
                 {showInfo && (
-                  <div
-                    ref={tooltipRef}
-                    className="fixed z-[9999] w-72 rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-600 shadow-xl"
-                    style={{
-                      top: tooltipPosition.top + 'px',
-                      left: tooltipPosition.left + 'px',
-                      transform: tooltipPosition.positionAbove ? 'translateY(-100%)' : 'none'
-                    }}
-                  >
+                  <div className="absolute left-0 bottom-full mb-2 z-[9999] w-64 rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-600 shadow-xl">
                     {info}
                   </div>
                 )}
