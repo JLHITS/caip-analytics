@@ -33,10 +33,14 @@ const MetricCard = ({ title, value, subtext, icon: Icon, color = 'text-slate-700
         setShowInfo(false);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
+    // Delay attaching click-outside listener to avoid catching the opening click
+    const timeoutId = setTimeout(() => {
+      document.addEventListener('mousedown', handleClickOutside);
+    }, 10);
     window.addEventListener('scroll', calculatePosition, true);
     window.addEventListener('resize', calculatePosition);
     return () => {
+      clearTimeout(timeoutId);
       document.removeEventListener('mousedown', handleClickOutside);
       window.removeEventListener('scroll', calculatePosition, true);
       window.removeEventListener('resize', calculatePosition);
