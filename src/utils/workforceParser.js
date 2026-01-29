@@ -279,10 +279,25 @@ export function aggregateWorkforcePractices(practices = []) {
 }
 
 export function buildWorkforceDataset(rows = [], month) {
+  // Data corrections for known mapping errors in NHS England source data
+  const DATA_CORRECTIONS = {
+    // Orchard Surgery should be mapped to NHS Nottingham and Nottinghamshire ICB
+    'C82040': {
+      icbCode: 'QT1',
+      icbName: 'NHS NOTTINGHAM AND NOTTINGHAMSHIRE INTEGRATED CARE BOARD'
+    }
+  };
+
   const practices = [];
   rows.forEach((row) => {
     const practice = buildWorkforcePractice(row, month);
-    if (practice) practices.push(practice);
+    if (practice) {
+      // Apply corrections if needed
+      if (DATA_CORRECTIONS[practice.odsCode]) {
+        Object.assign(practice, DATA_CORRECTIONS[practice.odsCode]);
+      }
+      practices.push(practice);
+    }
   });
 
   return {
