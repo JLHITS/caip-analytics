@@ -27,7 +27,7 @@ import SimpleMarkdown from './markdown/SimpleMarkdown';
 
 // Utility imports
 import { parseNationalAppointmentsData, searchAppointmentPractices } from '../utils/parseNationalAppointments';
-import { loadAppointmentsData, loadTelephonyData, loadOnlineConsultationsData } from '../data/dataLoader';
+import { loadAppointmentsData, loadTelephonyData, loadOnlineConsultationsData, loadWorkforceData } from '../data/dataLoader';
 import {
   calculatePracticeMetrics,
   calculateNetworkAverages,
@@ -298,6 +298,7 @@ const NationalDemandCapacity = ({
   // Telephony and OC data - loaded by child components and shared here for combined metrics
   const [telephonyData, setTelephonyData] = useState(null);
   const [ocData, setOcData] = useState(null);
+  const [workforceNationalData, setWorkforceNationalData] = useState(null);
   const populationData = null;
 
   // Practice selection
@@ -376,40 +377,42 @@ const NationalDemandCapacity = ({
   const preloadedJsonRef = useRef(null);
   const jsonLoadAttemptedRef = useRef(false);
 
-  // Load telephony and OC data for combined metrics (fallback if child loads lag)
+  // Load telephony, OC, and workforce data for combined metrics (fallback if child loads lag)
   useEffect(() => {
     let isActive = true;
 
     const loadSupplementalData = async () => {
       try {
-        const [telephony, oc] = await Promise.all([
+        const [telephony, oc, workforce] = await Promise.all([
           telephonyData ? Promise.resolve(telephonyData) : loadTelephonyData(),
           ocData ? Promise.resolve(ocData) : loadOnlineConsultationsData(),
+          workforceNationalData ? Promise.resolve(workforceNationalData) : loadWorkforceData(),
         ]);
 
         if (!isActive) return;
 
         if (!telephonyData) setTelephonyData(telephony);
         if (!ocData) setOcData(oc);
+        if (!workforceNationalData) setWorkforceNationalData(workforce);
 
         if (telephony) setTelephonyLoading(false);
         if (oc) setOcLoading(false);
       } catch (error) {
-        console.error('Error loading telephony/OC data:', error);
+        console.error('Error loading telephony/OC/workforce data:', error);
         if (!isActive) return;
         setTelephonyLoading(false);
         setOcLoading(false);
       }
     };
 
-    if (!telephonyData || !ocData) {
+    if (!telephonyData || !ocData || !workforceNationalData) {
       loadSupplementalData();
     }
 
     return () => {
       isActive = false;
     };
-  }, [telephonyData, ocData]);
+  }, [telephonyData, ocData, workforceNationalData]);
 
   // Load appointment data for a single month
   const loadMonthData = useCallback(async (month) => {
@@ -606,6 +609,19 @@ const NationalDemandCapacity = ({
     if (!monthData?.practices) return new Map();
     return new Map(monthData.practices.map(practice => [practice.odsCode, practice]));
   }, [ocData, selectedMonth]);
+
+  // Get workforce data for selected month (fallback to latest available)
+  const workforceByOds = useMemo(() => {
+    if (!workforceNationalData) return new Map();
+    // Find the effective month - use selected or fallback to latest
+    const workforceMonths = Object.keys(workforceNationalData).filter(k => k !== 'metadata');
+    const effectiveMonth = workforceMonths.includes(selectedMonth)
+      ? selectedMonth
+      : workforceMonths[workforceMonths.length - 1];
+    const monthData = workforceNationalData?.[effectiveMonth];
+    if (!monthData?.practices) return new Map();
+    return new Map(monthData.practices.map(practice => [practice.odsCode, practice]));
+  }, [workforceNationalData, selectedMonth]);
 
   const comparePcnResults = useMemo(() => {
     if (!appointmentData[selectedMonth] || compareSearchQuery.length < 2) return [];
@@ -979,8 +995,36 @@ const NationalDemandCapacity = ({
       return metrics;
     });
 
-    return collectNationalMetricArrays(allMetrics);
-  }, [appointmentData, selectedMonth, telephonyByOds, ocByOds]);
+    const baseArrays = collectNationalMetricArrays(allMetrics);
+
+    // Add workforce national arrays for percentile calculations
+    const patientsPerGpWteArray = [];
+    const patientsPerClinicalWteArray = [];
+
+    if (workforceByOds.size > 0) {
+      currentData.practices.forEach(practice => {
+        const workforcePractice = workforceByOds.get(practice.odsCode);
+        if (workforcePractice?.workforce?.totals) {
+          const listSize = practice.listSize || workforcePractice.listSize || 0;
+          const gpWte = workforcePractice.workforce.totals.totalWteGP || 0;
+          const clinicalWte = workforcePractice.workforce.totals.totalWteClinical || 0;
+
+          if (gpWte > 0 && listSize > 0) {
+            patientsPerGpWteArray.push(listSize / gpWte);
+          }
+          if (clinicalWte > 0 && listSize > 0) {
+            patientsPerClinicalWteArray.push(listSize / clinicalWte);
+          }
+        }
+      });
+    }
+
+    return {
+      ...baseArrays,
+      patientsPerGpWte: patientsPerGpWteArray,
+      patientsPerClinicalWte: patientsPerClinicalWteArray,
+    };
+  }, [appointmentData, selectedMonth, telephonyByOds, ocByOds, workforceByOds]);
 
   // Check for existing CAIP analysis when practice or month changes
   useEffect(() => {
@@ -3501,6 +3545,10 @@ const NationalDemandCapacity = ({
           ocData={ocData}
           onLoadingChange={setWorkforceLoading}
           onMetricsChange={setWorkforceMetrics}
+          nationalWorkforceArrays={{
+            patientsPerGpWte: nationalMetricArrays.patientsPerGpWte || [],
+            patientsPerClinicalWte: nationalMetricArrays.patientsPerClinicalWte || [],
+          }}
         />
       </div>
 

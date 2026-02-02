@@ -208,6 +208,15 @@ const loadDefinitionsFromAssets = async () => {
   };
 };
 
+// Calculate percentile position
+const calculatePercentile = (value, allValues) => {
+  if (value == null || !allValues?.length) return null;
+  const sorted = [...allValues].filter(v => v != null && !isNaN(v)).sort((a, b) => a - b);
+  if (sorted.length === 0) return null;
+  const below = sorted.filter(v => v < value).length;
+  return Math.round((below / sorted.length) * 100);
+};
+
 const NationalWorkforce = ({
   selectedPractice,
   selectedMonth,
@@ -216,6 +225,7 @@ const NationalWorkforce = ({
   ocData,
   onLoadingChange,
   onMetricsChange,
+  nationalWorkforceArrays = {},
 }) => {
   const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState(true);
@@ -618,12 +628,23 @@ const NationalWorkforce = ({
               value={formatNumber(derivedMetrics.patientsPerGpWte, 0)}
               icon={Users}
               info="Registered patients per GP WTE (lower is better)."
+              subtext={(() => {
+                const pctl = calculatePercentile(derivedMetrics.patientsPerGpWte, nationalWorkforceArrays?.patientsPerGpWte);
+                if (pctl === null) return 'National percentile: N/A';
+                // Lower is better, so provide context
+                return `National percentile: ${pctl}th (${pctl <= 25 ? 'better staffed' : pctl >= 75 ? 'higher workload' : 'average'})`;
+              })()}
             />
             <MetricCard
               title="Patients / Clinical WTE"
               value={formatNumber(derivedMetrics.patientsPerClinicalWte, 0)}
               icon={Users}
               info="Registered patients per total clinical WTE."
+              subtext={(() => {
+                const pctl = calculatePercentile(derivedMetrics.patientsPerClinicalWte, nationalWorkforceArrays?.patientsPerClinicalWte);
+                if (pctl === null) return 'National percentile: N/A';
+                return `National percentile: ${pctl}th (${pctl <= 25 ? 'better staffed' : pctl >= 75 ? 'higher workload' : 'average'})`;
+              })()}
             />
           </div>
 
