@@ -24,7 +24,8 @@
       "Bash(npm run build:*)",
       "Bash(node analyze-triage-data.js:*)",
       "Bash(npm run preprocess:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(node scripts/test-caip-metrics.js:*)"
     ],
     "deny": [],
     "ask": []

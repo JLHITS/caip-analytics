@@ -848,6 +848,11 @@ const NationalDemandCapacity = ({
       selectedMonth
     );
 
+    // Add OC clinical submissions for CAIP analysis
+    metrics.ocClinicalSubmissions = practiceOC?.clinicalSubmissions || 0;
+    metrics.inboundCalls = practiceTelephony?.inboundCalls || 0;
+    metrics.answeredCalls = practiceTelephony?.answered || 0;
+
     // Calculate rankings based on gpApptPerDayPct metric (higher = better access)
     const allPractices = currentData.practices;
     const allMetricsWithOds = allPractices.map(p => {
