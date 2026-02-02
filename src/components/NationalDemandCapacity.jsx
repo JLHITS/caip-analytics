@@ -318,6 +318,7 @@ const NationalDemandCapacity = ({
   const [compareSearchQuery, setCompareSearchQuery] = useState('');
   const [compareSearchResults, setCompareSearchResults] = useState([]);
   const [compareSort, setCompareSort] = useState({ key: 'practice', direction: 'asc' });
+  const [workforceCompareSort, setWorkforceCompareSort] = useState({ key: 'practice', direction: 'asc' });
   const [compareLegendVisible, setCompareLegendVisible] = useState(true);
   const [compareZoom, setCompareZoom] = useState(false);
 
@@ -753,6 +754,7 @@ const NationalDemandCapacity = ({
       );
       const telephony = telephonyByOds.get(practice.odsCode) || null;
       const oc = ocByOds.get(practice.odsCode) || null;
+      const workforce = workforceByOds.get(practice.odsCode) || null;
       const metrics = data ? calculatePracticeMetrics(
         data, telephony, oc, data.listSize || 10000, selectedMonth
       ) : null;
@@ -769,17 +771,35 @@ const NationalDemandCapacity = ({
         return current.value > best.value ? current : best;
       }, null);
 
+      // Calculate workforce metrics for comparison
+      const listSize = data?.listSize || practice.listSize || 0;
+      const gpWte = workforce?.workforce?.totals?.totalWteGP || 0;
+      const clinicalWte = workforce?.workforce?.totals?.totalWteClinical || 0;
+      const adminWte = workforce?.workforce?.totals?.totalWteNonClinical || 0;
+      const totalWte = workforce?.workforce?.totals?.totalWte || 0;
+      const patientsPerGpWte = gpWte > 0 ? listSize / gpWte : null;
+      const patientsPerClinicalWte = clinicalWte > 0 ? listSize / clinicalWte : null;
+
       return {
         practice,
         metrics,
         telephony,
         oc,
+        workforce: workforce ? {
+          gpWte,
+          clinicalWte,
+          adminWte,
+          totalWte,
+          patientsPerGpWte,
+          patientsPerClinicalWte,
+          hasData: true,
+        } : { hasData: false },
         color: compareColorMap.get(practice.odsCode),
         topWaitLabel: topWait ? topWait.label : null,
         topWaitValue: topWait ? topWait.value : null,
       };
     });
-  }, [comparePractices, appointmentData, selectedMonth, telephonyByOds, ocByOds, compareColorMap]);
+  }, [comparePractices, appointmentData, selectedMonth, telephonyByOds, ocByOds, workforceByOds, compareColorMap]);
 
   const sortedCompareRows = useMemo(() => {
     const sorted = [...compareRows];
@@ -835,6 +855,50 @@ const NationalDemandCapacity = ({
 
     return sorted;
   }, [compareRows, compareSort]);
+
+  // Sort workforce comparison rows
+  const sortedWorkforceCompareRows = useMemo(() => {
+    const sorted = [...compareRows];
+    const direction = workforceCompareSort.direction === 'asc' ? 1 : -1;
+    const getValue = (row) => {
+      switch (workforceCompareSort.key) {
+        case 'practice':
+          return row.practice.gpName || '';
+        case 'gpWte':
+          return row.workforce?.gpWte;
+        case 'clinicalWte':
+          return row.workforce?.clinicalWte;
+        case 'adminWte':
+          return row.workforce?.adminWte;
+        case 'totalWte':
+          return row.workforce?.totalWte;
+        case 'patientsPerGpWte':
+          return row.workforce?.patientsPerGpWte;
+        case 'patientsPerClinicalWte':
+          return row.workforce?.patientsPerClinicalWte;
+        default:
+          return null;
+      }
+    };
+
+    sorted.sort((a, b) => {
+      const aVal = getValue(a);
+      const bVal = getValue(b);
+      const aMissing = aVal === null || aVal === undefined || Number.isNaN(aVal);
+      const bMissing = bVal === null || bVal === undefined || Number.isNaN(bVal);
+
+      if (aMissing && bMissing) return 0;
+      if (aMissing) return 1;
+      if (bMissing) return -1;
+
+      if (workforceCompareSort.key === 'practice') {
+        return aVal.localeCompare(bVal) * direction;
+      }
+      return (aVal - bVal) * direction;
+    });
+
+    return sorted;
+  }, [compareRows, workforceCompareSort]);
 
   // Get current practice data with metrics
   const practiceMetrics = useMemo(() => {
@@ -3042,8 +3106,9 @@ const NationalDemandCapacity = ({
 
           {/* Comparison View */}
           {comparePractices.length >= 2 && (
+            <>
             <Card>
-              <h4 className="font-bold text-slate-700 mb-4">Comparison Results</h4>
+              <h4 className="font-bold text-slate-700 mb-4">Demand & Capacity Comparison</h4>
 
               {/* Comparison Table */}
               <div className="overflow-x-auto">
@@ -3487,6 +3552,159 @@ const NationalDemandCapacity = ({
                 </button>
               </div>
             </Card>
+
+            {/* Workforce Comparison Table */}
+            <Card className="mt-4">
+              <h4 className="font-bold text-slate-700 mb-4">Workforce Comparison</h4>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50">
+                    <tr>
+                      <th className="px-3 py-2 text-left">
+                        <button
+                          onClick={() => setWorkforceCompareSort(prev => ({
+                            key: 'practice',
+                            direction: prev.key === 'practice' && prev.direction === 'asc' ? 'desc' : 'asc',
+                          }))}
+                          className="flex items-center gap-1 text-left font-semibold text-slate-700 hover:text-slate-900"
+                        >
+                          Practice
+                          {workforceCompareSort.key === 'practice' && (
+                            workforceCompareSort.direction === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
+                          )}
+                        </button>
+                      </th>
+                      <th className="px-3 py-2 text-right">
+                        <button
+                          onClick={() => setWorkforceCompareSort(prev => ({
+                            key: 'gpWte',
+                            direction: prev.key === 'gpWte' && prev.direction === 'asc' ? 'desc' : 'asc',
+                          }))}
+                          className="inline-flex items-center gap-1 font-semibold text-slate-700 hover:text-slate-900"
+                        >
+                          GP WTE
+                          {workforceCompareSort.key === 'gpWte' && (
+                            workforceCompareSort.direction === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
+                          )}
+                        </button>
+                      </th>
+                      <th className="px-3 py-2 text-right">
+                        <button
+                          onClick={() => setWorkforceCompareSort(prev => ({
+                            key: 'clinicalWte',
+                            direction: prev.key === 'clinicalWte' && prev.direction === 'asc' ? 'desc' : 'asc',
+                          }))}
+                          className="inline-flex items-center gap-1 font-semibold text-slate-700 hover:text-slate-900"
+                        >
+                          Clinical WTE
+                          {workforceCompareSort.key === 'clinicalWte' && (
+                            workforceCompareSort.direction === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
+                          )}
+                        </button>
+                      </th>
+                      <th className="px-3 py-2 text-right">
+                        <button
+                          onClick={() => setWorkforceCompareSort(prev => ({
+                            key: 'adminWte',
+                            direction: prev.key === 'adminWte' && prev.direction === 'asc' ? 'desc' : 'asc',
+                          }))}
+                          className="inline-flex items-center gap-1 font-semibold text-slate-700 hover:text-slate-900"
+                        >
+                          Admin WTE
+                          {workforceCompareSort.key === 'adminWte' && (
+                            workforceCompareSort.direction === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
+                          )}
+                        </button>
+                      </th>
+                      <th className="px-3 py-2 text-right">
+                        <button
+                          onClick={() => setWorkforceCompareSort(prev => ({
+                            key: 'totalWte',
+                            direction: prev.key === 'totalWte' && prev.direction === 'asc' ? 'desc' : 'asc',
+                          }))}
+                          className="inline-flex items-center gap-1 font-semibold text-slate-700 hover:text-slate-900"
+                        >
+                          Total WTE
+                          {workforceCompareSort.key === 'totalWte' && (
+                            workforceCompareSort.direction === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
+                          )}
+                        </button>
+                      </th>
+                      <th className="px-3 py-2 text-right">
+                        <button
+                          onClick={() => setWorkforceCompareSort(prev => ({
+                            key: 'patientsPerGpWte',
+                            direction: prev.key === 'patientsPerGpWte' && prev.direction === 'asc' ? 'desc' : 'asc',
+                          }))}
+                          className="inline-flex items-center gap-1 font-semibold text-slate-700 hover:text-slate-900"
+                        >
+                          Patients/GP
+                          {workforceCompareSort.key === 'patientsPerGpWte' && (
+                            workforceCompareSort.direction === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
+                          )}
+                        </button>
+                      </th>
+                      <th className="px-3 py-2 text-right">
+                        <button
+                          onClick={() => setWorkforceCompareSort(prev => ({
+                            key: 'patientsPerClinicalWte',
+                            direction: prev.key === 'patientsPerClinicalWte' && prev.direction === 'asc' ? 'desc' : 'asc',
+                          }))}
+                          className="inline-flex items-center gap-1 font-semibold text-slate-700 hover:text-slate-900"
+                        >
+                          Patients/Clinical
+                          {workforceCompareSort.key === 'patientsPerClinicalWte' && (
+                            workforceCompareSort.direction === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
+                          )}
+                        </button>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortedWorkforceCompareRows.map((row) => {
+                      const wf = row.workforce;
+                      return (
+                        <tr key={row.practice.odsCode} className="border-b">
+                          <td className="px-3 py-2">
+                            <div className="flex items-center gap-2">
+                              <div
+                                className="w-3 h-3 rounded-full"
+                                style={{ backgroundColor: row.color }}
+                              />
+                              <span className="font-medium">{row.practice.gpName}</span>
+                            </div>
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            {wf?.hasData ? wf.gpWte?.toFixed(2) : 'N/A'}
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            {wf?.hasData ? wf.clinicalWte?.toFixed(2) : 'N/A'}
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            {wf?.hasData ? wf.adminWte?.toFixed(2) : 'N/A'}
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            {wf?.hasData ? wf.totalWte?.toFixed(2) : 'N/A'}
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            {wf?.hasData && wf.patientsPerGpWte ? Math.round(wf.patientsPerGpWte).toLocaleString() : 'N/A'}
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            {wf?.hasData && wf.patientsPerClinicalWte ? Math.round(wf.patientsPerClinicalWte).toLocaleString() : 'N/A'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <p className="text-xs text-slate-500 mt-3">
+                WTE = Whole Time Equivalent. Patients/GP and Patients/Clinical show workload ratios (lower = more capacity per patient).
+              </p>
+            </Card>
+            </>
           )}
         </div>
       )}
