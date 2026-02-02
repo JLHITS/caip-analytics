@@ -1191,7 +1191,19 @@ const NationalDemandCapacity = ({
     setAiError(null);
 
     try {
-      // Get historical metrics for trends
+      // Load previous months' data for trend calculations
+      const previousMonths = getPreviousMonths(selectedMonth, 3);
+      console.log('Loading historical data for months:', previousMonths);
+
+      // Ensure historical months are loaded before calculating trends
+      for (const month of previousMonths) {
+        if (!appointmentData[month]) {
+          console.log(`Loading data for ${month}...`);
+          await loadMonthData(month);
+        }
+      }
+
+      // Get historical metrics for trends (now with loaded data)
       const historicalMetrics = getHistoricalMetrics();
 
       // Build the prompt
@@ -1242,7 +1254,7 @@ const NationalDemandCapacity = ({
       setAiError(`Analysis failed: ${error.message}`);
       setIsAiLoading(false);
     }
-  }, [selectedPractice, practiceMetrics, nationalMetricArrays, workforceMetrics, selectedMonth, geminiApiKey, geminiModel, getHistoricalMetrics]);
+  }, [selectedPractice, practiceMetrics, nationalMetricArrays, workforceMetrics, selectedMonth, geminiApiKey, geminiModel, getHistoricalMetrics, loadMonthData, appointmentData]);
 
   // ========================================
   // APPOINTMENT SUB-TABS

@@ -105,10 +105,11 @@ Key principles:
 - You must interpret metrics in combination, not in isolation.
 - You must be explicit where evidence supports unmet demand or insufficient capacity.
 - Do not soften conclusions unnecessarily.
-- Be directive and practical: practices using this analysis want clear actions.
+- Be directive and practical: practices using this analysis want clear actions they can take.
 - Avoid clinical judgement; focus on access, operational performance, capacity, and workforce planning.
-- Acknowledge uncertainty only where data availability windows materially limit interpretation.
 - Where a metric shows 'N/A', acknowledge the data gap but do not let it prevent analysis of available metrics.
+- CRITICAL: Data availability limitations (e.g., telephony data only from Oct 2025) are national NHS Digital constraints, NOT practice issues. Never suggest actions related to data availability - focus only on actionable operational improvements within the practice's control.
+- If trend data shows "Insufficient data", this means historical comparison data is limited - acknowledge briefly but focus analysis on the current snapshot metrics available.
 
 You must follow the interpretation rules provided in the user prompt.
 
@@ -123,9 +124,14 @@ Analyse this GP practice's demand and capacity using the metrics and national be
 PRACTICE CONTEXT
 - Practice name: {{PRACTICE_NAME}}
 - Practice list size: {{LIST_SIZE}}
-- Appointment data available since: Apr 2024
-- Online consultation data available since: Apr 2024
-- Telephony data available since: Oct 2025
+
+DATA AVAILABILITY (national NHS Digital publication dates - NOT practice controllable):
+- Appointment data: available from Apr 2024
+- Online consultation data: available from Apr 2024
+- Telephony data: available from Oct 2025 (NHS Digital only began publishing GP telephony data nationally from this date)
+- Workforce data: monthly snapshots
+
+Note: Data availability limitations are due to national NHS Digital publication schedules. Do NOT include data availability gaps as actions or recommendations - practices cannot control when NHS Digital publishes national datasets.
 {{DATA_AVAILABILITY_NOTES}}
 
 METRICS (each includes value and national percentile position)
