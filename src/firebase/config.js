@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, collection } from 'firebase/firestore';
 import { getAnalytics, logEvent, isSupported } from 'firebase/analytics';
 
 const firebaseConfig = {
@@ -14,6 +14,9 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
+
+// Collection references
+export const caipAnalysesRef = collection(db, 'caip-analyses');
 
 // Initialize Analytics (only in browser, not during SSR/build)
 let analytics = null;
@@ -40,4 +43,5 @@ export const trackImport = () => trackEvent('import_dashboard');
 export const trackDisclaimerAccepted = () => trackEvent('disclaimer_accepted');
 export const trackShareCreated = (type) => trackEvent('share_created', { type });
 export const trackAIAnalysis = () => trackEvent('ai_analysis_requested');
+export const trackNationalAIAnalysis = (odsCode) => trackEvent('national_ai_analysis_requested', { ods_code: odsCode });
 export const trackCoffeeClick = (source) => trackEvent('coffee_click', { source });

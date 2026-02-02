@@ -4,6 +4,7 @@
  */
 
 // Import the CSV files - Vite will handle these as raw text
+import pracPopDecRaw from '../assets/PracPopDec.csv?raw';
 import pracPopNovRaw from '../assets/PracPopNov.csv?raw';
 import pracPopOctRaw from '../assets/PracPopOct.csv?raw';
 
@@ -63,7 +64,7 @@ const parsePracPopCSV = (csvContent) => {
 
 /**
  * Get the latest PracPop data
- * Returns November data as it's more recent than October
+ * Returns December data as it's the most recent
  */
 let cachedPractices = null;
 
@@ -72,8 +73,8 @@ export const getPracPopData = () => {
     return cachedPractices;
   }
 
-  // Use November data as it's more recent
-  cachedPractices = parsePracPopCSV(pracPopNovRaw);
+  // Use December data as it's the most recent
+  cachedPractices = parsePracPopCSV(pracPopDecRaw);
 
   console.log(`Loaded ${cachedPractices.length} practices from PracPop data`);
   return cachedPractices;

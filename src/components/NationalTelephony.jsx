@@ -46,19 +46,22 @@ ChartJS.register(
 // Import the Excel files
 import octData from '../assets/Cloud Based Telephony Publication Summary October 2025_v2.xlsx?url';
 import novData from '../assets/Cloud Based Telephony Publication Summary November 2025.xlsx?url';
+import decData from '../assets/Cloud Based Telephony Publication Summary December 2025.xlsx?url';
 
 // Import population CSV files
 import octPopData from '../assets/PracPopOct.csv?url';
 import novPopData from '../assets/PracPopNov.csv?url';
+import decPopData from '../assets/PracPopDec.csv?url';
 
 // Month data mapping - ordered from oldest to newest for charts
 const MONTH_DATA = {
+  'December 2025': { telephony: decData, population: decPopData },
   'November 2025': { telephony: novData, population: novPopData },
   'October 2025': { telephony: octData, population: octPopData }
 };
 
 // Ordered months for charts (oldest first)
-const MONTHS_ORDERED = ['October 2025', 'November 2025'];
+const MONTHS_ORDERED = ['October 2025', 'November 2025', 'December 2025'];
 
 const NationalTelephony = ({
   sharedPractice,

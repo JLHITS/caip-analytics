@@ -9,7 +9,10 @@ import {
 import * as XLSX from 'xlsx';
 
 // Analytics imports
-import { trackEvent, trackPracticeLookup, trackTabView } from '../firebase/config';
+import { trackEvent, trackPracticeLookup, trackTabView, trackNationalAIAnalysis } from '../firebase/config';
+
+// AI imports
+import { GoogleGenAI } from '@google/genai';
 
 // Component imports
 import Card from './ui/Card';
@@ -19,6 +22,8 @@ import FancyNationalLoader from './ui/FancyNationalLoader';
 import NationalTelephony from './NationalTelephony';
 import NationalOnlineConsultations from './NationalOnlineConsultations';
 import NationalWorkforce from './NationalWorkforce';
+import CAIPConsentModal from './modals/CAIPConsentModal';
+import SimpleMarkdown from './markdown/SimpleMarkdown';
 
 // Utility imports
 import { parseNationalAppointmentsData, searchAppointmentPractices } from '../utils/parseNationalAppointments';
@@ -26,12 +31,24 @@ import { loadAppointmentsData, loadTelephonyData, loadOnlineConsultationsData } 
 import {
   calculatePracticeMetrics,
   calculateNetworkAverages,
+  collectNationalMetricArrays,
   formatMetricValue,
   DEMAND_CAPACITY_METRICS,
   getMetricConfig,
   forecastValues,
   calculateCombinedDemandIndex,
 } from '../utils/demandCapacityMetrics';
+import {
+  buildCAIPAnalysisPrompt,
+  calculatePercentile,
+  calculateTrend,
+  getPreviousMonths,
+} from '../utils/caipAnalysisPrompt';
+import {
+  saveAnalysis,
+  loadAnalysis,
+  checkAnalysisStatus,
+} from '../utils/caipAnalysisStorage';
 import {
   APPOINTMENT_FILES,
   MONTHS_ORDERED,
@@ -249,6 +266,7 @@ const NationalDemandCapacity = ({
   sharedUsageStats = {},
   recordPracticeUsage,
   initialOdsCode,
+  onOpenBugReport,
 }) => {
   // ========================================
   // STATE MANAGEMENT
@@ -269,7 +287,7 @@ const NationalDemandCapacity = ({
   // Data states
   const [appointmentData, setAppointmentData] = useState({}); // { month: parsedData }
   const [loadedMonths, setLoadedMonths] = useState(new Set());
-  const [selectedMonth, setSelectedMonth] = useState('November 2025');
+  const [selectedMonth, setSelectedMonth] = useState('December 2025');
   const compareMode = true; // Always compare with previous months
   const defaultEndMonth = MONTHS_NEWEST_FIRST[0];
   const defaultStartMonth = MONTHS_NEWEST_FIRST[Math.min(11, MONTHS_NEWEST_FIRST.length - 1)];
@@ -307,18 +325,48 @@ const NationalDemandCapacity = ({
   const searchInputRef = useRef(null);
   const dropdownRef = useRef(null);
 
+  // CAIP Analysis state
+  const [showAIConsent, setShowAIConsent] = useState(false);
+  const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
+  const [aiPassword, setAiPassword] = useState('');
+  const [aiPasswordError, setAiPasswordError] = useState('');
+  const [aiAuthed, setAiAuthed] = useState(false);
+  const [aiReport, setAiReport] = useState(null);
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [aiError, setAiError] = useState(null);
+  const [savedAnalysis, setSavedAnalysis] = useState(null);
+  const [hasExistingAnalysis, setHasExistingAnalysis] = useState(false);
+  const [isAiMinimized, setIsAiMinimized] = useState(false);
+
+  // Admin password from environment
+  const adminPassword = (import.meta && import.meta.env && (import.meta.env.VITE_ADMIN_PASSWORD || import.meta.env.ADMIN_PASSWORD)) || '';
+  const geminiApiKey = (import.meta && import.meta.env && import.meta.env.VITE_GEMINI_KEY) || '';
+  const geminiModel = (import.meta && import.meta.env && import.meta.env.VITE_GEMINI_MODEL) || 'gemini-2.5-flash';
+
   // ========================================
   // SUB-TABS CONFIGURATION
   // ========================================
 
-  const SUB_TABS = [
-    { id: 'appointments', label: 'Appointments', icon: Calendar, color: 'blue' },
-    { id: 'telephony', label: 'Telephony', icon: Phone, color: 'blue' },
-    { id: 'online-consultations', label: 'Online Consultations', icon: Monitor, color: 'blue' },
-    { id: 'workforce', label: 'Workforce', icon: UserCheck, color: 'blue' },
-    { id: 'compare', label: 'Compare', icon: Users, color: 'blue' },
-    { id: 'forecasting', label: 'Forecasting', icon: TrendingUp, color: 'blue', disabled: true, comingSoon: true },
-  ];
+  // Build SUB_TABS dynamically to include Analysis when available
+  const SUB_TABS = useMemo(() => {
+    const tabs = [
+      { id: 'appointments', label: 'Appointments', icon: Calendar, color: 'blue' },
+      { id: 'telephony', label: 'Telephony', icon: Phone, color: 'blue' },
+      { id: 'online-consultations', label: 'Online Consultations', icon: Monitor, color: 'blue' },
+      { id: 'workforce', label: 'Workforce', icon: UserCheck, color: 'blue' },
+      { id: 'compare', label: 'Compare', icon: Users, color: 'blue' },
+    ];
+
+    // Add Analysis tab if there's an existing analysis
+    if (hasExistingAnalysis) {
+      tabs.push({ id: 'analysis', label: 'Analysis', icon: Sparkles, color: 'purple' });
+    }
+
+    // Add Forecasting (coming soon)
+    tabs.push({ id: 'forecasting', label: 'Forecasting', icon: TrendingUp, color: 'blue', disabled: true, comingSoon: true });
+
+    return tabs;
+  }, [hasExistingAnalysis]);
 
   // ========================================
   // DATA LOADING
@@ -911,6 +959,53 @@ const NationalDemandCapacity = ({
     return calculateNetworkAverages(allMetrics);
   }, [appointmentData, selectedMonth, telephonyByOds, ocByOds]);
 
+  // Collect national metric arrays for percentile calculations
+  const nationalMetricArrays = useMemo(() => {
+    if (!appointmentData[selectedMonth]) return {};
+
+    const currentData = appointmentData[selectedMonth];
+    const allMetrics = currentData.practices.map(practice => {
+      const population = practice.listSize || 10000;
+      const practiceTelephony = telephonyByOds.get(practice.odsCode) || null;
+      const practiceOC = ocByOds.get(practice.odsCode) || null;
+      const metrics = calculatePracticeMetrics(practice, practiceTelephony, practiceOC, population, selectedMonth);
+      // Add OC clinical submissions for percentile calculation
+      metrics.ocClinicalSubmissions = practiceOC?.clinicalSubmissions || 0;
+      return metrics;
+    });
+
+    return collectNationalMetricArrays(allMetrics);
+  }, [appointmentData, selectedMonth, telephonyByOds, ocByOds]);
+
+  // Check for existing CAIP analysis when practice or month changes
+  useEffect(() => {
+    if (!selectedPractice) {
+      setSavedAnalysis(null);
+      setHasExistingAnalysis(false);
+      setAiReport(null);
+      return;
+    }
+
+    const checkExisting = async () => {
+      try {
+        const status = await checkAnalysisStatus(selectedPractice.odsCode, selectedMonth);
+        if (status.exists && status.analysis) {
+          setSavedAnalysis(status.analysis);
+          setHasExistingAnalysis(true);
+          setAiReport(status.analysis.analysis);
+        } else {
+          setSavedAnalysis(null);
+          setHasExistingAnalysis(false);
+          setAiReport(null);
+        }
+      } catch (error) {
+        console.error('Error checking analysis status:', error);
+      }
+    };
+
+    checkExisting();
+  }, [selectedPractice, selectedMonth]);
+
   // ========================================
   // BOOKMARK HANDLING
   // ========================================
@@ -937,6 +1032,168 @@ const NationalDemandCapacity = ({
       trackEvent('bookmark_added', { ods_code: selectedPractice.odsCode });
     }
   }, [selectedPractice, isBookmarked, sharedBookmarks, updateSharedBookmarks]);
+
+  // ========================================
+  // CAIP ANALYSIS HANDLERS
+  // ========================================
+
+  // Handle CAIP Analysis button click
+  const handleCAIPAnalysisClick = useCallback(() => {
+    if (!selectedPractice) return;
+
+    // If already have analysis, switch to analysis tab
+    if (hasExistingAnalysis && aiReport) {
+      setActiveSubTab('analysis');
+      return;
+    }
+
+    // If not authenticated, show password prompt
+    if (!aiAuthed) {
+      setShowPasswordPrompt(true);
+      return;
+    }
+
+    // Show consent modal
+    setShowAIConsent(true);
+  }, [selectedPractice, hasExistingAnalysis, aiReport, aiAuthed]);
+
+  // Handle password submission
+  const handlePasswordSubmit = useCallback((e) => {
+    e.preventDefault();
+
+    if (!adminPassword) {
+      setAiPasswordError('Password not configured. Contact support.');
+      return;
+    }
+
+    if (aiPassword !== adminPassword) {
+      setAiPasswordError('Incorrect password.');
+      return;
+    }
+
+    // Password correct
+    setAiAuthed(true);
+    setShowPasswordPrompt(false);
+    setAiPassword('');
+    setAiPasswordError('');
+    setShowAIConsent(true);
+  }, [aiPassword, adminPassword]);
+
+  // Calculate historical metrics for trend analysis
+  const getHistoricalMetrics = useCallback(() => {
+    if (!selectedPractice) return {};
+
+    const previousMonths = getPreviousMonths(selectedMonth, 3);
+    const historicalMetrics = {
+      gpApptsPerCall: [],
+      gpApptsPer1000: [],
+      gpApptOrOCPerDayPct: [],
+      otherApptPerDayPct: [],
+      dnaPct: [],
+      sameDayPct: [],
+      inboundCallsPer1000: [],
+      missedCallPct: [],
+      ocPer1000: [],
+    };
+
+    for (const month of previousMonths) {
+      const monthData = appointmentData[month];
+      if (!monthData) continue;
+
+      const practice = monthData.practices.find(p => p.odsCode === selectedPractice.odsCode);
+      if (!practice) continue;
+
+      const population = practice.listSize || 10000;
+      const telephonyMonth = telephonyData?.[month];
+      const ocMonth = ocData?.[month];
+      const practiceTelephony = telephonyMonth?.practices?.find(p => p.odsCode === practice.odsCode) || null;
+      const practiceOC = ocMonth?.practices?.find(p => p.odsCode === practice.odsCode) || null;
+      const metrics = calculatePracticeMetrics(practice, practiceTelephony, practiceOC, population, month);
+
+      // Collect metrics for trends
+      if (metrics.gpApptsPerCall != null) historicalMetrics.gpApptsPerCall.push(metrics.gpApptsPerCall);
+      if (metrics.gpApptsPer1000 != null) historicalMetrics.gpApptsPer1000.push(metrics.gpApptsPer1000);
+      if (metrics.gpApptOrOCPerDayPct != null) historicalMetrics.gpApptOrOCPerDayPct.push(metrics.gpApptOrOCPerDayPct);
+      if (metrics.otherApptPerDayPct != null) historicalMetrics.otherApptPerDayPct.push(metrics.otherApptPerDayPct);
+      if (metrics.dnaPct != null) historicalMetrics.dnaPct.push(metrics.dnaPct);
+      if (metrics.sameDayPct != null) historicalMetrics.sameDayPct.push(metrics.sameDayPct);
+      if (metrics.hasTelephonyData && metrics.inboundCalls && population) {
+        historicalMetrics.inboundCallsPer1000.push((metrics.inboundCalls / population) * 1000);
+      }
+      if (metrics.missedCallPct != null) historicalMetrics.missedCallPct.push(metrics.missedCallPct);
+      if (metrics.hasOCData && metrics.ocSubmissions && population) {
+        historicalMetrics.ocPer1000.push((metrics.ocSubmissions / population) * 1000);
+      }
+    }
+
+    return historicalMetrics;
+  }, [selectedPractice, selectedMonth, appointmentData, telephonyData, ocData]);
+
+  // Run CAIP Analysis
+  const runCAIPAnalysis = useCallback(async () => {
+    if (!selectedPractice || !practiceMetrics) return;
+
+    if (!geminiApiKey) {
+      setAiError('Google AI API key not configured. Please set VITE_GEMINI_KEY in environment.');
+      return;
+    }
+
+    setIsAiLoading(true);
+    setAiError(null);
+
+    try {
+      // Get historical metrics for trends
+      const historicalMetrics = getHistoricalMetrics();
+
+      // Build the prompt
+      const prompt = buildCAIPAnalysisPrompt({
+        practiceName: selectedPractice.gpName,
+        listSize: selectedPractice.listSize || practiceMetrics.listSize,
+        metrics: practiceMetrics,
+        nationalArrays: nationalMetricArrays,
+        historicalMetrics,
+        workforceMetrics: workforceMetrics,
+        hasTelephonyData: practiceMetrics.hasTelephonyData,
+        hasOCData: practiceMetrics.hasOCData,
+        hasWorkforceData: Boolean(workforceMetrics),
+      });
+
+      console.log('CAIP Analysis Prompt:', prompt);
+
+      // Call Gemini API
+      const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+      const response = await ai.models.generateContent({
+        model: geminiModel,
+        contents: [{ parts: [{ text: prompt }] }],
+      });
+
+      const text = response.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!text) throw new Error('No response generated from AI');
+
+      // Save to Firebase
+      await saveAnalysis({
+        odsCode: selectedPractice.odsCode,
+        practiceName: selectedPractice.gpName,
+        month: selectedMonth,
+        analysis: text,
+      });
+
+      // Update state
+      setAiReport(text);
+      setHasExistingAnalysis(true);
+      setActiveSubTab('analysis');
+      setIsAiLoading(false);
+
+      // Track analytics
+      trackNationalAIAnalysis(selectedPractice.odsCode);
+      setToast({ type: 'success', message: 'CAIP Analysis generated successfully' });
+
+    } catch (error) {
+      console.error('CAIP Analysis error:', error);
+      setAiError(`Analysis failed: ${error.message}`);
+      setIsAiLoading(false);
+    }
+  }, [selectedPractice, practiceMetrics, nationalMetricArrays, workforceMetrics, selectedMonth, geminiApiKey, geminiModel, getHistoricalMetrics]);
 
   // ========================================
   // APPOINTMENT SUB-TABS
@@ -1319,15 +1576,38 @@ const NationalDemandCapacity = ({
           );
         })}
 
-        {/* CAIP Analysis Button (Disabled) */}
+        {/* CAIP Analysis Button */}
         <button
-          disabled
-          className="flex items-center gap-1.5 px-3 py-2 rounded-lg font-medium text-sm bg-slate-100 text-slate-400 cursor-not-allowed ml-auto"
+          onClick={handleCAIPAnalysisClick}
+          disabled={isAiLoading || !selectedPractice}
+          className={`group relative inline-flex items-center gap-1.5 px-4 py-2 rounded-lg font-medium text-sm
+            ml-auto overflow-hidden transition-all duration-300
+            ${!selectedPractice
+              ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+              : hasExistingAnalysis
+                ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white shadow-lg shadow-green-500/25 hover:shadow-green-500/40'
+                : 'bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 text-white shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40'
+            }`}
+          title={!selectedPractice ? 'Select a practice first' : hasExistingAnalysis ? 'View Analysis' : 'Generate AI Analysis'}
         >
-          <Sparkles size={16} />
-          <span className="hidden sm:inline">CAIP Analysis</span>
-          <span className="sm:hidden">CAIP</span>
-          <span className="text-[9px] bg-slate-300/60 text-slate-500 px-1.5 py-0.5 rounded-full leading-none">Soon</span>
+          {/* Animated sparkle background */}
+          {selectedPractice && !hasExistingAnalysis && (
+            <div className="absolute inset-0 bg-gradient-to-r from-purple-400/20 via-pink-400/20 to-blue-400/20 animate-pulse" />
+          )}
+
+          <span className="relative flex items-center gap-1.5">
+            {isAiLoading ? (
+              <Loader2 size={16} className="animate-spin" />
+            ) : (
+              <Sparkles size={16} className={selectedPractice && !hasExistingAnalysis ? 'animate-pulse' : ''} />
+            )}
+            <span className="hidden sm:inline">
+              {hasExistingAnalysis ? 'View ' : ''}C<span className={selectedPractice ? 'text-transparent bg-clip-text bg-gradient-to-r from-purple-200 to-pink-200' : ''}>AI</span>P Analysis
+            </span>
+            <span className="sm:hidden">
+              C<span className={selectedPractice ? 'text-transparent bg-clip-text bg-gradient-to-r from-purple-200 to-pink-200' : ''}>AI</span>P
+            </span>
+          </span>
         </button>
       </div>
 
@@ -2454,6 +2734,88 @@ const NationalDemandCapacity = ({
       )}
 
       {/* ========================================
+          ANALYSIS TAB (AI-Generated)
+          ======================================== */}
+      {activeSubTab === 'analysis' && selectedPractice && aiReport && (
+        <div className="space-y-6">
+          {/* Analysis Header Card */}
+          <Card className="bg-gradient-to-br from-purple-50 to-indigo-50 border-purple-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-lg">
+                  <Sparkles className="text-white" size={24} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-purple-800">CAIP Analysis</h3>
+                  <p className="text-sm text-purple-600">
+                    AI-powered demand & capacity analysis for {selectedPractice.gpName}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {savedAnalysis?.generatedAt && (
+                  <span className="text-xs text-purple-500">
+                    Generated: {new Date(savedAnalysis.generatedAt).toLocaleDateString()}
+                  </span>
+                )}
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(aiReport);
+                    setToast({ type: 'success', message: 'Copied to clipboard' });
+                  }}
+                  className="p-2 text-purple-600 hover:bg-purple-100 rounded-lg transition-colors"
+                  title="Copy to clipboard"
+                >
+                  <Copy size={16} />
+                </button>
+                <button
+                  onClick={() => setIsAiMinimized(!isAiMinimized)}
+                  className="p-2 text-purple-600 hover:bg-purple-100 rounded-lg transition-colors"
+                  title={isAiMinimized ? 'Expand' : 'Minimize'}
+                >
+                  {isAiMinimized ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
+                </button>
+              </div>
+            </div>
+          </Card>
+
+          {/* Analysis Content */}
+          {!isAiMinimized && (
+            <Card>
+              <div className="prose prose-sm prose-purple max-w-none">
+                <SimpleMarkdown text={aiReport} />
+              </div>
+            </Card>
+          )}
+
+          {/* Regenerate Option */}
+          <Card className="bg-slate-50 border-slate-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-600">
+                  Want a fresh analysis? You can regenerate at any time.
+                </p>
+                <p className="text-xs text-slate-400 mt-1">
+                  Note: This will replace the current analysis.
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setAiReport(null);
+                  setHasExistingAnalysis(false);
+                  setShowAIConsent(true);
+                }}
+                disabled={isAiLoading}
+                className="px-4 py-2 text-sm font-medium text-purple-600 bg-purple-100 hover:bg-purple-200 rounded-lg transition-colors disabled:opacity-50"
+              >
+                {isAiLoading ? 'Generating...' : 'Regenerate Analysis'}
+              </button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* ========================================
           FORECASTING TAB
           ======================================== */}
       {activeSubTab === 'forecasting' && selectedPractice && (
@@ -3133,6 +3495,121 @@ const NationalDemandCapacity = ({
           onMetricsChange={setWorkforceMetrics}
         />
       </div>
+
+      {/* AI Error Display */}
+      {aiError && (
+        <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-96 p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl shadow-lg z-50 flex items-center gap-2">
+          <AlertTriangle size={20} />
+          <div className="flex-1">
+            <p className="font-medium">Analysis Error</p>
+            <p className="text-sm">{aiError}</p>
+          </div>
+          <button
+            onClick={() => setAiError(null)}
+            className="p-1 hover:bg-red-100 rounded-lg"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
+      {/* Password Prompt Modal */}
+      {showPasswordPrompt && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200"
+          onClick={() => {
+            setShowPasswordPrompt(false);
+            setAiPassword('');
+            setAiPasswordError('');
+          }}
+        >
+          <div
+            className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-in zoom-in-95 duration-200"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-lg">
+                <Sparkles className="text-white" size={24} />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-slate-800">CAIP Analysis</h3>
+                <p className="text-sm text-slate-500">Beta Access Required</p>
+              </div>
+            </div>
+
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+              <p className="text-sm text-amber-800">
+                <strong>Beta Testing:</strong> This feature is in beta. Enter the password to continue.
+              </p>
+              <p className="text-xs text-amber-600 mt-1">
+                Need access? Use the <strong>Feedback</strong> option to request beta access.
+              </p>
+            </div>
+
+            <form onSubmit={handlePasswordSubmit}>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
+                <input
+                  type="password"
+                  value={aiPassword}
+                  onChange={(e) => setAiPassword(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  placeholder="Enter beta access password"
+                  autoFocus
+                />
+                {aiPasswordError && (
+                  <p className="text-sm text-red-600 mt-1">{aiPasswordError}</p>
+                )}
+              </div>
+
+              <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowPasswordPrompt(false);
+                    setAiPassword('');
+                    setAiPasswordError('');
+                  }}
+                  className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-medium rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-all"
+                >
+                  Unlock
+                </button>
+              </div>
+            </form>
+
+            <div className="mt-4 pt-3 border-t border-slate-100">
+              <button
+                onClick={() => {
+                  setShowPasswordPrompt(false);
+                  if (onOpenBugReport) onOpenBugReport();
+                }}
+                className="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1"
+              >
+                <ExternalLink size={12} />
+                Request beta access via Feedback
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CAIP Consent Modal */}
+      <CAIPConsentModal
+        isOpen={showAIConsent}
+        onClose={() => setShowAIConsent(false)}
+        onProceed={() => {
+          setShowAIConsent(false);
+          runCAIPAnalysis();
+        }}
+        onOpenFeedback={onOpenBugReport}
+        practiceName={selectedPractice?.gpName}
+      />
 
       {/* Toast Notifications */}
       {toast && (

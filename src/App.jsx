@@ -3140,6 +3140,7 @@ export default function App() {
             sharedUsageStats={sharedUsageStats}
             recordPracticeUsage={recordPracticeUsage}
             initialOdsCode={initialNationalOdsCode}
+            onOpenBugReport={() => setShowBugReport(true)}
           />
         )}
 

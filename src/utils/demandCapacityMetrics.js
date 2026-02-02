@@ -279,6 +279,60 @@ export function calculateNetworkAverages(practices, metrics = null) {
 }
 
 /**
+ * Collect all national values for each metric into arrays for percentile calculations
+ * Used for CAIP Analysis to calculate percentile position
+ *
+ * @param {Array} allPracticeMetrics - Array of practice metric objects
+ * @returns {Object} Object with arrays for each metric key
+ */
+export function collectNationalMetricArrays(allPracticeMetrics) {
+  if (!allPracticeMetrics || allPracticeMetrics.length === 0) {
+    return {};
+  }
+
+  return {
+    // Appointment & Demand metrics
+    gpApptsPerCall: allPracticeMetrics.map(m => m.gpApptsPerCall).filter(v => v != null && !isNaN(v)),
+    gpApptsPer1000: allPracticeMetrics.map(m => m.gpApptsPer1000).filter(v => v != null && !isNaN(v)),
+    gpApptOrOCPerDayPct: allPracticeMetrics.map(m => m.gpApptOrOCPerDayPct).filter(v => v != null && !isNaN(v)),
+    otherApptPerDayPct: allPracticeMetrics.map(m => m.otherApptPerDayPct).filter(v => v != null && !isNaN(v)),
+    dnaPct: allPracticeMetrics.map(m => m.dnaPct).filter(v => v != null && !isNaN(v)),
+    sameDayPct: allPracticeMetrics.map(m => m.sameDayPct).filter(v => v != null && !isNaN(v)),
+
+    // Telephony metrics (only from practices with telephony data)
+    inboundCallsPer1000: allPracticeMetrics
+      .filter(m => m.hasTelephonyData && m.inboundCalls > 0 && m.listSize > 0)
+      .map(m => (m.inboundCalls / m.listSize) * 1000)
+      .filter(v => v != null && !isNaN(v)),
+    answeredCallsPer1000: allPracticeMetrics
+      .filter(m => m.hasTelephonyData && m.answeredCalls > 0 && m.listSize > 0)
+      .map(m => (m.answeredCalls / m.listSize) * 1000)
+      .filter(v => v != null && !isNaN(v)),
+    missedCallsPer1000: allPracticeMetrics
+      .filter(m => m.hasTelephonyData)
+      .map(m => m.missedCallsPer1000)
+      .filter(v => v != null && !isNaN(v)),
+    missedCallPct: allPracticeMetrics
+      .filter(m => m.hasTelephonyData)
+      .map(m => m.missedCallPct)
+      .filter(v => v != null && !isNaN(v)),
+
+    // Online consultation metrics (only from practices with OC data)
+    ocPer1000: allPracticeMetrics
+      .filter(m => m.hasOCData && m.ocSubmissions > 0 && m.listSize > 0)
+      .map(m => (m.ocSubmissions / m.listSize) * 1000)
+      .filter(v => v != null && !isNaN(v)),
+    ocMedicalPct: allPracticeMetrics
+      .filter(m => m.hasOCData && m.ocSubmissions > 0)
+      .map(m => m.ocClinicalSubmissions != null ? (m.ocClinicalSubmissions / m.ocSubmissions) * 100 : null)
+      .filter(v => v != null && !isNaN(v)),
+
+    // Note: Workforce metrics (patientsPerGpWte, patientsPerClinicalWte) are calculated
+    // separately in NationalWorkforce component and need to be collected there
+  };
+}
+
+/**
  * Detect if a value is an outlier compared to network stats
  * Uses z-score method: value is outlier if |z| > threshold
  */
@@ -593,6 +647,7 @@ export function calculateCombinedDemandIndex(metrics, nationalAverages, weights 
 export default {
   calculatePracticeMetrics,
   calculateNetworkAverages,
+  collectNationalMetricArrays,
   detectOutlier,
   formatMetricValue,
   DEMAND_CAPACITY_METRICS,
