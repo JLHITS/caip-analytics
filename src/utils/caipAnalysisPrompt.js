@@ -146,6 +146,9 @@ APPOINTMENTS & DEMAND
 - % of patient population with a GP appointment or medical online consultation per working day (last month)
   Value={{GP_MED_OC_PCT_PER_DAY}}, Percentile={{GP_MED_OC_PCT_PER_DAY_PCTL}}
 
+- % of patient population with a GP appointment per working day (EXCLUDING medical online consultations)
+  Value={{GP_APPT_PCT_PER_DAY}}, Percentile={{GP_APPT_PCT_PER_DAY_PCTL}}
+
 - % of patient population with a non-GP clinical appointment per working day (last month)
   Value={{NON_GP_CLINICAL_PCT_PER_DAY}}, Percentile={{NON_GP_CLINICAL_PCT_PER_DAY_PCTL}}
 
@@ -182,9 +185,15 @@ WORKFORCE
 - Patients per clinical WTE (all clinicians)
   Value={{PATIENTS_PER_CLINICAL_WTE}}, Percentile={{PATIENTS_PER_CLINICAL_WTE_PCTL}}
 
+PRACTICE MODEL CONTEXT
+- Estimated practice model: {{PRACTICE_MODEL_TYPE}}
+- Medical OC contribution over GP-only: {{MEDICAL_OC_CONTRIBUTION_PCT}}%
+- Interpretation: {{PRACTICE_MODEL_DESCRIPTION}}
+
 TRENDS (direction and scale over time; interpret cautiously where telephony data is shorter)
 - GP appointments per demand: {{TREND_GP_APPTS_PER_DEMAND}}
 - GP appointments per 1000 patients: {{TREND_GP_APPTS_PER_1000}}
+- % population with GP appt per day (GP only): {{TREND_GP_APPT_PCT_PER_DAY}}
 - % population with GP appt or medical OC per day: {{TREND_GP_MED_OC_PCT_PER_DAY}}
 - Non-GP clinical activity per day: {{TREND_NON_GP_CLINICAL_PCT_PER_DAY}}
 - DNA rate: {{TREND_DNA_RATE_PCT}}
@@ -224,6 +233,20 @@ Balance and resilience:
 - Assess whether the practice is overly reliant on a single channel (telephony, online, or GP-only).
 - Identify signs of system strain, such as rising demand, high workforce stretch, and declining conversion of demand into activity.
 - Where substitution is present, assess whether it is sufficient or masking underlying capacity gaps.
+
+Practice model interpretation:
+- Compare "GP appointments per day (GP-only)" with "GP + Medical OC per day (combined)" to understand the practice's access model.
+- If Medical OC contribution < 10%: Traditional model - interpret GP appointment volumes and same-day booking as primary access indicators.
+- If Medical OC contribution 10-30%: Hybrid model - consider both GP and OC metrics together when assessing capacity.
+- If Medical OC contribution > 30%: Total Triage model - lower GP appointment volumes may indicate effective triage rather than capacity issues. Demand is being resolved at the triage layer before requiring a GP appointment.
+
+Same-day booking interpretation by practice model:
+- Traditional model: High same-day (>50%) indicates good acute access. Low same-day (<30%) is a potential capacity concern.
+- Total Triage model: Low same-day may be acceptable if demand is resolved at triage without requiring appointments. High same-day combined with high missed calls indicates reactive callback model (concerning). High same-day with low missed calls indicates effective triage with good follow-through (positive).
+
+GP appointment volume interpretation by practice model:
+- Traditional model: Lower GP/1000 indicates potential capacity constraints.
+- Total Triage model: Lower GP/1000 combined with high Medical OC contribution is POSITIVE - indicates effective demand resolution at triage layer before needing GP time. Do not interpret this as a capacity issue.
 
 Trends and confidence:
 - Use trends to validate or challenge single-period findings.
@@ -304,6 +327,39 @@ export function buildCAIPAnalysisPrompt({
   prompt = prompt.replace('{{GP_MED_OC_PCT_PER_DAY}}', formatValue(gpMedOcPctPerDay));
   prompt = prompt.replace('{{GP_MED_OC_PCT_PER_DAY_PCTL}}',
     formatPercentile(calculatePercentile(gpMedOcPctPerDay, nationalArrays?.gpApptOrOCPerDayPct)));
+
+  // GP-only metric (excluding medical online consultations)
+  const gpApptPctPerDay = metrics?.gpApptPerDayPct;
+  prompt = prompt.replace('{{GP_APPT_PCT_PER_DAY}}', formatValue(gpApptPctPerDay));
+  prompt = prompt.replace('{{GP_APPT_PCT_PER_DAY_PCTL}}',
+    formatPercentile(calculatePercentile(gpApptPctPerDay, nationalArrays?.gpApptPerDayPct)));
+
+  // Calculate Practice Model Context
+  // Medical OC contribution = % increase from medical OC over GP-only appointments
+  const medicalOCContributionPct = gpApptPctPerDay > 0 && gpMedOcPctPerDay > 0
+    ? ((gpMedOcPctPerDay - gpApptPctPerDay) / gpApptPctPerDay) * 100
+    : null;
+
+  // Determine practice model type based on thresholds
+  let practiceModelType = 'Unknown';
+  let practiceModelDescription = 'Unable to determine practice model (insufficient data)';
+
+  if (medicalOCContributionPct !== null) {
+    if (medicalOCContributionPct < 10) {
+      practiceModelType = 'Traditional';
+      practiceModelDescription = 'Most patient demand is handled through direct GP appointments. Interpret same-day booking and GP volumes as primary access indicators.';
+    } else if (medicalOCContributionPct < 30) {
+      practiceModelType = 'Hybrid/Transitional';
+      practiceModelDescription = 'Practice uses some online consultation triage. Consider both GP appointments and Medical OC when assessing capacity.';
+    } else {
+      practiceModelType = 'Total Triage';
+      practiceModelDescription = 'Significant demand is managed through medical online consultations before requiring GP time. Lower GP appointment volumes may indicate effective triage rather than capacity issues. Same-day booking should be interpreted in context of triage model.';
+    }
+  }
+
+  prompt = prompt.replace('{{PRACTICE_MODEL_TYPE}}', practiceModelType);
+  prompt = prompt.replace('{{MEDICAL_OC_CONTRIBUTION_PCT}}', medicalOCContributionPct !== null ? medicalOCContributionPct.toFixed(1) : 'N/A');
+  prompt = prompt.replace('{{PRACTICE_MODEL_DESCRIPTION}}', practiceModelDescription);
 
   const nonGpClinicalPctPerDay = metrics?.otherApptPerDayPct;
   prompt = prompt.replace('{{NON_GP_CLINICAL_PCT_PER_DAY}}', formatValue(nonGpClinicalPctPerDay));
@@ -393,6 +449,8 @@ export function buildCAIPAnalysisPrompt({
     calculateTrend(gpApptsPerDemand, historicalMetrics?.gpApptsPerCall));
   prompt = prompt.replace('{{TREND_GP_APPTS_PER_1000}}',
     calculateTrend(gpApptsPer1000, historicalMetrics?.gpApptsPer1000));
+  prompt = prompt.replace('{{TREND_GP_APPT_PCT_PER_DAY}}',
+    calculateTrend(gpApptPctPerDay, historicalMetrics?.gpApptPerDayPct));
   prompt = prompt.replace('{{TREND_GP_MED_OC_PCT_PER_DAY}}',
     calculateTrend(gpMedOcPctPerDay, historicalMetrics?.gpApptOrOCPerDayPct));
   prompt = prompt.replace('{{TREND_NON_GP_CLINICAL_PCT_PER_DAY}}',

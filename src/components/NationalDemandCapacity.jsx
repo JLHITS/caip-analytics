@@ -1200,6 +1200,7 @@ const NationalDemandCapacity = ({
     const historicalMetrics = {
       gpApptsPerCall: [],
       gpApptsPer1000: [],
+      gpApptPerDayPct: [],
       gpApptOrOCPerDayPct: [],
       otherApptPerDayPct: [],
       dnaPct: [],
@@ -1226,6 +1227,7 @@ const NationalDemandCapacity = ({
       // Collect metrics for trends
       if (metrics.gpApptsPerCall != null) historicalMetrics.gpApptsPerCall.push(metrics.gpApptsPerCall);
       if (metrics.gpApptsPer1000 != null) historicalMetrics.gpApptsPer1000.push(metrics.gpApptsPer1000);
+      if (metrics.gpApptPerDayPct != null) historicalMetrics.gpApptPerDayPct.push(metrics.gpApptPerDayPct);
       if (metrics.gpApptOrOCPerDayPct != null) historicalMetrics.gpApptOrOCPerDayPct.push(metrics.gpApptOrOCPerDayPct);
       if (metrics.otherApptPerDayPct != null) historicalMetrics.otherApptPerDayPct.push(metrics.otherApptPerDayPct);
       if (metrics.dnaPct != null) historicalMetrics.dnaPct.push(metrics.dnaPct);

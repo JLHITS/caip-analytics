@@ -294,6 +294,7 @@ export function collectNationalMetricArrays(allPracticeMetrics) {
     // Appointment & Demand metrics
     gpApptsPerCall: allPracticeMetrics.map(m => m.gpApptsPerCall).filter(v => v != null && !isNaN(v)),
     gpApptsPer1000: allPracticeMetrics.map(m => m.gpApptsPer1000).filter(v => v != null && !isNaN(v)),
+    gpApptPerDayPct: allPracticeMetrics.map(m => m.gpApptPerDayPct).filter(v => v != null && !isNaN(v)),
     gpApptOrOCPerDayPct: allPracticeMetrics.map(m => m.gpApptOrOCPerDayPct).filter(v => v != null && !isNaN(v)),
     otherApptPerDayPct: allPracticeMetrics.map(m => m.otherApptPerDayPct).filter(v => v != null && !isNaN(v)),
     dnaPct: allPracticeMetrics.map(m => m.dnaPct).filter(v => v != null && !isNaN(v)),
