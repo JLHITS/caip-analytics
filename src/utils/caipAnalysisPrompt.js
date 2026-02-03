@@ -228,6 +228,7 @@ Access and friction:
 - Use missed call rate, missed calls per 1000, DNA rate, and same-day booking percentage to identify access bottlenecks.
 - High same-day booking must be interpreted cautiously; when combined with high missed calls it may indicate reactive or callback-driven access rather than good responsiveness.
 - High DNA rates should be interpreted in the context of booking delay and access model.
+- CRITICAL: Low same-day booking percentage is NOT automatically a concern. It must be interpreted alongside other access metrics to determine if it reflects unmet demand or patient choice.
 
 Balance and resilience:
 - Assess whether the practice is overly reliant on a single channel (telephony, online, or GP-only).
@@ -240,9 +241,13 @@ Practice model interpretation:
 - If Medical OC contribution 10-30%: Hybrid model - consider both GP and OC metrics together when assessing capacity.
 - If Medical OC contribution > 30%: Total Triage model - lower GP appointment volumes may indicate effective triage rather than capacity issues. Demand is being resolved at the triage layer before requiring a GP appointment.
 
-Same-day booking interpretation by practice model:
-- Traditional model: High same-day (>50%) indicates good acute access. Low same-day (<30%) is a potential capacity concern.
-- Total Triage model: Low same-day may be acceptable if demand is resolved at triage without requiring appointments. High same-day combined with high missed calls indicates reactive callback model (concerning). High same-day with low missed calls indicates effective triage with good follow-through (positive).
+Same-day booking interpretation (CRITICAL - context dependent):
+- Low same-day booking % is ONLY a concern when accompanied by signs of unmet demand.
+- Signs of unmet demand: high missed call rate, high missed calls per 1000, high DNA rate, low GP appointments per demand, or patients struggling to access care.
+- Signs that low same-day % reflects PATIENT CHOICE (positive): low missed call rate, low DNA rate, good conversion of demand to appointments, adequate workforce capacity. In this scenario, patients have good access and choose to book appointments at times that suit their schedules rather than being forced into same-day slots.
+- Traditional model with good access metrics (low missed calls, low DNA): Low same-day % likely reflects patient choice and distributed booking - NOT a capacity concern. Do not recommend increasing same-day capacity if other access metrics are strong.
+- Traditional model with poor access metrics (high missed calls, high DNA): Low same-day % may indicate genuine capacity constraints for acute demand - this IS a concern.
+- Total Triage model: Low same-day may be acceptable if demand is resolved at triage without requiring appointments.
 
 GP appointment volume interpretation by practice model:
 - Traditional model: Lower GP/1000 indicates potential capacity constraints.
