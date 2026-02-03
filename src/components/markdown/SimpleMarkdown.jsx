@@ -117,11 +117,18 @@ const SimpleMarkdown = ({ text }) => {
     const trimmed = line.trim();
     if (!trimmed) return;
 
-    // Check if this is a section heading (starts with # or is a known section title)
+    // Bullet points are NEVER section headers - they're content
+    const isBulletPoint = trimmed.startsWith('* ') || trimmed.startsWith('- ');
+
+    // Check if this is a section heading (starts with # or is a known section title on its own line)
     const isHashHeading = trimmed.startsWith('##') || trimmed.startsWith('#');
     const cleanText = trimmed.replace(/^#+\s*/, '');
-    const detectedTheme = detectSectionTheme(cleanText);
-    const isKnownSection = detectedTheme !== 'default';
+
+    // Only detect as section if it's NOT a bullet point and matches known section patterns
+    // Section titles are typically short standalone lines like "Whats working well" or "Room for improvement"
+    const isKnownSection = !isBulletPoint &&
+                           cleanText.length < 50 &&
+                           detectSectionTheme(cleanText) !== 'default';
 
     if (isHashHeading || isKnownSection) {
       // Save previous section if exists

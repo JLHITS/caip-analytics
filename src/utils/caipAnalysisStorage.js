@@ -50,10 +50,12 @@ export async function saveAnalysis({ odsCode, practiceName, month, analysis }) {
       promptVersion: PROMPT_VERSION,
     });
 
-    console.log(`CAIP Analysis saved for ${odsCode} (${month})`);
     return true;
   } catch (error) {
-    console.error('Error saving CAIP analysis:', error);
+    // Only log errors in development
+    if (import.meta.env.DEV) {
+      console.error('[CAIP Cache] Error saving analysis:', error.code);
+    }
     return false;
   }
 }
@@ -85,7 +87,10 @@ export async function loadAnalysis(odsCode, month) {
 
     return null;
   } catch (error) {
-    console.error('Error loading CAIP analysis:', error);
+    // Only log errors in development
+    if (import.meta.env.DEV) {
+      console.error('[CAIP Cache] Error loading analysis:', error.code);
+    }
     return null;
   }
 }
@@ -140,7 +145,7 @@ export async function checkAnalysisStatus(odsCode, month) {
       analysis,
     };
   } catch (error) {
-    console.error('Error checking CAIP analysis status:', error);
+    // Silently fail - Firebase permissions may not be configured
     return { exists: false, isStale: false, analysis: null };
   }
 }

@@ -1116,7 +1116,7 @@ const NationalDemandCapacity = ({
           setAiReport(null);
         }
       } catch (error) {
-        console.error('Error checking analysis status:', error);
+        // Silently handle - Firebase may not be configured
         setIsAnalysisStale(false);
       }
     };
@@ -1289,8 +1289,6 @@ const NationalDemandCapacity = ({
         hasOCData: practiceMetrics.hasOCData,
         hasWorkforceData: Boolean(workforceMetrics),
       });
-
-      console.log('CAIP Analysis Prompt:', prompt);
 
       // Call Gemini API
       const ai = new GoogleGenAI({ apiKey: geminiApiKey });
