@@ -336,8 +336,10 @@ const NationalDemandCapacity = ({
   const [aiReport, setAiReport] = useState(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiError, setAiError] = useState(null);
+  const [aiErrorType, setAiErrorType] = useState(null); // 'rate_limit' | 'quota' | 'general'
   const [savedAnalysis, setSavedAnalysis] = useState(null);
   const [hasExistingAnalysis, setHasExistingAnalysis] = useState(false);
+  const [isAnalysisStale, setIsAnalysisStale] = useState(false);
   const [isAiMinimized, setIsAiMinimized] = useState(false);
 
   // Admin password from environment
@@ -1105,14 +1107,17 @@ const NationalDemandCapacity = ({
         if (status.exists && status.analysis) {
           setSavedAnalysis(status.analysis);
           setHasExistingAnalysis(true);
+          setIsAnalysisStale(status.isStale);
           setAiReport(status.analysis.analysis);
         } else {
           setSavedAnalysis(null);
           setHasExistingAnalysis(false);
+          setIsAnalysisStale(false);
           setAiReport(null);
         }
       } catch (error) {
         console.error('Error checking analysis status:', error);
+        setIsAnalysisStale(false);
       }
     };
 
@@ -1298,7 +1303,7 @@ const NationalDemandCapacity = ({
       if (!text) throw new Error('No response generated from AI');
 
       // Save to Firebase
-      await saveAnalysis({
+      const savedSuccessfully = await saveAnalysis({
         odsCode: selectedPractice.odsCode,
         practiceName: selectedPractice.gpName,
         month: selectedMonth,
@@ -1308,8 +1313,22 @@ const NationalDemandCapacity = ({
       // Update state
       setAiReport(text);
       setHasExistingAnalysis(true);
+      setIsAnalysisStale(false);
+      setSavedAnalysis({
+        odsCode: selectedPractice.odsCode,
+        practiceName: selectedPractice.gpName,
+        month: selectedMonth,
+        analysis: text,
+        generatedAt: new Date(),
+        promptVersion: '2.0',
+      });
       setActiveSubTab('analysis');
       setIsAiLoading(false);
+
+      // Log if save failed (analysis still shown but may not persist)
+      if (!savedSuccessfully) {
+        console.warn('Analysis displayed but failed to save to Firebase');
+      }
 
       // Track analytics
       trackNationalAIAnalysis(selectedPractice.odsCode);
@@ -1317,7 +1336,27 @@ const NationalDemandCapacity = ({
 
     } catch (error) {
       console.error('CAIP Analysis error:', error);
-      setAiError(`Analysis failed: ${error.message}`);
+
+      // Detect rate limit and quota errors
+      const errorMessage = error.message?.toLowerCase() || '';
+      const isRateLimit = errorMessage.includes('rate limit') ||
+                          errorMessage.includes('429') ||
+                          errorMessage.includes('too many requests') ||
+                          errorMessage.includes('resource exhausted');
+      const isQuotaError = errorMessage.includes('quota') ||
+                          errorMessage.includes('exceeded') ||
+                          errorMessage.includes('limit exceeded');
+
+      if (isRateLimit) {
+        setAiErrorType('rate_limit');
+        setAiError('Rate limit reached. Gemini has the following limits: 5 requests/minute, 250,000 tokens/minute. Please wait a minute before trying again.');
+      } else if (isQuotaError) {
+        setAiErrorType('quota');
+        setAiError('Daily quota exceeded. The free tier allows 20 requests per day. Your quota will reset at midnight Pacific Time.');
+      } else {
+        setAiErrorType('general');
+        setAiError(`Analysis failed: ${error.message}`);
+      }
       setIsAiLoading(false);
     }
   }, [selectedPractice, practiceMetrics, nationalMetricArrays, workforceMetrics, selectedMonth, geminiApiKey, geminiModel, getHistoricalMetrics, loadMonthData, appointmentData]);
@@ -2909,6 +2948,27 @@ const NationalDemandCapacity = ({
             </div>
           </Card>
 
+          {/* Stale Analysis Banner */}
+          {isAnalysisStale && (
+            <div className="flex items-center gap-3 p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800">
+              <Info size={18} className="shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-medium">Analysis may be outdated</p>
+                <p className="text-xs opacity-75">The prompt has been updated since this analysis was generated. Consider regenerating for improved insights.</p>
+              </div>
+              <button
+                onClick={() => {
+                  setAiReport(null);
+                  setHasExistingAnalysis(false);
+                  setShowAIConsent(true);
+                }}
+                className="px-3 py-1.5 text-xs font-medium bg-amber-100 hover:bg-amber-200 rounded-lg transition-colors"
+              >
+                Regenerate
+              </button>
+            </div>
+          )}
+
           {/* Analysis Content */}
           {!isAiMinimized && (
             <Card>
@@ -2919,29 +2979,31 @@ const NationalDemandCapacity = ({
           )}
 
           {/* Regenerate Option */}
-          <Card className="bg-slate-50 border-slate-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-slate-600">
-                  Want a fresh analysis? You can regenerate at any time.
-                </p>
-                <p className="text-xs text-slate-400 mt-1">
-                  Note: This will replace the current analysis.
-                </p>
+          {!isAnalysisStale && (
+            <Card className="bg-slate-50 border-slate-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-slate-600">
+                    Want a fresh analysis? You can regenerate at any time.
+                  </p>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Note: This will replace the current analysis.
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setAiReport(null);
+                    setHasExistingAnalysis(false);
+                    setShowAIConsent(true);
+                  }}
+                  disabled={isAiLoading}
+                  className="px-4 py-2 text-sm font-medium text-purple-600 bg-purple-100 hover:bg-purple-200 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {isAiLoading ? 'Generating...' : 'Regenerate Analysis'}
+                </button>
               </div>
-              <button
-                onClick={() => {
-                  setAiReport(null);
-                  setHasExistingAnalysis(false);
-                  setShowAIConsent(true);
-                }}
-                disabled={isAiLoading}
-                className="px-4 py-2 text-sm font-medium text-purple-600 bg-purple-100 hover:bg-purple-200 rounded-lg transition-colors disabled:opacity-50"
-              >
-                {isAiLoading ? 'Generating...' : 'Regenerate Analysis'}
-              </button>
-            </div>
-          </Card>
+            </Card>
+          )}
         </div>
       )}
 
@@ -3786,18 +3848,63 @@ const NationalDemandCapacity = ({
 
       {/* AI Error Display */}
       {aiError && (
-        <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-96 p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl shadow-lg z-50 flex items-center gap-2">
-          <AlertTriangle size={20} />
-          <div className="flex-1">
-            <p className="font-medium">Analysis Error</p>
-            <p className="text-sm">{aiError}</p>
+        <div className={`fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-[420px] p-4 rounded-xl shadow-lg z-50 ${
+          aiErrorType === 'rate_limit' ? 'bg-amber-50 border border-amber-200 text-amber-800' :
+          aiErrorType === 'quota' ? 'bg-orange-50 border border-orange-200 text-orange-800' :
+          'bg-red-50 border border-red-200 text-red-700'
+        }`}>
+          <div className="flex items-start gap-3">
+            <div className={`p-2 rounded-lg shrink-0 ${
+              aiErrorType === 'rate_limit' ? 'bg-amber-100' :
+              aiErrorType === 'quota' ? 'bg-orange-100' :
+              'bg-red-100'
+            }`}>
+              {aiErrorType === 'rate_limit' ? (
+                <Clock size={20} />
+              ) : aiErrorType === 'quota' ? (
+                <Calendar size={20} />
+              ) : (
+                <AlertTriangle size={20} />
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold">
+                {aiErrorType === 'rate_limit' ? 'Rate Limit Reached' :
+                 aiErrorType === 'quota' ? 'Daily Quota Exceeded' :
+                 'Analysis Error'}
+              </p>
+              <p className="text-sm mt-1">{aiError}</p>
+              {aiErrorType === 'rate_limit' && (
+                <div className="mt-2 text-xs opacity-75">
+                  <p>Gemini Free Tier Limits:</p>
+                  <ul className="list-disc list-inside ml-1 space-y-0.5">
+                    <li>5 requests per minute</li>
+                    <li>250,000 tokens per minute</li>
+                    <li>20 requests per day</li>
+                  </ul>
+                </div>
+              )}
+              {aiErrorType === 'quota' && (
+                <div className="mt-2 text-xs opacity-75">
+                  <p>The free tier allows 20 requests per day. Consider:</p>
+                  <ul className="list-disc list-inside ml-1 space-y-0.5">
+                    <li>Using cached analyses where available</li>
+                    <li>Waiting until quota resets (midnight PT)</li>
+                  </ul>
+                </div>
+              )}
+            </div>
+            <button
+              onClick={() => { setAiError(null); setAiErrorType(null); }}
+              className={`p-1 rounded-lg shrink-0 ${
+                aiErrorType === 'rate_limit' ? 'hover:bg-amber-100' :
+                aiErrorType === 'quota' ? 'hover:bg-orange-100' :
+                'hover:bg-red-100'
+              }`}
+            >
+              <X size={16} />
+            </button>
           </div>
-          <button
-            onClick={() => setAiError(null)}
-            className="p-1 hover:bg-red-100 rounded-lg"
-          >
-            <X size={16} />
-          </button>
         </div>
       )}
 

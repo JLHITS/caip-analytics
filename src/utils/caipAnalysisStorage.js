@@ -9,7 +9,10 @@ import { doc, getDoc, setDoc, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase/config';
 
 // Current prompt version - increment when prompt changes significantly
-const PROMPT_VERSION = '1.0';
+// v1.0 - Initial release
+// v2.0 - Added practice model detection (Traditional/Hybrid/Total Triage),
+//        GP-only metrics, same-day booking context-dependent interpretation
+const PROMPT_VERSION = '2.0';
 
 /**
  * Generate document ID for an analysis
