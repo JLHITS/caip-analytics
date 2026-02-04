@@ -1,5 +1,6 @@
 import React from 'react';
 import { CheckCircle, AlertTriangle, Lightbulb } from 'lucide-react';
+import PercentileGauge from '../charts/PercentileGauge';
 
 // Section theme configurations for CAIP Analysis output
 const sectionThemes = {
@@ -41,6 +42,73 @@ const sectionThemes = {
   },
 };
 
+// Metric configurations for detection and display
+const metricConfigs = [
+  {
+    key: 'gpApptOrOCPerDayPct',
+    label: 'GP + OC per Day',
+    unit: '%',
+    higherIsBetter: true,
+    keywords: ['gp appointment', 'gp appt', 'appointment rate', 'appointments per', 'medical oc', 'online consultation', 'patient contact'],
+  },
+  {
+    key: 'sameDayPct',
+    label: 'Same-Day Appts',
+    unit: '%',
+    higherIsBetter: true,
+    keywords: ['same-day', 'same day', 'acute access', 'urgent appointment', 'on-the-day'],
+  },
+  {
+    key: 'dnaRate',
+    label: 'DNA Rate',
+    unit: '%',
+    higherIsBetter: false,
+    keywords: ['dna', 'did not attend', 'no-show', 'missed appointment', 'attendance'],
+  },
+  {
+    key: 'missedCallPct',
+    label: 'Missed Call Rate',
+    unit: '%',
+    higherIsBetter: false,
+    keywords: ['missed call', 'unanswered call', 'telephony', 'call answer', 'phone'],
+  },
+  {
+    key: 'gpPerThousand',
+    label: 'GPs per 1000',
+    unit: '',
+    higherIsBetter: true,
+    keywords: ['gp per', 'workforce', 'staffing', 'fte', 'wte', 'capacity', 'gp ratio', 'clinician'],
+  },
+];
+
+// Detect which metrics are mentioned in the section content
+const detectMentionedMetrics = (contentLines, metrics, percentiles) => {
+  if (!metrics || !percentiles) return [];
+
+  // Combine all text content for searching
+  const fullText = contentLines.map(c => c.line).join(' ').toLowerCase();
+
+  const mentioned = [];
+  for (const config of metricConfigs) {
+    // Check if metric has valid data
+    const value = metrics[config.key];
+    const pctl = percentiles[`${config.key}Pctl`];
+    if (value == null || isNaN(value) || pctl == null || isNaN(pctl)) continue;
+
+    // Check if any keyword is mentioned in the content
+    const isFound = config.keywords.some(keyword => fullText.includes(keyword));
+    if (isFound) {
+      mentioned.push({
+        ...config,
+        value,
+        percentile: pctl,
+      });
+    }
+  }
+
+  return mentioned;
+};
+
 // Detect which theme to use based on section heading
 const detectSectionTheme = (heading) => {
   const lower = heading.toLowerCase();
@@ -56,8 +124,32 @@ const detectSectionTheme = (heading) => {
   return 'default';
 };
 
+// Inline gauge display for contextual metrics
+const ContextualGauges = ({ mentionedMetrics }) => {
+  if (!mentionedMetrics || mentionedMetrics.length === 0) return null;
+
+  return (
+    <div className="mt-4 pt-4 border-t border-slate-200/50">
+      <p className="text-xs text-slate-500 mb-2 font-medium">Related metrics:</p>
+      <div className="flex flex-wrap gap-2">
+        {mentionedMetrics.map(metric => (
+          <PercentileGauge
+            key={metric.key}
+            value={metric.value}
+            percentile={metric.percentile}
+            label={metric.label}
+            unit={metric.unit}
+            higherIsBetter={metric.higherIsBetter}
+            size="sm"
+          />
+        ))}
+      </div>
+    </div>
+  );
+};
+
 // Themed section wrapper component
-const ThemedSection = ({ title, children, theme }) => {
+const ThemedSection = ({ title, children, theme, mentionedMetrics }) => {
   const config = sectionThemes[theme] || sectionThemes.default;
   const Icon = config.icon;
 
@@ -76,14 +168,15 @@ const ThemedSection = ({ title, children, theme }) => {
       {/* Content */}
       <div className="relative px-4 py-4">
         {children}
+        <ContextualGauges mentionedMetrics={mentionedMetrics} />
       </div>
     </div>
   );
 };
 
 // Simple markdown renderer for AI-generated analysis text
-// Supports themed sections, bullet points, and bold text
-const SimpleMarkdown = ({ text }) => {
+// Supports themed sections, bullet points, bold text, and contextual metric gauges
+const SimpleMarkdown = ({ text, metrics, percentiles }) => {
   if (!text) return null;
 
   // Parse bold text within a line
@@ -147,11 +240,24 @@ const SimpleMarkdown = ({ text }) => {
     });
   }
 
+  // Track which metrics have been shown to avoid duplicates
+  const shownMetrics = new Set();
+
   // Render sections
   return (
     <div className="space-y-4">
       {sections.map((section, sectionIndex) => {
         const theme = sectionThemes[section.theme] || sectionThemes.default;
+
+        // Detect metrics mentioned in this section (only for themed sections, not default/preamble)
+        let mentionedMetrics = [];
+        if (section.theme !== 'default' && metrics && percentiles) {
+          mentionedMetrics = detectMentionedMetrics(section.content, metrics, percentiles)
+            .filter(m => !shownMetrics.has(m.key)); // Exclude already shown
+
+          // Mark these as shown
+          mentionedMetrics.forEach(m => shownMetrics.add(m.key));
+        }
 
         const contentElements = section.content.map(({ line, index }) => {
           if (line.startsWith('* ') || line.startsWith('- ')) {
@@ -172,7 +278,12 @@ const SimpleMarkdown = ({ text }) => {
         // If this section has a title, wrap it in themed container
         if (section.title) {
           return (
-            <ThemedSection key={sectionIndex} title={section.title} theme={section.theme}>
+            <ThemedSection
+              key={sectionIndex}
+              title={section.title}
+              theme={section.theme}
+              mentionedMetrics={mentionedMetrics}
+            >
               {contentElements}
             </ThemedSection>
           );
