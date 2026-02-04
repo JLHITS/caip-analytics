@@ -24,6 +24,7 @@ import NationalOnlineConsultations from './NationalOnlineConsultations';
 import NationalWorkforce from './NationalWorkforce';
 import CAIPConsentModal from './modals/CAIPConsentModal';
 import SimpleMarkdown from './markdown/SimpleMarkdown';
+import { KeyMetricsDisplay } from './charts/PercentileGauge';
 
 // Utility imports
 import { parseNationalAppointmentsData, searchAppointmentPractices } from '../utils/parseNationalAppointments';
@@ -2970,6 +2971,27 @@ const NationalDemandCapacity = ({
           {/* Analysis Content */}
           {!isAiMinimized && (
             <Card>
+              {/* Key Metrics Visualization */}
+              {practiceMetrics && nationalMetricArrays && (
+                <KeyMetricsDisplay
+                  metrics={{
+                    gpApptOrOCPerDayPct: practiceMetrics.gpApptOrOCPerDayPct,
+                    sameDayPct: practiceMetrics.sameDayPct,
+                    dnaRate: practiceMetrics.dnaPct,
+                    missedCallPct: practiceMetrics.missedCallPct,
+                    gpPerThousand: workforceMetrics?.patientsPerGpWte > 0 ? 1000 / workforceMetrics.patientsPerGpWte : null,
+                  }}
+                  percentiles={{
+                    gpApptOrOCPerDayPctPctl: calculatePercentile(practiceMetrics.gpApptOrOCPerDayPct, nationalMetricArrays.gpApptOrOCPerDayPct),
+                    sameDayPctPctl: calculatePercentile(practiceMetrics.sameDayPct, nationalMetricArrays.sameDayPct),
+                    dnaRatePctl: calculatePercentile(practiceMetrics.dnaPct, nationalMetricArrays.dnaPct),
+                    missedCallPctPctl: calculatePercentile(practiceMetrics.missedCallPct, nationalMetricArrays.missedCallPct),
+                    gpPerThousandPctl: workforceMetrics?.patientsPerGpWte > 0
+                      ? calculatePercentile(1000 / workforceMetrics.patientsPerGpWte, nationalMetricArrays.patientsPerGpWte?.map(v => v > 0 ? 1000 / v : null).filter(v => v != null))
+                      : null,
+                  }}
+                />
+              )}
               <div className="prose prose-sm prose-purple max-w-none">
                 <SimpleMarkdown text={aiReport} />
               </div>
