@@ -11,7 +11,6 @@ const sectionThemes = {
     titleColor: 'text-emerald-800',
     bulletColor: 'text-emerald-500',
     boldColor: 'text-emerald-900',
-    shimmer: 'from-transparent via-emerald-200/30 to-transparent',
   },
   'improvement': {
     icon: AlertTriangle,
@@ -21,7 +20,6 @@ const sectionThemes = {
     titleColor: 'text-amber-800',
     bulletColor: 'text-amber-500',
     boldColor: 'text-amber-900',
-    shimmer: 'from-transparent via-amber-200/30 to-transparent',
   },
   'actions': {
     icon: Lightbulb,
@@ -31,7 +29,6 @@ const sectionThemes = {
     titleColor: 'text-purple-800',
     bulletColor: 'text-purple-500',
     boldColor: 'text-purple-900',
-    shimmer: 'from-transparent via-purple-200/30 to-transparent',
   },
   'default': {
     icon: null,
@@ -41,7 +38,6 @@ const sectionThemes = {
     titleColor: 'text-slate-800',
     bulletColor: 'text-slate-500',
     boldColor: 'text-slate-900',
-    shimmer: 'from-transparent via-slate-200/30 to-transparent',
   },
 };
 
@@ -67,11 +63,6 @@ const ThemedSection = ({ title, children, theme }) => {
 
   return (
     <div className={`relative overflow-hidden rounded-xl border ${config.border} bg-gradient-to-br ${config.bgGradient} mb-6`}>
-      {/* Shimmer effect overlay */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className={`absolute inset-0 -translate-x-full animate-[shimmer_3s_ease-in-out_infinite] bg-gradient-to-r ${config.shimmer}`} />
-      </div>
-
       {/* Header with gradient bar */}
       <div className={`relative flex items-center gap-3 px-4 py-3 border-b ${config.border}`}>
         <div className={`relative p-2 rounded-lg bg-gradient-to-br ${config.gradient} shadow-lg`}>
@@ -159,15 +150,6 @@ const SimpleMarkdown = ({ text }) => {
   // Render sections
   return (
     <div className="space-y-4">
-      {/* Add shimmer keyframes via style tag */}
-      <style>{`
-        @keyframes shimmer {
-          0% { transform: translateX(-100%); }
-          50% { transform: translateX(100%); }
-          100% { transform: translateX(100%); }
-        }
-      `}</style>
-
       {sections.map((section, sectionIndex) => {
         const theme = sectionThemes[section.theme] || sectionThemes.default;
 
