@@ -150,9 +150,65 @@ export async function checkAnalysisStatus(odsCode, month) {
   }
 }
 
+/**
+ * Validate a beta access code
+ * Checks if the code exists in Firestore and has not been used
+ *
+ * @param {string} code - The beta access code to validate
+ * @returns {Promise<{valid: boolean, error: string|null}>}
+ */
+export async function validateBetaCode(code) {
+  try {
+    const docRef = doc(db, 'beta-access-codes', code);
+    const docSnap = await getDoc(docRef);
+
+    if (!docSnap.exists()) {
+      return { valid: false, error: 'Code not found. Please check your code and try again.' };
+    }
+
+    const data = docSnap.data();
+    if (data.used) {
+      return { valid: false, error: 'This code has already been used.' };
+    }
+
+    return { valid: true, error: null };
+  } catch (error) {
+    if (import.meta.env.DEV) {
+      console.error('[Beta Code] Error validating code:', error.code);
+    }
+    return { valid: false, error: 'Unable to verify code. Please try again.' };
+  }
+}
+
+/**
+ * Mark a beta access code as used after successful analysis generation
+ *
+ * @param {string} code - The beta access code
+ * @param {string} odsCode - The ODS code of the practice that used it
+ * @returns {Promise<boolean>} True if marked successfully
+ */
+export async function consumeBetaCode(code, odsCode) {
+  try {
+    const docRef = doc(db, 'beta-access-codes', code);
+    await setDoc(docRef, {
+      used: true,
+      usedAt: Timestamp.now(),
+      usedBy: odsCode,
+    }, { merge: true });
+    return true;
+  } catch (error) {
+    if (import.meta.env.DEV) {
+      console.error('[Beta Code] Error consuming code:', error.code);
+    }
+    return false;
+  }
+}
+
 export default {
   saveAnalysis,
   loadAnalysis,
   hasAnalysis,
   checkAnalysisStatus,
+  validateBetaCode,
+  consumeBetaCode,
 };

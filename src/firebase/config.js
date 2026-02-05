@@ -17,6 +17,7 @@ export const db = getFirestore(app);
 
 // Collection references
 export const caipAnalysesRef = collection(db, 'caip-analyses');
+export const betaAccessCodesRef = collection(db, 'beta-access-codes');
 
 // Initialize Analytics (only in browser, not during SSR/build)
 let analytics = null;

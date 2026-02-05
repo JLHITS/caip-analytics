@@ -48,6 +48,8 @@ import {
   saveAnalysis,
   loadAnalysis,
   checkAnalysisStatus,
+  validateBetaCode,
+  consumeBetaCode,
 } from '../utils/caipAnalysisStorage';
 import {
   APPOINTMENT_FILES,
@@ -341,6 +343,7 @@ const NationalDemandCapacity = ({
   const [hasExistingAnalysis, setHasExistingAnalysis] = useState(false);
   const [isAnalysisStale, setIsAnalysisStale] = useState(false);
   const [isAiMinimized, setIsAiMinimized] = useState(false);
+  const [pendingBetaCode, setPendingBetaCode] = useState(null);
 
   // Admin password from environment
   const adminPassword = (import.meta && import.meta.env && (import.meta.env.VITE_ADMIN_PASSWORD || import.meta.env.ADMIN_PASSWORD)) || '';
@@ -1098,6 +1101,7 @@ const NationalDemandCapacity = ({
       setSavedAnalysis(null);
       setHasExistingAnalysis(false);
       setAiReport(null);
+      setPendingBetaCode(null);
       return;
     }
 
@@ -1165,36 +1169,50 @@ const NationalDemandCapacity = ({
       return;
     }
 
-    // If not authenticated, show password prompt
-    if (!aiAuthed) {
-      setShowPasswordPrompt(true);
+    // If authenticated (admin password) or have a pending beta code, go to consent
+    if (aiAuthed || pendingBetaCode) {
+      setShowAIConsent(true);
       return;
     }
 
-    // Show consent modal
-    setShowAIConsent(true);
-  }, [selectedPractice, hasExistingAnalysis, aiReport, aiAuthed]);
+    // Otherwise show password/code prompt
+    setShowPasswordPrompt(true);
+  }, [selectedPractice, hasExistingAnalysis, aiReport, aiAuthed, pendingBetaCode]);
 
-  // Handle password submission
-  const handlePasswordSubmit = useCallback((e) => {
+  // Handle password/access code submission
+  const handlePasswordSubmit = useCallback(async (e) => {
     e.preventDefault();
 
-    if (!adminPassword) {
-      setAiPasswordError('Password not configured. Contact support.');
+    const trimmedInput = aiPassword.trim();
+    if (!trimmedInput) {
+      setAiPasswordError('Please enter an access code or password.');
       return;
     }
 
-    if (aiPassword !== adminPassword) {
-      setAiPasswordError('Incorrect password.');
+    // 1. Check admin password first (instant, no network call)
+    if (adminPassword && trimmedInput === adminPassword) {
+      setAiAuthed(true);
+      setPendingBetaCode(null);
+      setShowPasswordPrompt(false);
+      setAiPassword('');
+      setAiPasswordError('');
+      setShowAIConsent(true);
       return;
     }
 
-    // Password correct
-    setAiAuthed(true);
-    setShowPasswordPrompt(false);
-    setAiPassword('');
+    // 2. Check as beta access code in Firestore
     setAiPasswordError('');
-    setShowAIConsent(true);
+    const { valid, error } = await validateBetaCode(trimmedInput);
+
+    if (valid) {
+      setPendingBetaCode(trimmedInput);
+      setShowPasswordPrompt(false);
+      setAiPassword('');
+      setAiPasswordError('');
+      setShowAIConsent(true);
+    } else {
+      setAiPasswordError(error);
+    }
   }, [aiPassword, adminPassword]);
 
   // Calculate historical metrics for trend analysis
@@ -1308,6 +1326,12 @@ const NationalDemandCapacity = ({
         analysis: text,
       });
 
+      // Consume beta code if one was used
+      if (pendingBetaCode) {
+        await consumeBetaCode(pendingBetaCode, selectedPractice.odsCode);
+        setPendingBetaCode(null);
+      }
+
       // Update state
       setAiReport(text);
       setHasExistingAnalysis(true);
@@ -1357,7 +1381,7 @@ const NationalDemandCapacity = ({
       }
       setIsAiLoading(false);
     }
-  }, [selectedPractice, practiceMetrics, nationalMetricArrays, workforceMetrics, selectedMonth, geminiApiKey, geminiModel, getHistoricalMetrics, loadMonthData, appointmentData]);
+  }, [selectedPractice, practiceMetrics, nationalMetricArrays, workforceMetrics, selectedMonth, geminiApiKey, geminiModel, getHistoricalMetrics, loadMonthData, appointmentData, pendingBetaCode]);
 
   // ========================================
   // APPOINTMENT SUB-TABS
@@ -2952,18 +2976,8 @@ const NationalDemandCapacity = ({
               <Info size={18} className="shrink-0" />
               <div className="flex-1">
                 <p className="text-sm font-medium">Analysis may be outdated</p>
-                <p className="text-xs opacity-75">The prompt has been updated since this analysis was generated. Consider regenerating for improved insights.</p>
+                <p className="text-xs opacity-75">The analysis model has been updated since this was generated. Contact your administrator for a refreshed analysis.</p>
               </div>
-              <button
-                onClick={() => {
-                  setAiReport(null);
-                  setHasExistingAnalysis(false);
-                  setShowAIConsent(true);
-                }}
-                className="px-3 py-1.5 text-xs font-medium bg-amber-100 hover:bg-amber-200 rounded-lg transition-colors"
-              >
-                Regenerate
-              </button>
             </div>
           )}
 
@@ -2994,32 +3008,6 @@ const NationalDemandCapacity = ({
             </Card>
           )}
 
-          {/* Regenerate Option */}
-          {!isAnalysisStale && (
-            <Card className="bg-slate-50 border-slate-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-slate-600">
-                    Want a fresh analysis? You can regenerate at any time.
-                  </p>
-                  <p className="text-xs text-slate-400 mt-1">
-                    Note: This will replace the current analysis.
-                  </p>
-                </div>
-                <button
-                  onClick={() => {
-                    setAiReport(null);
-                    setHasExistingAnalysis(false);
-                    setShowAIConsent(true);
-                  }}
-                  disabled={isAiLoading}
-                  className="px-4 py-2 text-sm font-medium text-purple-600 bg-purple-100 hover:bg-purple-200 rounded-lg transition-colors disabled:opacity-50"
-                >
-                  {isAiLoading ? 'Generating...' : 'Regenerate Analysis'}
-                </button>
-              </div>
-            </Card>
-          )}
         </div>
       )}
 
@@ -3950,22 +3938,22 @@ const NationalDemandCapacity = ({
 
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
               <p className="text-sm text-amber-800">
-                <strong>Beta Testing:</strong> This feature is in beta. Enter the password to continue.
+                <strong>Beta Testing:</strong> This feature is in closed beta. Enter your single-use access code to continue.
               </p>
               <p className="text-xs text-amber-600 mt-1">
-                Need access? Use the <strong>Feedback</strong> option to request beta access.
+                Each code is valid for one analysis. Need access? Use the <strong>Feedback</strong> option to request a code.
               </p>
             </div>
 
             <form onSubmit={handlePasswordSubmit}>
               <div className="mb-4">
-                <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Access Code / Password</label>
                 <input
-                  type="password"
+                  type="text"
                   value={aiPassword}
                   onChange={(e) => setAiPassword(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  placeholder="Enter beta access password"
+                  placeholder="Enter access code or password"
                   autoFocus
                 />
                 {aiPasswordError && (
