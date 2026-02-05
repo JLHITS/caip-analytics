@@ -60,6 +60,7 @@ import ShareModal from './components/modals/ShareModal';
 import ShareOptionsModal from './components/modals/ShareOptionsModal';
 import BugReportModal from './components/modals/BugReportModal';
 import AboutModal from './components/modals/AboutModal';
+import AdminPanel from './components/modals/AdminPanel';
 import Toast from './components/ui/Toast';
 import ImportButton from './components/ui/ImportButton';
 import PracticeLookup from './components/ui/PracticeLookup';
@@ -392,6 +393,7 @@ export default function App() {
   const [showAIConsent, setShowAIConsent] = useState(false);
   const [showBugReport, setShowBugReport] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [shareUrl, setShareUrl] = useState(null);
   const [shareType, setShareType] = useState('firebase');
   const [shareExpiresAt, setShareExpiresAt] = useState(null);
@@ -3202,7 +3204,13 @@ export default function App() {
         isOpen={showAbout}
         onClose={() => setShowAbout(false)}
         onOpenBugReport={() => setShowBugReport(true)}
+        onOpenAdmin={() => setShowAdminPanel(true)}
         timesUsed={sharedUsageStats?.totalChecks || 0}
+      />
+
+      <AdminPanel
+        isOpen={showAdminPanel}
+        onClose={() => setShowAdminPanel(false)}
       />
 
       <ComparisonBuilder
