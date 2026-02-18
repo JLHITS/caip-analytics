@@ -2083,7 +2083,7 @@ export default function App() {
             <button
               onClick={() => setShowBugReport(true)}
               className="p-1.5 text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:border-amber-300 transition-all"
-              title="Report a Bug"
+              title="Report a Bug / Feedback"
             >
               <AlertTriangle size={16} className="text-amber-500" />
             </button>
@@ -2235,6 +2235,10 @@ export default function App() {
                     <span className="text-xs px-2 py-1 bg-cyan-50 text-cyan-700 rounded-full font-medium">Telephony</span>
                     <span className="text-xs px-2 py-1 bg-indigo-50 text-indigo-700 rounded-full font-medium">Online Consultations</span>
                     <span className="text-xs px-2 py-1 bg-emerald-50 text-emerald-700 rounded-full font-medium">Workforce</span>
+                    <span className="relative text-xs px-2 py-1 rounded-full font-medium bg-gradient-to-r from-purple-500 to-indigo-500 text-white overflow-hidden">
+                      <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer" style={{ backgroundSize: '200% 100%', animation: 'shimmer 2.5s ease-in-out infinite' }} />
+                      <span className="relative">CAIP <span className="font-bold text-amber-200">AI</span> Analysis</span>
+                    </span>
                   </div>
                 </button>
               </div>

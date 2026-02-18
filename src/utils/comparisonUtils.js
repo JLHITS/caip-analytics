@@ -295,12 +295,12 @@ export const extractChartData = (practices, metric, sortedMonths) => {
 };
 
 /**
- * Find practices similar to the selected practice based on population size
- * and geographic proximity (via ODS code prefix matching).
+ * Find practices with similar list sizes to the selected practice.
+ * Selects randomly from practices within ±30% population to provide variety.
  * @param {Object} selectedPractice - The practice to find similar ones for
  * @param {Array} allPractices - All available practices
  * @param {number} count - Number of similar practices to return (default 5)
- * @returns {Array} Array of similar practices sorted by similarity score
+ * @returns {Array} Array of randomly selected similar-sized practices
  */
 export const findSimilarPractices = (selectedPractice, allPractices, count = 5) => {
   if (!selectedPractice || !allPractices?.length) return [];
@@ -310,29 +310,19 @@ export const findSimilarPractices = (selectedPractice, allPractices, count = 5) 
 
   if (!selectedPop || !selectedOds) return [];
 
-  const candidates = allPractices.filter(p =>
-    p.odsCode !== selectedOds && (p.listSize || 0) > 0
-  );
+  const lowerBound = selectedPop * 0.7;
+  const upperBound = selectedPop * 1.3;
 
-  const scored = candidates.map(p => {
+  const candidates = allPractices.filter(p => {
     const pop = p.listSize || 0;
-
-    // Population similarity: 1 / (1 + |pop_a - pop_b| / pop_a)
-    const popScore = 1 / (1 + Math.abs(selectedPop - pop) / selectedPop);
-
-    // Geographic proximity via ODS code prefix
-    const ods = p.odsCode || '';
-    let geoScore = 0;
-    if (selectedOds.slice(0, 3) === ods.slice(0, 3)) geoScore = 1.0;
-    else if (selectedOds.slice(0, 2) === ods.slice(0, 2)) geoScore = 0.7;
-    else if (selectedOds.charAt(0) === ods.charAt(0)) geoScore = 0.3;
-
-    // Combined: 60% population, 40% geography
-    const combinedScore = 0.6 * popScore + 0.4 * geoScore;
-
-    return { ...p, similarityScore: combinedScore };
+    return p.odsCode !== selectedOds && pop >= lowerBound && pop <= upperBound;
   });
 
-  scored.sort((a, b) => b.similarityScore - a.similarityScore);
-  return scored.slice(0, count);
+  // Shuffle candidates and pick `count` random ones
+  for (let i = candidates.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+  }
+
+  return candidates.slice(0, count);
 };

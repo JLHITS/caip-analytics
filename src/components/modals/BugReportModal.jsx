@@ -111,7 +111,7 @@ Timestamp: ${diagnosticData.timestamp}
 
         <div className="flex items-center gap-3 mb-4">
           <AlertTriangle className="text-amber-500" size={28} />
-          <h3 className="text-xl font-bold text-slate-800">Report a Bug</h3>
+          <h3 className="text-xl font-bold text-slate-800">Report a Bug / Feedback</h3>
         </div>
 
         {submitted ? (

@@ -180,10 +180,12 @@ export function calculateCallsSavedRanking(practice, allPractices) {
   const nationalMissedPct = getNationalMissedPct(allPractices);
   const practiceCallsSaved = calculateCallsSaved(practice, nationalMissedPct);
 
-  const practicesWithMetric = allPractices.map(p => ({
-    ...p,
-    callsSaved: calculateCallsSaved(p, nationalMissedPct)
-  }));
+  const practicesWithMetric = allPractices
+    .filter(p => (p.population || p.listSize || 0) >= 1500)
+    .map(p => ({
+      ...p,
+      callsSaved: calculateCallsSaved(p, nationalMissedPct)
+    }));
 
   // Sort by metric (descending - higher is better)
   const sorted = [...practicesWithMetric].sort((a, b) => b.callsSaved - a.callsSaved);

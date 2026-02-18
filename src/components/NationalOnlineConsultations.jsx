@@ -1345,7 +1345,7 @@ const NationalOnlineConsultations = ({
 
         // All practices ranked by rate (for practice-centric leaderboard)
         const allByRate = [...data.practices]
-          .filter(p => p.participation === 1 && p.ratePer1000 > 0)
+          .filter(p => p.participation === 1 && p.ratePer1000 > 0 && (p.listSize || 0) >= 1500)
           .sort((a, b) => b.ratePer1000 - a.ratePer1000);
 
         // All practices ranked by submissions
@@ -1355,12 +1355,12 @@ const NationalOnlineConsultations = ({
 
         // All practices ranked by medical rate
         const allByMedical = [...data.practices]
-          .filter(p => p.participation === 1 && p.clinicalPer1000 > 0)
+          .filter(p => p.participation === 1 && p.clinicalPer1000 > 0 && (p.listSize || 0) >= 1500)
           .sort((a, b) => b.clinicalPer1000 - a.clinicalPer1000);
 
         // All practices ranked by admin rate
         const allByAdmin = [...data.practices]
-          .filter(p => p.participation === 1 && p.adminPer1000 > 0)
+          .filter(p => p.participation === 1 && p.adminPer1000 > 0 && (p.listSize || 0) >= 1500)
           .sort((a, b) => b.adminPer1000 - a.adminPer1000);
 
         // All PCNs ranked

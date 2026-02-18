@@ -956,7 +956,7 @@ const NationalDemandCapacity = ({
         gpApptPerDayPct: metrics.gpApptPerDayPct || 0,
         gpApptOrOCPerDayPct: metrics.gpApptOrOCPerDayPct || 0,
       };
-    }).filter(m => m.gpApptPerDayPct > 0);
+    }).filter(m => m.gpApptPerDayPct > 0 && m.listSize >= 1500);
 
     // Sort by gpApptPerDayPct descending (higher = better)
     const sortedNational = [...allMetricsWithOds].sort((a, b) => b.gpApptPerDayPct - a.gpApptPerDayPct);
@@ -1617,7 +1617,13 @@ const NationalDemandCapacity = ({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              onFocus={() => searchQuery.length >= 2 && searchResults.length > 0 && setShowSearchDropdown(true)}
+              onFocus={() => {
+                if (searchQuery.length >= 2 && searchResults.length > 0) {
+                  setShowSearchDropdown(true);
+                } else if (sharedBookmarks.length > 0) {
+                  setShowSearchDropdown(true);
+                }
+              }}
               placeholder="Search by practice name or ODS code..."
               className="w-full pl-10 pr-4 py-3 rounded-lg bg-white/20 text-white placeholder-blue-200 border border-white/30 focus:outline-none focus:ring-2 focus:ring-white/50"
             />
@@ -1631,12 +1637,53 @@ const NationalDemandCapacity = ({
             )}
           </div>
 
-          {/* Search Results Dropdown */}
-          {showSearchDropdown && searchResults.length > 0 && (
+          {/* Search Results & Bookmarks Dropdown */}
+          {showSearchDropdown && (searchResults.length > 0 || (sharedBookmarks.length > 0 && searchQuery.length < 2)) && (
             <div
               ref={dropdownRef}
               className="absolute z-50 w-full mt-2 bg-white rounded-lg shadow-xl max-h-80 overflow-y-auto border border-slate-200"
             >
+              {/* Bookmarked practices - show when not actively searching */}
+              {searchQuery.length < 2 && sharedBookmarks.length > 0 && (
+                <>
+                  <div className="px-4 py-2 bg-amber-50 border-b border-amber-100">
+                    <p className="text-xs font-semibold text-amber-700 flex items-center gap-1.5">
+                      <Star size={12} fill="currentColor" />
+                      Bookmarked Practices
+                    </p>
+                  </div>
+                  {sharedBookmarks.map((bookmark) => {
+                    const fullPractice = appointmentData[selectedMonth]?.practices?.find(
+                      p => p.odsCode === bookmark.odsCode
+                    );
+                    return (
+                      <button
+                        key={bookmark.odsCode}
+                        onClick={() => {
+                          if (fullPractice) {
+                            handleSelectPractice(fullPractice);
+                          }
+                        }}
+                        disabled={!fullPractice}
+                        className={`w-full px-4 py-3 text-left border-b border-slate-100 last:border-0 ${
+                          fullPractice ? 'hover:bg-amber-50 transition-colors' : 'opacity-50 cursor-not-allowed'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="font-medium text-slate-900">{bookmark.gpName || bookmark.name}</p>
+                            <p className="text-sm text-slate-500">
+                              {bookmark.odsCode} • {bookmark.pcnName || 'Unknown PCN'}
+                            </p>
+                          </div>
+                          <Star size={14} className="text-amber-400" fill="currentColor" />
+                        </div>
+                      </button>
+                    );
+                  })}
+                </>
+              )}
+              {/* Search results */}
               {searchResults.map((practice) => (
                 <button
                   key={practice.odsCode}
@@ -1990,7 +2037,7 @@ const NationalDemandCapacity = ({
                   <div className="h-64">
                     <Doughnut
                       data={{
-                        labels: ['Face-to-Face', 'Telephone', 'Video', 'Home Visit'],
+                        labels: ['Face-to-Face', 'Telephone', 'Online/Video', 'Home Visit'],
                         datasets: [{
                           data: [
                             practiceMetrics.faceToFace || 0,
@@ -2021,7 +2068,7 @@ const NationalDemandCapacity = ({
                     </div>
                     <div className="flex items-center gap-2">
                       <div className="w-3 h-3 rounded-full" style={{ backgroundColor: NHS_AMBER }} />
-                      <span>Video: {formatMetricValue(practiceMetrics.videoPct, 'percent1')}</span>
+                      <span>Online/Video: {formatMetricValue(practiceMetrics.videoPct, 'percent1')}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <div className="w-3 h-3 rounded-full" style={{ backgroundColor: NHS_RED }} />
@@ -2574,7 +2621,7 @@ const NationalDemandCapacity = ({
                               const rows = [
                                 { label: 'Face-to-Face', value: modes.faceToFace || 0 },
                                 { label: 'Telephone', value: modes.telephone || 0 },
-                                { label: 'Video', value: modes.video || 0 },
+                                { label: 'Online/Video', value: modes.video || 0 },
                                 { label: 'Home Visit', value: modes.homeVisit || 0 },
                                 { label: 'Unknown', value: modes.unknown || 0 },
                               ];
@@ -3418,7 +3465,7 @@ const NationalDemandCapacity = ({
                           borderWidth: 2,
                         },
                         {
-                          label: 'Video %',
+                          label: 'Online/Video %',
                           data: historicalData.map(d => d.videoPct),
                           borderColor: '#10b981',
                           fill: false,
@@ -3930,7 +3977,7 @@ const NationalDemandCapacity = ({
                     className="px-3 py-1.5 text-xs font-medium text-orange-700 bg-orange-50 border border-orange-200 rounded-lg hover:bg-orange-100 flex items-center gap-1.5"
                   >
                     <Users size={14} />
-                    Compare to Similar
+                    Compare to Similar Size
                   </button>
                 )}
                 <button
@@ -4015,28 +4062,50 @@ const NationalDemandCapacity = ({
               </div>
             )}
 
-            {/* Selected Practices Chips */}
-            <div className="flex flex-wrap gap-2">
-              {comparePractices.map((practice, index) => (
-                <div
-                  key={practice.odsCode}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 rounded-full"
-                >
-                  <div
-                    className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: COMPARISON_COLORS[index % COMPARISON_COLORS.length] }}
-                  />
-                  <span className="text-sm font-medium">{practice.odsCode}</span>
-                  <span className="text-sm text-slate-500">{practice.gpName.slice(0, 20)}...</span>
-                  <button
-                    onClick={() => setComparePractices(comparePractices.filter(p => p.odsCode !== practice.odsCode))}
-                    className="text-slate-400 hover:text-slate-600"
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
-              ))}
-            </div>
+            {/* Selected Practices Table */}
+            {comparePractices.length > 0 && (
+              <div className="overflow-x-auto -mx-4 sm:mx-0">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-slate-50 border-b border-slate-200">
+                    <tr>
+                      <th className="text-left p-2 pl-3 font-semibold text-slate-600 w-8"></th>
+                      <th className="text-left p-2 font-semibold text-slate-600">Practice</th>
+                      <th className="text-right p-2 font-semibold text-slate-600">List Size</th>
+                      <th className="text-left p-2 font-semibold text-slate-600">PCN</th>
+                      <th className="text-left p-2 font-semibold text-slate-600">ICB</th>
+                      <th className="p-2 w-8"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {comparePractices.map((practice, index) => (
+                      <tr key={practice.odsCode} className="border-b border-slate-100">
+                        <td className="p-2 pl-3">
+                          <div
+                            className="w-3 h-3 rounded-full"
+                            style={{ backgroundColor: COMPARISON_COLORS[index % COMPARISON_COLORS.length] }}
+                          />
+                        </td>
+                        <td className="p-2">
+                          <div className="font-medium text-slate-800">{practice.gpName}</div>
+                          <div className="text-xs text-slate-400">{practice.odsCode}</div>
+                        </td>
+                        <td className="p-2 text-right text-slate-700">{(practice.listSize || 0).toLocaleString()}</td>
+                        <td className="p-2 text-slate-600 text-xs">{practice.pcnName || '—'}</td>
+                        <td className="p-2 text-slate-600 text-xs max-w-[150px] truncate">{practice.subICBName || practice.icbName || '—'}</td>
+                        <td className="p-2">
+                          <button
+                            onClick={() => setComparePractices(comparePractices.filter(p => p.odsCode !== practice.odsCode))}
+                            className="text-slate-400 hover:text-slate-600"
+                          >
+                            <X size={14} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
 
             {comparePractices.length === 0 && (
               <p className="text-sm text-slate-500 text-center py-4">

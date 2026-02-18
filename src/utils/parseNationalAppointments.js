@@ -324,6 +324,18 @@ function parseTable4(rawData) {
     return { data: {}, national: null };
   }
 
+  // Dynamically detect column indices from header row
+  const headerRow = rawData[headerRowIndex];
+  const colIdx = { faceToFace: -1, homeVisit: -1, telephone: -1, video: -1, unknown: -1 };
+  for (let c = 0; c < headerRow.length; c++) {
+    const h = String(headerRow[c] || '').toLowerCase().replace(/[\s_-]+/g, '');
+    if (h.includes('facetoface')) colIdx.faceToFace = c;
+    else if (h.includes('homevisit')) colIdx.homeVisit = c;
+    else if (h.includes('telephone')) colIdx.telephone = c;
+    else if (h.includes('video') || h.includes('conference') || h.includes('online')) colIdx.video = c;
+    else if (h === 'unknown') colIdx.unknown = c;
+  }
+
   const dataStartRow = headerRowIndex + 1;
 
   for (let i = dataStartRow; i < rawData.length; i++) {
@@ -333,14 +345,13 @@ function parseTable4(rawData) {
     const odsCode = String(row[1] || '').trim();
     const gpName = String(row[2] || '').trim();
 
-    // Extract mode data
-    // Column indices: 8=Face-to-Face, 9=Home_Visit, 10=Telephone, 11=Video_Conference_Online, 12=Unknown
+    // Extract mode data using dynamically detected column indices
     const modesData = {
-      faceToFace: Number(row[8]) || 0,
-      homeVisit: Number(row[9]) || 0,
-      telephone: Number(row[10]) || 0,
-      video: Number(row[11]) || 0,
-      unknown: Number(row[12]) || 0,
+      faceToFace: colIdx.faceToFace >= 0 ? (Number(row[colIdx.faceToFace]) || 0) : 0,
+      homeVisit: colIdx.homeVisit >= 0 ? (Number(row[colIdx.homeVisit]) || 0) : 0,
+      telephone: colIdx.telephone >= 0 ? (Number(row[colIdx.telephone]) || 0) : 0,
+      video: colIdx.video >= 0 ? (Number(row[colIdx.video]) || 0) : 0,
+      unknown: colIdx.unknown >= 0 ? (Number(row[colIdx.unknown]) || 0) : 0,
     };
 
     // Calculate total and percentages

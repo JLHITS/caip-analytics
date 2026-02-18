@@ -1712,7 +1712,7 @@ const NationalTelephony = ({
             {(() => {
               const populationMap = data.populationMap || {};
               const practicesWithPop = data.practices
-                .filter(p => populationMap[p.odsCode] > 0)
+                .filter(p => populationMap[p.odsCode] >= 1500)
                 .map(p => ({
                   ...p,
                   population: populationMap[p.odsCode],

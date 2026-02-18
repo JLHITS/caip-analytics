@@ -442,11 +442,11 @@ export const DEMAND_CAPACITY_METRICS = [
   },
   {
     id: 'videoPct',
-    label: 'Video %',
-    shortLabel: 'Video',
+    label: 'Online/Video %',
+    shortLabel: 'Online/Video',
     format: 'percent1',
     higherBetter: null,
-    description: 'Percentage of appointments delivered by video consultation',
+    description: 'Percentage of appointments delivered via online/video consultation',
   },
   // Booking Metrics
   {
