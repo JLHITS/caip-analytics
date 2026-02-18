@@ -2323,9 +2323,14 @@ export default function App() {
                 )}
                 {dataSource === 'national' && (
                   <>
-                    <div className="flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg shadow-md">
-                      <Activity size={20} />
-                      <span className="font-bold">National Demand & Capacity Analysis</span>
+                    <div className="flex items-center justify-between gap-3 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg shadow-md">
+                      <div className="flex items-center gap-3">
+                        <Activity size={20} />
+                        <span className="font-bold">National Demand & Capacity Analysis</span>
+                      </div>
+                      <span className="text-xs bg-white/20 px-3 py-1 rounded-full font-medium whitespace-nowrap">
+                        Latest extract: Dec 2025
+                      </span>
                     </div>
                   </>
                 )}

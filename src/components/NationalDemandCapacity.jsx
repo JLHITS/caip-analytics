@@ -16,6 +16,8 @@ import { GoogleGenAI } from '@google/genai';
 
 // Component imports
 import Card from './ui/Card';
+import PracticeCentricLeaderboard from './ui/PracticeCentricLeaderboard';
+import { findSimilarPractices } from '../utils/comparisonUtils';
 import MetricCard from './ui/MetricCard';
 import Toast from './ui/Toast';
 import FancyNationalLoader from './ui/FancyNationalLoader';
@@ -361,6 +363,8 @@ const NationalDemandCapacity = ({
       { id: 'telephony', label: 'Telephony', icon: Phone, color: 'blue' },
       { id: 'online-consultations', label: 'Online Consultations', icon: Monitor, color: 'blue' },
       { id: 'workforce', label: 'Workforce', icon: UserCheck, color: 'blue' },
+      { id: 'trends', label: 'Trends', icon: Activity, color: 'blue' },
+      { id: 'forecasting', label: 'Forecasting', icon: TrendingUp, color: 'purple' },
       { id: 'compare', label: 'Compare', icon: Users, color: 'blue' },
     ];
 
@@ -368,9 +372,6 @@ const NationalDemandCapacity = ({
     if (hasExistingAnalysis) {
       tabs.push({ id: 'analysis', label: 'Analysis', icon: Sparkles, color: 'purple' });
     }
-
-    // Add Forecasting (coming soon)
-    tabs.push({ id: 'forecasting', label: 'Forecasting', icon: TrendingUp, color: 'blue', disabled: true, comingSoon: true });
 
     return tabs;
   }, [hasExistingAnalysis]);
@@ -947,7 +948,9 @@ const NationalDemandCapacity = ({
       const metrics = calculatePracticeMetrics(p, pTelephony, pOC, population, selectedMonth);
       return {
         odsCode: p.odsCode,
+        gpName: p.gpName,
         pcnCode: p.pcnCode,
+        pcnName: p.pcnName,
         subICBCode: p.subICBCode,
         listSize: p.listSize || 0,
         gpApptPerDayPct: metrics.gpApptPerDayPct || 0,
@@ -999,6 +1002,9 @@ const NationalDemandCapacity = ({
       // National distribution for spectrum visualization
       allGpApptPerDayPctValues,
       allGpOcPerDayPctValues,
+      // Sorted arrays for leaderboard tables
+      rankedByGpApptPerDay: sortedNational,
+      rankedByGpOcPerDay: sortedNationalGpOc,
     };
   }, [selectedPractice, appointmentData, selectedMonth, telephonyByOds, ocByOds, populationData]);
 
@@ -1147,8 +1153,13 @@ const NationalDemandCapacity = ({
     } else {
       updateSharedBookmarks([...sharedBookmarks, {
         odsCode: selectedPractice.odsCode,
+        name: selectedPractice.gpName,
         gpName: selectedPractice.gpName,
-        addedAt: new Date().toISOString(),
+        pcnCode: selectedPractice.pcnCode,
+        pcnName: selectedPractice.pcnName,
+        icbCode: selectedPractice.icbCode,
+        icbName: selectedPractice.icbName,
+        timestamp: new Date().toISOString(),
       }]);
       setToast({ type: 'success', message: 'Added to bookmarks' });
       trackEvent('bookmark_added', { ods_code: selectedPractice.odsCode });
@@ -1728,7 +1739,7 @@ const NationalDemandCapacity = ({
           const Icon = tab.icon;
           const isActive = activeSubTab === tab.id;
           // Disable data tabs until a practice is selected
-          const requiresPractice = ['appointments', 'telephony', 'online-consultations', 'workforce', 'compare'].includes(tab.id);
+          const requiresPractice = ['appointments', 'telephony', 'online-consultations', 'workforce', 'trends', 'forecasting', 'compare'].includes(tab.id);
           const isDisabled = tab.disabled || (requiresPractice && !selectedPractice);
 
           return (
@@ -1876,6 +1887,8 @@ const NationalDemandCapacity = ({
                   value={formatMetricValue(practiceMetrics.gpApptPerDayPct, 'percent2')}
                   info="Percentage of registered patients each working day who attended a GP appointment"
                   icon={UserCheck}
+                  className="border-blue-200 bg-blue-50"
+                  color="text-blue-700"
                   trend={networkAverages?.gpApptPerDayPct ? (
                     practiceMetrics.gpApptPerDayPct > networkAverages.gpApptPerDayPct.mean ? 'up' : 'down'
                   ) : null}
@@ -1885,25 +1898,32 @@ const NationalDemandCapacity = ({
                   value={formatMetricValue(practiceMetrics.gpApptOrOCPerDayPct, 'percent2')}
                   info="Percentage of registered patients each working day who attended a GP appointment and/or Medical Online Consultation (any outcome)"
                   icon={Activity}
+                  className="border-purple-200 bg-purple-50"
+                  color="text-purple-700"
                 />
                 <MetricCard
                   title="Other Staff/Day %"
                   value={formatMetricValue(practiceMetrics.otherApptPerDayPct, 'percent2')}
                   subtext="Non-GP appointments"
                   icon={Users}
+                  className="border-green-200 bg-green-50"
+                  color="text-green-700"
                 />
                 <MetricCard
                   title="DNA Rate"
                   value={formatMetricValue(practiceMetrics.dnaPct, 'percent1')}
                   subtext="Did Not Attend"
                   icon={AlertTriangle}
-                  className={practiceMetrics.dnaPct > 5 ? 'border-red-200 bg-red-50' : ''}
+                  className={practiceMetrics.dnaPct > 5 ? 'border-red-200 bg-red-50' : 'border-amber-200 bg-amber-50'}
+                  color={practiceMetrics.dnaPct > 5 ? 'text-red-700' : 'text-amber-700'}
                 />
                 <MetricCard
                   title="Same Day %"
                   value={formatMetricValue(practiceMetrics.sameDayPct, 'percent1')}
                   subtext="Booked same day"
                   icon={Clock}
+                  className="border-indigo-200 bg-indigo-50"
+                  color="text-indigo-700"
                 />
                 <MetricCard
                   title="GP Appts/Demand"
@@ -1913,6 +1933,8 @@ const NationalDemandCapacity = ({
                   subtext={practiceMetrics.hasTelephonyData || practiceMetrics.hasOCData ? 'Per call + Medical OC' : 'No demand data'}
                   info="GP Appointments divided by (Inbound Calls + Medical OC submissions)"
                   icon={Phone}
+                  className="border-blue-200 bg-blue-50"
+                  color="text-blue-700"
                 />
               </div>
 
@@ -2465,7 +2487,7 @@ const NationalDemandCapacity = ({
                     <h4 className="font-medium text-amber-800">About This Data</h4>
                     <p className="text-sm text-amber-700 mt-1">
                       This breakdown is sourced from NHS Digital's <strong>Appointments in General Practice (GPAD)</strong> dataset.
-                      Categories are based on SNOMED codes mapped by NHS Digital. Some appointment types may be categorised
+                      Categories are based on national mapping categories defined by NHS Digital. Some appointment types may be categorised
                       differently to how your practice records them locally. For more accurate categorisation, use your
                       practice's local appointment extract.
                     </p>
@@ -2896,9 +2918,39 @@ const NationalDemandCapacity = ({
                   </div>
                 </Card>
 
-              <p className="text-sm text-slate-500 text-center">
+              <p className="text-sm text-slate-500 text-center mb-4">
                 Rankings are based on GP Appts/Day % and GP+OC/Day % metrics. Higher access rates contribute to better rankings.
               </p>
+
+              {practiceMetrics.rankedByGpApptPerDay?.length > 0 && (
+                <PracticeCentricLeaderboard
+                  title="Practices by GP Appts/Day %"
+                  rankedItems={practiceMetrics.rankedByGpApptPerDay}
+                  selectedOdsCode={selectedPractice.odsCode}
+                  colorTheme="blue"
+                  columns={[
+                    { key: 'practice', header: 'Practice', render: (p) => (<><div className="font-medium">{p.gpName}</div><div className="text-xs text-slate-500">{p.odsCode}</div></>), truncate: true },
+                    { key: 'pcnName', header: 'PCN', render: (p) => <span className="text-xs text-slate-600">{p.pcnName}</span> },
+                    { key: 'listSize', header: 'List Size', align: 'right', render: (p) => p.listSize.toLocaleString() },
+                    { key: 'gpApptPerDayPct', header: 'GP Appts/Day %', align: 'right', render: (p) => <span className="text-blue-600 font-medium">{p.gpApptPerDayPct.toFixed(2)}%</span> },
+                  ]}
+                />
+              )}
+
+              {practiceMetrics.rankedByGpOcPerDay?.length > 0 && (
+                <PracticeCentricLeaderboard
+                  title="Practices by GP+OC/Day %"
+                  rankedItems={practiceMetrics.rankedByGpOcPerDay}
+                  selectedOdsCode={selectedPractice.odsCode}
+                  colorTheme="indigo"
+                  columns={[
+                    { key: 'practice', header: 'Practice', render: (p) => (<><div className="font-medium">{p.gpName}</div><div className="text-xs text-slate-500">{p.odsCode}</div></>), truncate: true },
+                    { key: 'pcnName', header: 'PCN', render: (p) => <span className="text-xs text-slate-600">{p.pcnName}</span> },
+                    { key: 'listSize', header: 'List Size', align: 'right', render: (p) => p.listSize.toLocaleString() },
+                    { key: 'gpApptOrOCPerDayPct', header: 'GP+OC/Day %', align: 'right', render: (p) => <span className="text-indigo-600 font-medium">{p.gpApptOrOCPerDayPct.toFixed(2)}%</span> },
+                  ]}
+                />
+              )}
             </>
           )}
 
@@ -3012,33 +3064,834 @@ const NationalDemandCapacity = ({
       )}
 
       {/* ========================================
-          FORECASTING TAB
+          TRENDS TAB
           ======================================== */}
-      {activeSubTab === 'forecasting' && selectedPractice && (
-        <div className="space-y-6">
-          <Card className="bg-purple-50 border-purple-200">
-            <div className="flex items-center gap-3">
-              <TrendingUp className="text-purple-600" size={24} />
-              <div>
-                <h3 className="font-bold text-purple-800">Combined Demand Forecasting</h3>
-                <p className="text-sm text-purple-700">
-                  Predictions based on historical appointment, telephony, and online consultation data
+      {activeSubTab === 'trends' && selectedPractice && (() => {
+        if (!historicalData || historicalData.length < 2) {
+          return (
+            <div className="space-y-6">
+              <Card className="bg-blue-50 border-blue-200">
+                <div className="flex items-center gap-3">
+                  <Activity className="text-blue-600" size={24} />
+                  <div>
+                    <h3 className="font-bold text-blue-800">Trends Overview</h3>
+                    <p className="text-sm text-blue-700">Key metric trends across all data sources</p>
+                  </div>
+                </div>
+              </Card>
+              <Card className="text-center py-12">
+                <Activity className="mx-auto text-slate-300 mb-4" size={48} />
+                <h3 className="text-xl font-bold text-slate-700 mb-2">Insufficient Data for Trends</h3>
+                <p className="text-slate-500">
+                  At least 2 months of data are needed. Currently have {historicalData?.length || 0} month(s).
+                </p>
+              </Card>
+            </div>
+          );
+        }
+
+        // Calculate changes for each metric
+        const latest = historicalData[historicalData.length - 1];
+        const previous = historicalData[historicalData.length - 2];
+        const earliest = historicalData[0];
+
+        const calcChange = (curr, prev) => prev && prev !== 0 ? ((curr - prev) / Math.abs(prev) * 100) : null;
+        const calcAbsChange = (curr, prev) => curr - prev;
+
+        // Build trend metrics
+        const trendMetrics = [
+          {
+            label: 'GP Appts / Day %',
+            current: latest.gpApptPerDayPct,
+            previous: previous.gpApptPerDayPct,
+            change: calcAbsChange(latest.gpApptPerDayPct, previous.gpApptPerDayPct),
+            overall: calcAbsChange(latest.gpApptPerDayPct, earliest.gpApptPerDayPct),
+            series: historicalData.map(d => d.gpApptPerDayPct),
+            format: v => v?.toFixed(2) + '%',
+            color: '#2563eb',
+            higherIsBetter: true,
+          },
+          {
+            label: 'GP+OC / Day %',
+            current: latest.gpApptOrOCPerDayPct || latest.gpApptPerDayPct,
+            previous: previous.gpApptOrOCPerDayPct || previous.gpApptPerDayPct,
+            change: calcAbsChange(latest.gpApptOrOCPerDayPct || latest.gpApptPerDayPct, previous.gpApptOrOCPerDayPct || previous.gpApptPerDayPct),
+            overall: calcAbsChange(latest.gpApptOrOCPerDayPct || latest.gpApptPerDayPct, earliest.gpApptOrOCPerDayPct || earliest.gpApptPerDayPct),
+            series: historicalData.map(d => d.gpApptOrOCPerDayPct || d.gpApptPerDayPct),
+            format: v => v?.toFixed(2) + '%',
+            color: '#4f46e5',
+            higherIsBetter: true,
+          },
+          {
+            label: 'DNA Rate',
+            current: latest.dnaPct,
+            previous: previous.dnaPct,
+            change: calcAbsChange(latest.dnaPct, previous.dnaPct),
+            overall: calcAbsChange(latest.dnaPct, earliest.dnaPct),
+            series: historicalData.map(d => d.dnaPct),
+            format: v => v?.toFixed(1) + '%',
+            color: '#dc2626',
+            higherIsBetter: false,
+          },
+          {
+            label: 'Same Day %',
+            current: latest.sameDayPct,
+            previous: previous.sameDayPct,
+            change: calcAbsChange(latest.sameDayPct, previous.sameDayPct),
+            overall: calcAbsChange(latest.sameDayPct, earliest.sameDayPct),
+            series: historicalData.map(d => d.sameDayPct),
+            format: v => v?.toFixed(1) + '%',
+            color: '#0d9488',
+            higherIsBetter: true,
+          },
+          {
+            label: 'Face-to-Face %',
+            current: latest.faceToFacePct,
+            previous: previous.faceToFacePct,
+            change: calcAbsChange(latest.faceToFacePct, previous.faceToFacePct),
+            overall: calcAbsChange(latest.faceToFacePct, earliest.faceToFacePct),
+            series: historicalData.map(d => d.faceToFacePct),
+            format: v => v?.toFixed(1) + '%',
+            color: '#7c3aed',
+            higherIsBetter: null, // Neutral
+          },
+        ];
+
+        // Add telephony if available
+        if (historicalData.some(d => d.hasTelephonyData)) {
+          trendMetrics.push({
+            label: 'Missed Call %',
+            current: latest.missedCallPct,
+            previous: previous.missedCallPct,
+            change: latest.missedCallPct != null && previous.missedCallPct != null ? calcAbsChange(latest.missedCallPct, previous.missedCallPct) : null,
+            overall: latest.missedCallPct != null && earliest.missedCallPct != null ? calcAbsChange(latest.missedCallPct, earliest.missedCallPct) : null,
+            series: historicalData.map(d => d.missedCallPct),
+            format: v => v != null ? v.toFixed(1) + '%' : 'N/A',
+            color: '#d97706',
+            higherIsBetter: false,
+          });
+        }
+
+        // Add OC if available
+        if (historicalData.some(d => d.hasOCData)) {
+          const ocRates = historicalData.map(d => d.hasOCData ? (d.ocSubmissions / (d.population || d.listSize || 10000)) * 1000 : null);
+          const latestOcRate = ocRates[ocRates.length - 1];
+          const prevOcRate = ocRates[ocRates.length - 2];
+          const earliestOcRate = ocRates[0];
+          trendMetrics.push({
+            label: 'OC Rate / 1000',
+            current: latestOcRate,
+            previous: prevOcRate,
+            change: latestOcRate != null && prevOcRate != null ? calcAbsChange(latestOcRate, prevOcRate) : null,
+            overall: latestOcRate != null && earliestOcRate != null ? calcAbsChange(latestOcRate, earliestOcRate) : null,
+            series: ocRates,
+            format: v => v != null ? v.toFixed(1) : 'N/A',
+            color: '#059669',
+            higherIsBetter: true,
+          });
+        }
+
+        // Find best improving and biggest concern
+        const improving = trendMetrics
+          .filter(m => m.overall != null && m.higherIsBetter !== null)
+          .sort((a, b) => {
+            const aScore = a.higherIsBetter ? a.overall : -a.overall;
+            const bScore = b.higherIsBetter ? b.overall : -b.overall;
+            return bScore - aScore;
+          });
+        const bestImproving = improving.length > 0 ? improving[0] : null;
+        const biggestConcern = improving.length > 0 ? improving[improving.length - 1] : null;
+
+        const trendLabels = historicalData.map(d => {
+          const [mn, yr] = d.month.split(' ');
+          return `${mn.substring(0,3)} ${yr.substring(2)}`;
+        });
+
+        // Mini sparkline options
+        const miniSparkOpts = {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false }, tooltip: { enabled: false } },
+          scales: { x: { display: false }, y: { display: false } },
+          elements: { point: { radius: 0 } },
+        };
+
+        return (
+          <div className="space-y-6">
+            {/* Header */}
+            <Card className="bg-gradient-to-r from-blue-100 via-indigo-100 to-purple-100 border-2 border-blue-300">
+              <div className="text-center py-2">
+                <h2 className="text-xl font-bold text-slate-800">Trends Overview</h2>
+                <p className="text-sm text-slate-600 mt-1">
+                  Key metric trends over {historicalData.length} months ({trendLabels[0]} - {trendLabels[trendLabels.length - 1]})
                 </p>
               </div>
-            </div>
-          </Card>
+            </Card>
 
-          <Card className="text-center py-12">
-            <TrendingUp className="mx-auto text-slate-300 mb-4" size={48} />
-            <h3 className="text-xl font-bold text-slate-700 mb-2">Forecasting Coming Soon</h3>
-            <p className="text-slate-500">
-              Enable "Compare with previous months" to load historical data for forecasting analysis.
-              <br />
-              This feature will combine trends from all data sources to predict future demand.
-            </p>
-          </Card>
-        </div>
-      )}
+            {/* Highlights Row */}
+            {bestImproving && biggestConcern && bestImproving !== biggestConcern && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-300">
+                  <div className="flex items-center gap-2 mb-1">
+                    <ArrowUp className="text-green-600" size={18} />
+                    <h4 className="text-sm font-bold text-green-800">Best Improving</h4>
+                  </div>
+                  <p className="text-lg font-bold text-green-700">{bestImproving.label}</p>
+                  <p className="text-sm text-green-600">
+                    {bestImproving.higherIsBetter ? '+' : ''}{bestImproving.overall > 0 ? '+' : ''}{bestImproving.overall?.toFixed(2)} over {historicalData.length} months
+                  </p>
+                </Card>
+                <Card className="bg-gradient-to-br from-red-50 to-orange-50 border-red-300">
+                  <div className="flex items-center gap-2 mb-1">
+                    <ArrowDown className="text-red-600" size={18} />
+                    <h4 className="text-sm font-bold text-red-800">Biggest Concern</h4>
+                  </div>
+                  <p className="text-lg font-bold text-red-700">{biggestConcern.label}</p>
+                  <p className="text-sm text-red-600">
+                    {biggestConcern.overall > 0 ? '+' : ''}{biggestConcern.overall?.toFixed(2)} over {historicalData.length} months
+                  </p>
+                </Card>
+              </div>
+            )}
+
+            {/* Trend Cards Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {trendMetrics.map((metric) => {
+                const isPositive = metric.change != null && (metric.higherIsBetter ? metric.change > 0 : metric.change < 0);
+                const isNegative = metric.change != null && (metric.higherIsBetter ? metric.change < 0 : metric.change > 0);
+
+                return (
+                  <Card key={metric.label} className="relative overflow-hidden">
+                    <div className="flex items-center justify-between mb-1">
+                      <h4 className="text-xs font-bold text-slate-600">{metric.label}</h4>
+                      {metric.change != null && (
+                        <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
+                          isPositive ? 'bg-green-100 text-green-700' :
+                          isNegative ? 'bg-red-100 text-red-700' :
+                          'bg-slate-100 text-slate-600'
+                        }`}>
+                          {metric.change > 0 ? '+' : ''}{metric.change.toFixed(2)}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xl font-bold" style={{ color: metric.color }}>
+                      {metric.format(metric.current)}
+                    </p>
+                    <p className="text-xs text-slate-400 mb-2">
+                      prev: {metric.format(metric.previous)}
+                    </p>
+                    {/* Mini sparkline */}
+                    <div style={{ height: '40px' }}>
+                      <Line
+                        data={{
+                          labels: trendLabels,
+                          datasets: [{
+                            data: metric.series,
+                            borderColor: metric.color,
+                            backgroundColor: metric.color + '20',
+                            fill: true,
+                            tension: 0.3,
+                            borderWidth: 1.5,
+                          }],
+                        }}
+                        options={miniSparkOpts}
+                      />
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+
+            {/* Full Trend Charts */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* GP Appts/Day trend */}
+              <Card>
+                <h3 className="text-sm font-bold text-slate-700 mb-3">GP Appointments / Day % Trend</h3>
+                <div style={{ height: '200px' }}>
+                  <Line
+                    data={{
+                      labels: trendLabels,
+                      datasets: [
+                        {
+                          label: 'GP Appts/Day %',
+                          data: historicalData.map(d => d.gpApptPerDayPct),
+                          borderColor: '#2563eb',
+                          backgroundColor: '#2563eb20',
+                          fill: true,
+                          tension: 0.3,
+                          pointRadius: 3,
+                          borderWidth: 2,
+                        },
+                        {
+                          label: 'GP+OC/Day %',
+                          data: historicalData.map(d => d.gpApptOrOCPerDayPct || d.gpApptPerDayPct),
+                          borderColor: '#4f46e5',
+                          backgroundColor: '#4f46e520',
+                          fill: false,
+                          tension: 0.3,
+                          pointRadius: 3,
+                          borderWidth: 2,
+                          borderDash: [4, 2],
+                        },
+                      ],
+                    }}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      plugins: { legend: { position: 'top', labels: { boxWidth: 12, font: { size: 10 } } } },
+                      scales: {
+                        x: { ticks: { font: { size: 10 } }, grid: { display: false } },
+                        y: { ticks: { font: { size: 10 } }, grid: { color: '#f1f5f9' } },
+                      },
+                    }}
+                  />
+                </div>
+              </Card>
+
+              {/* DNA & Same Day trend */}
+              <Card>
+                <h3 className="text-sm font-bold text-slate-700 mb-3">DNA Rate & Same Day Booking Trend</h3>
+                <div style={{ height: '200px' }}>
+                  <Line
+                    data={{
+                      labels: trendLabels,
+                      datasets: [
+                        {
+                          label: 'DNA %',
+                          data: historicalData.map(d => d.dnaPct),
+                          borderColor: '#dc2626',
+                          backgroundColor: '#dc262620',
+                          fill: true,
+                          tension: 0.3,
+                          pointRadius: 3,
+                          borderWidth: 2,
+                        },
+                        {
+                          label: 'Same Day %',
+                          data: historicalData.map(d => d.sameDayPct),
+                          borderColor: '#0d9488',
+                          backgroundColor: '#0d948820',
+                          fill: false,
+                          tension: 0.3,
+                          pointRadius: 3,
+                          borderWidth: 2,
+                        },
+                      ],
+                    }}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      plugins: { legend: { position: 'top', labels: { boxWidth: 12, font: { size: 10 } } } },
+                      scales: {
+                        x: { ticks: { font: { size: 10 } }, grid: { display: false } },
+                        y: { ticks: { font: { size: 10 } }, grid: { color: '#f1f5f9' } },
+                      },
+                    }}
+                  />
+                </div>
+              </Card>
+
+              {/* Appointment Mode trend */}
+              <Card>
+                <h3 className="text-sm font-bold text-slate-700 mb-3">Appointment Mode Mix Trend</h3>
+                <div style={{ height: '200px' }}>
+                  <Line
+                    data={{
+                      labels: trendLabels,
+                      datasets: [
+                        {
+                          label: 'Face-to-Face %',
+                          data: historicalData.map(d => d.faceToFacePct),
+                          borderColor: '#7c3aed',
+                          fill: false,
+                          tension: 0.3,
+                          pointRadius: 3,
+                          borderWidth: 2,
+                        },
+                        {
+                          label: 'Telephone %',
+                          data: historicalData.map(d => d.telephonePct),
+                          borderColor: '#0ea5e9',
+                          fill: false,
+                          tension: 0.3,
+                          pointRadius: 3,
+                          borderWidth: 2,
+                        },
+                        {
+                          label: 'Video %',
+                          data: historicalData.map(d => d.videoPct),
+                          borderColor: '#10b981',
+                          fill: false,
+                          tension: 0.3,
+                          pointRadius: 3,
+                          borderWidth: 2,
+                        },
+                      ],
+                    }}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      plugins: { legend: { position: 'top', labels: { boxWidth: 12, font: { size: 10 } } } },
+                      scales: {
+                        x: { ticks: { font: { size: 10 } }, grid: { display: false } },
+                        y: { ticks: { font: { size: 10 } }, grid: { color: '#f1f5f9' } },
+                      },
+                    }}
+                  />
+                </div>
+              </Card>
+
+              {/* Missed Call % trend (if telephony available) */}
+              {historicalData.some(d => d.hasTelephonyData) && (
+                <Card>
+                  <h3 className="text-sm font-bold text-slate-700 mb-3">Telephony Missed Call % Trend</h3>
+                  <div style={{ height: '200px' }}>
+                    <Line
+                      data={{
+                        labels: trendLabels,
+                        datasets: [{
+                          label: 'Missed Call %',
+                          data: historicalData.map(d => d.missedCallPct),
+                          borderColor: '#d97706',
+                          backgroundColor: '#d9770620',
+                          fill: true,
+                          tension: 0.3,
+                          pointRadius: 3,
+                          borderWidth: 2,
+                        }],
+                      }}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                          x: { ticks: { font: { size: 10 } }, grid: { display: false } },
+                          y: { ticks: { font: { size: 10 } }, grid: { color: '#f1f5f9' } },
+                        },
+                      }}
+                    />
+                  </div>
+                </Card>
+              )}
+            </div>
+
+            {/* Trend Summary Table */}
+            <Card>
+              <h3 className="text-sm font-bold text-slate-700 mb-3">Trend Summary</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-slate-50 border-b">
+                      <th className="p-2 text-left text-slate-600">Metric</th>
+                      <th className="p-2 text-right text-slate-600">Current</th>
+                      <th className="p-2 text-right text-slate-600">Previous</th>
+                      <th className="p-2 text-right text-slate-600">Monthly Change</th>
+                      <th className="p-2 text-right text-slate-600">Overall Change</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {trendMetrics.map((metric) => {
+                      const isMonthPositive = metric.change != null && (metric.higherIsBetter ? metric.change > 0 : metric.change < 0);
+                      const isMonthNegative = metric.change != null && (metric.higherIsBetter ? metric.change < 0 : metric.change > 0);
+                      const isOverallPositive = metric.overall != null && (metric.higherIsBetter ? metric.overall > 0 : metric.overall < 0);
+                      const isOverallNegative = metric.overall != null && (metric.higherIsBetter ? metric.overall < 0 : metric.overall > 0);
+
+                      return (
+                        <tr key={metric.label} className="border-b border-slate-100 hover:bg-slate-50">
+                          <td className="p-2 font-medium text-slate-700">{metric.label}</td>
+                          <td className="p-2 text-right font-medium" style={{ color: metric.color }}>{metric.format(metric.current)}</td>
+                          <td className="p-2 text-right text-slate-500">{metric.format(metric.previous)}</td>
+                          <td className={`p-2 text-right font-medium ${isMonthPositive ? 'text-green-600' : isMonthNegative ? 'text-red-600' : 'text-slate-500'}`}>
+                            {metric.change != null ? `${metric.change > 0 ? '+' : ''}${metric.change.toFixed(2)}` : 'N/A'}
+                          </td>
+                          <td className={`p-2 text-right font-medium ${isOverallPositive ? 'text-green-600' : isOverallNegative ? 'text-red-600' : 'text-slate-500'}`}>
+                            {metric.overall != null ? `${metric.overall > 0 ? '+' : ''}${metric.overall.toFixed(2)}` : 'N/A'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </div>
+        );
+      })()}
+
+      {/* ========================================
+          FORECASTING TAB
+          ======================================== */}
+      {activeSubTab === 'forecasting' && selectedPractice && (() => {
+        // Need at least 3 data points for forecasting
+        if (!historicalData || historicalData.length < 3) {
+          return (
+            <div className="space-y-6">
+              <Card className="bg-purple-50 border-purple-200">
+                <div className="flex items-center gap-3">
+                  <TrendingUp className="text-purple-600" size={24} />
+                  <div>
+                    <h3 className="font-bold text-purple-800">Combined Demand Forecasting</h3>
+                    <p className="text-sm text-purple-700">
+                      Predictions based on historical appointment, telephony, and online consultation data
+                    </p>
+                  </div>
+                </div>
+              </Card>
+              <Card className="text-center py-12">
+                <TrendingUp className="mx-auto text-slate-300 mb-4" size={48} />
+                <h3 className="text-xl font-bold text-slate-700 mb-2">Insufficient Data for Forecasting</h3>
+                <p className="text-slate-500">
+                  At least 3 months of historical data are needed. Currently have {historicalData?.length || 0} month(s).
+                  <br />
+                  Data will load automatically as more months become available.
+                </p>
+              </Card>
+            </div>
+          );
+        }
+
+        // Build forecasts for each metric
+        const gpApptDayForecast = forecastValues(historicalData.map(d => d.gpApptPerDayPct));
+        const gpApptOcDayForecast = forecastValues(historicalData.map(d => d.gpApptOrOCPerDayPct || d.gpApptPerDayPct));
+        const missedCallForecast = historicalData.some(d => d.hasTelephonyData)
+          ? forecastValues(historicalData.filter(d => d.missedCallPct != null).map(d => d.missedCallPct))
+          : null;
+        const ocRateForecast = historicalData.some(d => d.hasOCData)
+          ? forecastValues(historicalData.filter(d => d.ocSubmissions > 0).map(d => (d.ocSubmissions / (d.population || d.listSize || 10000)) * 1000))
+          : null;
+        const dnaPctForecast = forecastValues(historicalData.map(d => d.dnaPct));
+        const sameDayPctForecast = forecastValues(historicalData.map(d => d.sameDayPct));
+
+        // Generate future month labels
+        const lastMonth = historicalData[historicalData.length - 1].month;
+        const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+        const [lastMName, lastYStr] = lastMonth.split(' ');
+        const lastMIdx = monthNames.indexOf(lastMName);
+        const futureLabels = [];
+        for (let i = 1; i <= 3; i++) {
+          const mi = (lastMIdx + i) % 12;
+          const yr = lastMIdx + i > 11 ? parseInt(lastYStr) + 1 : parseInt(lastYStr);
+          futureLabels.push(`${monthNames[mi].substring(0,3)} ${String(yr).substring(2)}`);
+        }
+        const historicalLabels = historicalData.map(d => {
+          const [mn, yr] = d.month.split(' ');
+          return `${mn.substring(0,3)} ${yr.substring(2)}`;
+        });
+        const allLabels = [...historicalLabels, ...futureLabels];
+
+        // Sparkline chart helper
+        const buildSparkline = (historical, forecast, color, label) => ({
+          labels: allLabels,
+          datasets: [
+            {
+              label: label,
+              data: [...historical, null],
+              borderColor: color,
+              backgroundColor: color + '20',
+              fill: true,
+              tension: 0.3,
+              pointRadius: 2,
+              borderWidth: 2,
+            },
+            {
+              label: 'Forecast',
+              data: [...new Array(historical.length - 1).fill(null), historical[historical.length - 1], ...forecast.forecasts.map(f => f.value)],
+              borderColor: color,
+              borderDash: [6, 3],
+              backgroundColor: color + '10',
+              fill: true,
+              tension: 0.3,
+              pointRadius: 3,
+              pointStyle: 'triangle',
+              borderWidth: 2,
+            },
+          ],
+        });
+
+        const sparklineOptions = {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
+          scales: {
+            x: { ticks: { font: { size: 10 } }, grid: { display: false } },
+            y: { ticks: { font: { size: 10 } }, grid: { color: '#f1f5f9' } },
+          },
+        };
+
+        const getTrendIcon = (trend) => {
+          if (trend === 'increasing') return <ArrowUp className="text-green-600" size={18} />;
+          if (trend === 'decreasing') return <ArrowDown className="text-red-600" size={18} />;
+          return <span className="text-slate-400">--</span>;
+        };
+
+        // For missed calls, decreasing is good
+        const getMissedCallTrendIcon = (trend) => {
+          if (trend === 'decreasing') return <ArrowDown className="text-green-600" size={18} />;
+          if (trend === 'increasing') return <ArrowUp className="text-red-600" size={18} />;
+          return <span className="text-slate-400">--</span>;
+        };
+
+        return (
+          <div className="space-y-6">
+            {/* Header */}
+            <Card className="bg-gradient-to-r from-purple-100 via-indigo-100 to-blue-100 border-2 border-purple-300">
+              <div className="text-center py-2">
+                <h2 className="text-xl font-bold text-slate-800">Combined Demand Forecasting</h2>
+                <p className="text-sm text-slate-600 mt-1">
+                  3-month predictions based on {historicalData.length} months of historical data across all data sources
+                </p>
+              </div>
+            </Card>
+
+            {/* Forecast Summary Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {/* GP Appts/Day */}
+              <Card className="bg-gradient-to-br from-blue-50 to-white border-blue-200">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-sm font-bold text-blue-900">GP Appts / Day %</h4>
+                  {getTrendIcon(gpApptDayForecast.trend)}
+                </div>
+                <p className="text-2xl font-bold text-blue-700">
+                  {gpApptDayForecast.forecasts[0]?.value.toFixed(2)}%
+                </p>
+                <p className="text-xs text-slate-500 mt-1">
+                  Next month forecast | R²: {(gpApptDayForecast.r2 * 100).toFixed(0)}%
+                </p>
+                <p className="text-xs text-slate-400 capitalize">Trend: {gpApptDayForecast.trend}</p>
+              </Card>
+
+              {/* GP+OC Appts/Day */}
+              <Card className="bg-gradient-to-br from-indigo-50 to-white border-indigo-200">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-sm font-bold text-indigo-900">GP+OC / Day %</h4>
+                  {getTrendIcon(gpApptOcDayForecast.trend)}
+                </div>
+                <p className="text-2xl font-bold text-indigo-700">
+                  {gpApptOcDayForecast.forecasts[0]?.value.toFixed(2)}%
+                </p>
+                <p className="text-xs text-slate-500 mt-1">
+                  Next month forecast | R²: {(gpApptOcDayForecast.r2 * 100).toFixed(0)}%
+                </p>
+                <p className="text-xs text-slate-400 capitalize">Trend: {gpApptOcDayForecast.trend}</p>
+              </Card>
+
+              {/* Missed Call % */}
+              {missedCallForecast && missedCallForecast.forecasts.length > 0 && (
+                <Card className="bg-gradient-to-br from-amber-50 to-white border-amber-200">
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-sm font-bold text-amber-900">Missed Call %</h4>
+                    {getMissedCallTrendIcon(missedCallForecast.trend)}
+                  </div>
+                  <p className="text-2xl font-bold text-amber-700">
+                    {missedCallForecast.forecasts[0]?.value.toFixed(1)}%
+                  </p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Next month forecast | R²: {(missedCallForecast.r2 * 100).toFixed(0)}%
+                  </p>
+                  <p className="text-xs text-slate-400 capitalize">Trend: {missedCallForecast.trend}</p>
+                </Card>
+              )}
+
+              {/* OC Rate per 1000 */}
+              {ocRateForecast && ocRateForecast.forecasts.length > 0 && (
+                <Card className="bg-gradient-to-br from-green-50 to-white border-green-200">
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-sm font-bold text-green-900">OC Rate / 1000</h4>
+                    {getTrendIcon(ocRateForecast.trend)}
+                  </div>
+                  <p className="text-2xl font-bold text-green-700">
+                    {ocRateForecast.forecasts[0]?.value.toFixed(1)}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Next month forecast | R²: {(ocRateForecast.r2 * 100).toFixed(0)}%
+                  </p>
+                  <p className="text-xs text-slate-400 capitalize">Trend: {ocRateForecast.trend}</p>
+                </Card>
+              )}
+
+              {/* DNA Rate */}
+              <Card className="bg-gradient-to-br from-red-50 to-white border-red-200">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-sm font-bold text-red-900">DNA Rate %</h4>
+                  {getMissedCallTrendIcon(dnaPctForecast.trend)}
+                </div>
+                <p className="text-2xl font-bold text-red-700">
+                  {dnaPctForecast.forecasts[0]?.value.toFixed(1)}%
+                </p>
+                <p className="text-xs text-slate-500 mt-1">
+                  Next month forecast | R²: {(dnaPctForecast.r2 * 100).toFixed(0)}%
+                </p>
+                <p className="text-xs text-slate-400 capitalize">Trend: {dnaPctForecast.trend}</p>
+              </Card>
+
+              {/* Same Day Booking % */}
+              <Card className="bg-gradient-to-br from-teal-50 to-white border-teal-200">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-sm font-bold text-teal-900">Same Day %</h4>
+                  {getTrendIcon(sameDayPctForecast.trend)}
+                </div>
+                <p className="text-2xl font-bold text-teal-700">
+                  {sameDayPctForecast.forecasts[0]?.value.toFixed(1)}%
+                </p>
+                <p className="text-xs text-slate-500 mt-1">
+                  Next month forecast | R²: {(sameDayPctForecast.r2 * 100).toFixed(0)}%
+                </p>
+                <p className="text-xs text-slate-400 capitalize">Trend: {sameDayPctForecast.trend}</p>
+              </Card>
+            </div>
+
+            {/* Forecast Charts */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* GP Appts/Day Chart */}
+              <Card>
+                <h3 className="text-sm font-bold text-slate-700 mb-3">GP Appointments / Day % Forecast</h3>
+                <div style={{ height: '200px' }}>
+                  <Line
+                    data={buildSparkline(
+                      historicalData.map(d => d.gpApptPerDayPct),
+                      gpApptDayForecast,
+                      '#2563eb',
+                      'GP Appts/Day %'
+                    )}
+                    options={sparklineOptions}
+                  />
+                </div>
+              </Card>
+
+              {/* GP+OC/Day Chart */}
+              <Card>
+                <h3 className="text-sm font-bold text-slate-700 mb-3">GP + Medical OC / Day % Forecast</h3>
+                <div style={{ height: '200px' }}>
+                  <Line
+                    data={buildSparkline(
+                      historicalData.map(d => d.gpApptOrOCPerDayPct || d.gpApptPerDayPct),
+                      gpApptOcDayForecast,
+                      '#4f46e5',
+                      'GP+OC/Day %'
+                    )}
+                    options={sparklineOptions}
+                  />
+                </div>
+              </Card>
+
+              {/* Missed Call % Chart */}
+              {missedCallForecast && missedCallForecast.forecasts.length > 0 && (
+                <Card>
+                  <h3 className="text-sm font-bold text-slate-700 mb-3">Missed Call % Forecast</h3>
+                  <div style={{ height: '200px' }}>
+                    <Line
+                      data={buildSparkline(
+                        historicalData.filter(d => d.missedCallPct != null).map(d => d.missedCallPct),
+                        missedCallForecast,
+                        '#d97706',
+                        'Missed Call %'
+                      )}
+                      options={sparklineOptions}
+                    />
+                  </div>
+                </Card>
+              )}
+
+              {/* OC Rate Chart */}
+              {ocRateForecast && ocRateForecast.forecasts.length > 0 && (
+                <Card>
+                  <h3 className="text-sm font-bold text-slate-700 mb-3">Online Consultations Rate / 1000 Forecast</h3>
+                  <div style={{ height: '200px' }}>
+                    <Line
+                      data={buildSparkline(
+                        historicalData.filter(d => d.ocSubmissions > 0).map(d => (d.ocSubmissions / (d.population || d.listSize || 10000)) * 1000),
+                        ocRateForecast,
+                        '#059669',
+                        'OC/1000'
+                      )}
+                      options={sparklineOptions}
+                    />
+                  </div>
+                </Card>
+              )}
+
+              {/* DNA Rate Chart */}
+              <Card>
+                <h3 className="text-sm font-bold text-slate-700 mb-3">DNA Rate % Forecast</h3>
+                <div style={{ height: '200px' }}>
+                  <Line
+                    data={buildSparkline(
+                      historicalData.map(d => d.dnaPct),
+                      dnaPctForecast,
+                      '#dc2626',
+                      'DNA %'
+                    )}
+                    options={sparklineOptions}
+                  />
+                </div>
+              </Card>
+
+              {/* Same Day % Chart */}
+              <Card>
+                <h3 className="text-sm font-bold text-slate-700 mb-3">Same Day Booking % Forecast</h3>
+                <div style={{ height: '200px' }}>
+                  <Line
+                    data={buildSparkline(
+                      historicalData.map(d => d.sameDayPct),
+                      sameDayPctForecast,
+                      '#0d9488',
+                      'Same Day %'
+                    )}
+                    options={sparklineOptions}
+                  />
+                </div>
+              </Card>
+            </div>
+
+            {/* 3-Month Forecast Table */}
+            <Card>
+              <h3 className="text-sm font-bold text-slate-700 mb-3">3-Month Forecast Details</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-slate-50 border-b">
+                      <th className="p-2 text-left text-slate-600">Month</th>
+                      <th className="p-2 text-right text-blue-600">GP/Day %</th>
+                      <th className="p-2 text-right text-indigo-600">GP+OC/Day %</th>
+                      {missedCallForecast && <th className="p-2 text-right text-amber-600">Missed %</th>}
+                      {ocRateForecast && <th className="p-2 text-right text-green-600">OC/1000</th>}
+                      <th className="p-2 text-right text-red-600">DNA %</th>
+                      <th className="p-2 text-right text-teal-600">Same Day %</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {futureLabels.map((label, idx) => (
+                      <tr key={label} className="border-b border-slate-100 hover:bg-slate-50">
+                        <td className="p-2 font-medium text-slate-700">{label}</td>
+                        <td className="p-2 text-right text-blue-700 font-medium">{gpApptDayForecast.forecasts[idx]?.value.toFixed(2)}%</td>
+                        <td className="p-2 text-right text-indigo-700 font-medium">{gpApptOcDayForecast.forecasts[idx]?.value.toFixed(2)}%</td>
+                        {missedCallForecast && <td className="p-2 text-right text-amber-700 font-medium">{missedCallForecast.forecasts[idx]?.value.toFixed(1)}%</td>}
+                        {ocRateForecast && <td className="p-2 text-right text-green-700 font-medium">{ocRateForecast.forecasts[idx]?.value.toFixed(1)}</td>}
+                        <td className="p-2 text-right text-red-700 font-medium">{dnaPctForecast.forecasts[idx]?.value.toFixed(1)}%</td>
+                        <td className="p-2 text-right text-teal-700 font-medium">{sameDayPctForecast.forecasts[idx]?.value.toFixed(1)}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-xs text-slate-400 mt-3">
+                Forecasts use linear regression on available historical data. R² indicates prediction confidence (higher = more reliable).
+              </p>
+            </Card>
+
+            {/* About this data */}
+            <Card className="bg-slate-50 border-slate-200">
+              <div className="flex items-start gap-3">
+                <Info className="text-slate-400 mt-0.5 flex-shrink-0" size={16} />
+                <div className="text-xs text-slate-500 space-y-1">
+                  <p><strong>About forecasting:</strong> Predictions are generated using linear regression on historical monthly data. The R² value indicates how well the trend line fits the historical data - higher values suggest more reliable predictions.</p>
+                  <p>Forecasts should be used as directional indicators, not precise predictions. Seasonal patterns, policy changes, and external factors may cause actual values to differ significantly.</p>
+                </div>
+              </div>
+            </Card>
+          </div>
+        );
+      })()}
 
       {/* ========================================
           COMPARE TAB
@@ -3061,13 +3914,33 @@ const NationalDemandCapacity = ({
           <Card>
             <div className="flex items-center justify-between mb-4">
               <h4 className="font-bold text-slate-700">Add Practices to Compare</h4>
-              <button
-                onClick={() => setComparePractices([])}
-                className="text-xs font-medium text-slate-600 hover:text-slate-800"
-                disabled={comparePractices.length === 0}
-              >
-                Clear All
-              </button>
+              <div className="flex items-center gap-2">
+                {selectedPractice && appointmentData[selectedMonth]?.practices && (
+                  <button
+                    onClick={() => {
+                      const similar = findSimilarPractices(
+                        selectedPractice,
+                        appointmentData[selectedMonth].practices,
+                        5
+                      );
+                      if (similar.length > 0) {
+                        setComparePractices(similar);
+                      }
+                    }}
+                    className="px-3 py-1.5 text-xs font-medium text-orange-700 bg-orange-50 border border-orange-200 rounded-lg hover:bg-orange-100 flex items-center gap-1.5"
+                  >
+                    <Users size={14} />
+                    Compare to Similar
+                  </button>
+                )}
+                <button
+                  onClick={() => setComparePractices([])}
+                  className="text-xs font-medium text-slate-600 hover:text-slate-800"
+                  disabled={comparePractices.length === 0}
+                >
+                  Clear All
+                </button>
+              </div>
             </div>
 
             <div className="flex gap-2 mb-4">

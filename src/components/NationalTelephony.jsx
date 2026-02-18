@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, ArrowUp, ArrowDown, Phone, Trophy, TrendingUp, ExternalLink, Info, Star, ChevronDown, ChevronUp, TrendingDown, Minus, Clock, BarChart3, Users, Activity } from 'lucide-react';
+import { Search, ArrowUp, ArrowDown, Phone, Trophy, TrendingUp, ExternalLink, Info, Star, ChevronDown, ChevronUp, TrendingDown, Minus, Clock, BarChart3, Users, Activity, Globe } from 'lucide-react';
 import { Line, Bar } from 'react-chartjs-2';
 import { trackEvent } from '../firebase/config';
 import {
@@ -15,6 +15,7 @@ import {
   Legend,
 } from 'chart.js';
 import Card from './ui/Card';
+import PracticeCentricLeaderboard from './ui/PracticeCentricLeaderboard';
 import { NHS_GREEN, NHS_RED } from '../constants/colors';
 import { parseNationalTelephonyData, getAverageWaitTimeBin, getAverageDurationBin } from '../utils/parseNationalTelephony';
 import {
@@ -869,24 +870,30 @@ const NationalTelephony = ({
         return (
           <>
             {/* National Averages */}
-            <Card className="bg-gradient-to-br from-slate-50 to-white border-slate-300">
-              <h3 className="text-lg font-bold text-slate-800 mb-4">National Averages</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                <div>
-                  <p className="text-xs text-slate-600 uppercase">Total Inbound Calls</p>
-                  <p className="text-xl font-bold text-slate-800">{avgInboundCalls.toLocaleString()}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-600 uppercase">Abandoned (IVR)</p>
-                  <p className="text-xl font-bold text-slate-800">{(data.national.endedDuringIVRPct * 100).toFixed(1)}%</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-600 uppercase">Missed</p>
-                  <p className="text-xl font-bold text-slate-800">{(data.national.missedPct * 100).toFixed(1)}%</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-600 uppercase">Callback Requested</p>
-                  <p className="text-xl font-bold text-slate-800">{(data.national.callbackRequestedPct * 100).toFixed(1)}%</p>
+            <Card className="bg-gradient-to-br from-slate-100 via-slate-50 to-white border-slate-300 border-l-4 border-l-slate-500 relative overflow-hidden">
+              <Globe size={120} className="absolute -right-4 -bottom-4 text-slate-200 opacity-40" />
+              <div className="relative z-10">
+                <h3 className="text-xs font-bold text-slate-500 mb-4 tracking-wider uppercase flex items-center gap-2">
+                  <Globe size={16} />
+                  National Averages
+                </h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                  <div>
+                    <p className="text-xs text-slate-500 uppercase">Total Inbound Calls</p>
+                    <p className="text-xl font-bold text-slate-700">{avgInboundCalls.toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500 uppercase">Abandoned (IVR)</p>
+                    <p className="text-xl font-bold text-slate-700">{(data.national.endedDuringIVRPct * 100).toFixed(1)}%</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500 uppercase">Missed</p>
+                    <p className="text-xl font-bold text-slate-700">{(data.national.missedPct * 100).toFixed(1)}%</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500 uppercase">Callback Requested</p>
+                    <p className="text-xl font-bold text-slate-700">{(data.national.callbackRequestedPct * 100).toFixed(1)}%</p>
+                  </div>
                 </div>
               </div>
             </Card>
@@ -1637,50 +1644,20 @@ const NationalTelephony = ({
                     </div>
                   </Card>
 
-                  {/* Top 10 PCNs Nationally */}
-                  <Card>
-                    <h3 className="text-lg font-bold text-slate-800 mb-4">Top 10 PCNs Nationally (Missed Calls %)</h3>
-                    <p className="text-xs text-slate-500 mb-3">Excluding single-practice PCNs</p>
-                    <div className="overflow-x-auto -mx-4 sm:mx-0">
-                      <div className="inline-block min-w-full align-middle">
-                        <div className="overflow-hidden sm:rounded-lg">
-                          <table className="min-w-full text-sm">
-                        <thead className="bg-slate-100 border-b-2 border-slate-200">
-                          <tr>
-                            <th className="text-left p-3 font-semibold text-slate-700">Rank</th>
-                            <th className="text-left p-3 font-semibold text-slate-700">PCN</th>
-                            <th className="text-left p-3 font-semibold text-slate-700">ICB</th>
-                            <th className="text-right p-3 font-semibold text-slate-700">Avg Missed %</th>
-                            <th className="text-right p-3 font-semibold text-slate-700">Practices</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {pcnAverages.filter(pcn => pcn.practiceCount > 1).slice(0, 10).map((pcn, idx) => {
-                            const isUserPCN = pcn.pcnCode === selectedPractice.pcnCode;
-                            return (
-                              <tr
-                                key={pcn.pcnCode}
-                                className={`border-b border-slate-100 ${isUserPCN ? 'bg-cyan-100 font-semibold' : 'hover:bg-slate-50'}`}
-                              >
-                                <td className="p-3">{idx + 1}</td>
-                                <td className="p-3">
-                                  <div className="font-medium">{pcn.pcnName}</div>
-                                  <div className="text-xs text-slate-500">{pcn.pcnCode}</div>
-                                </td>
-                                <td className="p-3 text-slate-600">{pcn.icbName}</td>
-                                <td className="p-3 text-right text-green-600 font-medium">
-                                  {(pcn.avgMissedPct * 100).toFixed(1)}%
-                                </td>
-                                <td className="p-3 text-right">{pcn.practiceCount}</td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    </div>
-                  </Card>
+                  {/* PCNs Nationally - Practice Centric */}
+                  <PracticeCentricLeaderboard
+                    title="PCNs Nationally (Lowest Missed Calls %)"
+                    rankedItems={pcnAverages.filter(pcn => pcn.practiceCount > 1)}
+                    selectedOdsCode={selectedPractice.pcnCode}
+                    odsCodeAccessor="pcnCode"
+                    colorTheme="blue"
+                    columns={[
+                      { key: 'pcn', header: 'PCN', render: (p) => (<><div className="font-medium">{p.pcnName}</div><div className="text-xs text-slate-500">{p.pcnCode}</div></>), truncate: true },
+                      { key: 'icbName', header: 'ICB', render: (p) => <span className="text-xs text-slate-600">{p.icbName}</span> },
+                      { key: 'avgMissedPct', header: 'Avg Missed %', align: 'right', render: (p) => <span className="text-green-600 font-medium">{(p.avgMissedPct * 100).toFixed(1)}%</span> },
+                      { key: 'practiceCount', header: 'Practices', align: 'right' },
+                    ]}
+                  />
 
                   {/* Top PCNs in Same ICB */}
                   <Card>
@@ -1745,46 +1722,19 @@ const NationalTelephony = ({
                 .sort((a, b) => a.missedPer1000 - b.missedPer1000);
 
               return (
-                <Card className="bg-gradient-to-br from-violet-50 to-white border-violet-200">
-                  <h3 className="text-lg font-bold text-violet-900 mb-4">👥 Top 20 Practices Nationally (Per 1000 Patients)</h3>
-                  <p className="text-sm text-slate-500 mb-4">Standardized by patient list size - lowest missed calls per 1000 registered patients</p>
-                  <div className="overflow-x-auto -mx-4 sm:mx-0">
-                    <div className="inline-block min-w-full align-middle">
-                      <div className="overflow-hidden sm:rounded-lg">
-                        <table className="min-w-full text-sm">
-                          <thead className="bg-violet-100 border-b-2 border-violet-200">
-                            <tr>
-                              <th className="text-left p-3 font-semibold text-violet-900">Rank</th>
-                              <th className="text-left p-3 font-semibold text-violet-900">Practice</th>
-                              <th className="text-left p-3 font-semibold text-violet-900">PCN</th>
-                              <th className="text-right p-3 font-semibold text-violet-900">List Size</th>
-                              <th className="text-right p-3 font-semibold text-violet-900">Missed/1000</th>
-                              <th className="text-right p-3 font-semibold text-violet-900">Missed %</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {practicesWithPop.slice(0, 20).map((practice, idx) => {
-                              const isSelected = practice.odsCode === selectedPractice.odsCode;
-                              return (
-                                <tr key={practice.odsCode} className={`border-b border-violet-100 ${isSelected ? 'bg-violet-200 font-semibold' : 'hover:bg-violet-50'}`}>
-                                  <td className="p-3 font-medium">{idx + 1}</td>
-                                  <td className="p-3">
-                                    <div className="font-medium">{practice.gpName}</div>
-                                    <div className="text-xs text-slate-500">{practice.odsCode}</div>
-                                  </td>
-                                  <td className="p-3 text-slate-600 text-xs">{practice.pcnName}</td>
-                                  <td className="p-3 text-right">{practice.population.toLocaleString()}</td>
-                                  <td className="p-3 text-right text-violet-600 font-medium">{practice.missedPer1000.toFixed(1)}</td>
-                                  <td className="p-3 text-right">{(practice.missedPct * 100).toFixed(1)}%</td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  </div>
-                </Card>
+                <PracticeCentricLeaderboard
+                  title="Practices Nationally (Lowest Missed Calls per 1000)"
+                  rankedItems={practicesWithPop}
+                  selectedOdsCode={selectedPractice.odsCode}
+                  colorTheme="indigo"
+                  columns={[
+                    { key: 'practice', header: 'Practice', render: (p) => (<><div className="font-medium">{p.gpName}</div><div className="text-xs text-slate-500">{p.odsCode}</div></>), truncate: true },
+                    { key: 'pcnName', header: 'PCN', render: (p) => <span className="text-xs text-slate-600">{p.pcnName}</span> },
+                    { key: 'population', header: 'List Size', align: 'right', render: (p) => p.population.toLocaleString() },
+                    { key: 'missedPer1000', header: 'Missed/1000', align: 'right', render: (p) => <span className="text-indigo-600 font-medium">{p.missedPer1000.toFixed(1)}</span> },
+                    { key: 'missedPct', header: 'Missed %', align: 'right', render: (p) => `${(p.missedPct * 100).toFixed(1)}%` },
+                  ]}
+                />
               );
             })()}
               </>
@@ -1839,11 +1789,9 @@ const NationalTelephony = ({
               // Sort by calls per 1000 (for demand ranking)
               const rankedByCallsPer1000 = [...practicesPer1000Ranked].sort((a, b) => b.callsPer1000 - a.callsPer1000);
 
-              // Top 20 best performers (lowest missed per 1000)
-              const top20BestPer1000 = rankedByMissedPer1000.slice(0, 20);
-
-              // Top 20 highest demand (most calls per 1000)
-              const top20HighestDemand = rankedByCallsPer1000.slice(0, 20);
+              // Full ranked lists for practice-centric leaderboards
+              const allBestPer1000 = rankedByMissedPer1000;
+              const allHighestDemand = rankedByCallsPer1000;
 
               return (
                 <>
@@ -1937,162 +1885,68 @@ const NationalTelephony = ({
                     </>
                   )}
 
-                  {/* Top 20 Best Performers (Lowest Missed per 1000) */}
-                  <Card>
-                    <h3 className="text-lg font-bold text-slate-800 mb-4">🏆 Top 20 Practices (Lowest Missed Calls per 1000 Patients)</h3>
-                    <p className="text-sm text-slate-500 mb-4">Practices with the fewest missed calls relative to their patient list size</p>
-                    <div className="overflow-x-auto -mx-4 sm:mx-0">
-                      <div className="inline-block min-w-full align-middle">
-                        <div className="overflow-hidden sm:rounded-lg">
-                          <table className="min-w-full text-sm">
-                            <thead className="bg-slate-100 border-b-2 border-slate-200">
-                              <tr>
-                                <th className="text-left p-3 font-semibold text-slate-700">Rank</th>
-                                <th className="text-left p-3 font-semibold text-slate-700">Practice</th>
-                                <th className="text-left p-3 font-semibold text-slate-700">PCN</th>
-                                <th className="text-right p-3 font-semibold text-slate-700">List Size</th>
-                                <th className="text-right p-3 font-semibold text-slate-700">Missed/1000</th>
-                                <th className="text-right p-3 font-semibold text-slate-700">Calls/1000</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {top20BestPer1000.map((practice, idx) => {
-                                const isSelected = practice.odsCode === selectedPractice.odsCode;
-                                return (
-                                  <tr key={practice.odsCode} className={`border-b border-slate-100 ${isSelected ? 'bg-blue-100 font-semibold' : 'hover:bg-slate-50'}`}>
-                                    <td className="p-3 font-medium">{idx + 1}</td>
-                                    <td className="p-3">
-                                      <div className="font-medium">{practice.gpName}</div>
-                                      <div className="text-xs text-slate-500">{practice.odsCode}</div>
-                                    </td>
-                                    <td className="p-3 text-slate-600 text-xs">{practice.pcnName}</td>
-                                    <td className="p-3 text-right">{practice.population.toLocaleString()}</td>
-                                    <td className="p-3 text-right text-green-600 font-medium">{practice.missedPer1000.toFixed(1)}</td>
-                                    <td className="p-3 text-right">{practice.callsPer1000.toFixed(1)}</td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    </div>
-                  </Card>
+                  <PracticeCentricLeaderboard
+                    title="Practices (Lowest Missed Calls per 1000 Patients)"
+                    rankedItems={allBestPer1000}
+                    selectedOdsCode={selectedPractice.odsCode}
+                    colorTheme="blue"
+                    columns={[
+                      { key: 'practice', header: 'Practice', render: (p) => (<><div className="font-medium">{p.gpName}</div><div className="text-xs text-slate-500">{p.odsCode}</div></>), truncate: true },
+                      { key: 'pcnName', header: 'PCN', render: (p) => <span className="text-xs text-slate-600">{p.pcnName}</span> },
+                      { key: 'population', header: 'List Size', align: 'right', render: (p) => p.population.toLocaleString() },
+                      { key: 'missedPer1000', header: 'Missed/1000', align: 'right', render: (p) => <span className="text-green-600 font-medium">{p.missedPer1000.toFixed(1)}</span> },
+                      { key: 'callsPer1000', header: 'Calls/1000', align: 'right', render: (p) => p.callsPer1000.toFixed(1) },
+                    ]}
+                  />
 
-                  {/* Top 20 Highest Demand (Most Calls per 1000) */}
-                  <Card className="bg-gradient-to-br from-orange-50 to-white border-orange-200">
-                    <h3 className="text-lg font-bold text-orange-900 mb-4">🔥 Top 20 Highest Demand Practices (Calls per 1000 Patients)</h3>
-                    <p className="text-sm text-slate-500 mb-4">Practices receiving the most calls relative to their patient list size</p>
-                    <div className="overflow-x-auto -mx-4 sm:mx-0">
-                      <div className="inline-block min-w-full align-middle">
-                        <div className="overflow-hidden sm:rounded-lg">
-                          <table className="min-w-full text-sm">
-                            <thead className="bg-orange-100 border-b-2 border-orange-200">
-                              <tr>
-                                <th className="text-left p-3 font-semibold text-orange-900">Rank</th>
-                                <th className="text-left p-3 font-semibold text-orange-900">Practice</th>
-                                <th className="text-left p-3 font-semibold text-orange-900">PCN</th>
-                                <th className="text-right p-3 font-semibold text-orange-900">List Size</th>
-                                <th className="text-right p-3 font-semibold text-orange-900">Calls/1000</th>
-                                <th className="text-right p-3 font-semibold text-orange-900">Missed %</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {top20HighestDemand.map((practice, idx) => {
-                                const isSelected = practice.odsCode === selectedPractice.odsCode;
-                                return (
-                                  <tr key={practice.odsCode} className={`border-b border-orange-100 ${isSelected ? 'bg-orange-200 font-semibold' : 'hover:bg-orange-50'}`}>
-                                    <td className="p-3 font-medium">{idx + 1}</td>
-                                    <td className="p-3">
-                                      <div className="font-medium">{practice.gpName}</div>
-                                      <div className="text-xs text-slate-500">{practice.odsCode}</div>
-                                    </td>
-                                    <td className="p-3 text-slate-600 text-xs">{practice.pcnName}</td>
-                                    <td className="p-3 text-right">{practice.population.toLocaleString()}</td>
-                                    <td className="p-3 text-right text-orange-600 font-bold">{practice.callsPer1000.toFixed(1)}</td>
-                                    <td className="p-3 text-right">{(practice.missedPct * 100).toFixed(1)}%</td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    </div>
-                  </Card>
+                  <PracticeCentricLeaderboard
+                    title="Highest Demand Practices (Calls per 1000 Patients)"
+                    rankedItems={allHighestDemand}
+                    selectedOdsCode={selectedPractice.odsCode}
+                    colorTheme="amber"
+                    columns={[
+                      { key: 'practice', header: 'Practice', render: (p) => (<><div className="font-medium">{p.gpName}</div><div className="text-xs text-slate-500">{p.odsCode}</div></>), truncate: true },
+                      { key: 'pcnName', header: 'PCN', render: (p) => <span className="text-xs text-slate-600">{p.pcnName}</span> },
+                      { key: 'population', header: 'List Size', align: 'right', render: (p) => p.population.toLocaleString() },
+                      { key: 'callsPer1000', header: 'Calls/1000', align: 'right', render: (p) => <span className="text-amber-600 font-bold">{p.callsPer1000.toFixed(1)}</span> },
+                      { key: 'missedPct', header: 'Missed %', align: 'right', render: (p) => `${(p.missedPct * 100).toFixed(1)}%` },
+                    ]}
+                  />
 
                   {/* Best PCNs per 1000 Patients */}
                   {(() => {
-                    // Calculate PCN averages per 1000 patients
                     const pcnPer1000Data = {};
-
                     practicesPer1000Ranked.forEach(practice => {
                       if (!pcnPer1000Data[practice.pcnCode]) {
                         pcnPer1000Data[practice.pcnCode] = {
-                          pcnCode: practice.pcnCode,
-                          pcnName: practice.pcnName,
-                          icbName: practice.icbName,
-                          totalMissed: 0,
-                          totalPopulation: 0,
-                          practiceCount: 0
+                          pcnCode: practice.pcnCode, pcnName: practice.pcnName, icbName: practice.icbName,
+                          totalMissed: 0, totalPopulation: 0, practiceCount: 0
                         };
                       }
                       pcnPer1000Data[practice.pcnCode].totalMissed += practice.missed;
                       pcnPer1000Data[practice.pcnCode].totalPopulation += practice.population;
                       pcnPer1000Data[practice.pcnCode].practiceCount += 1;
                     });
-
                     const pcnsPer1000 = Object.values(pcnPer1000Data)
                       .filter(pcn => pcn.practiceCount > 1 && pcn.totalPopulation > 0)
-                      .map(pcn => ({
-                        ...pcn,
-                        missedPer1000: (pcn.totalMissed / pcn.totalPopulation) * 1000
-                      }))
+                      .map(pcn => ({ ...pcn, missedPer1000: (pcn.totalMissed / pcn.totalPopulation) * 1000 }))
                       .sort((a, b) => a.missedPer1000 - b.missedPer1000);
 
-                    const isUserPCNInTop = pcnsPer1000.slice(0, 20).some(pcn => pcn.pcnCode === selectedPractice.pcnCode);
-
                     return (
-                      <Card className="bg-gradient-to-br from-cyan-50 to-white border-cyan-200">
-                        <h3 className="text-lg font-bold text-cyan-900 mb-4">🏆 Top 20 PCNs (Lowest Missed Calls per 1000 Patients)</h3>
-                        <p className="text-sm text-slate-500 mb-4">PCNs with the best performance when standardized by patient population (multi-practice PCNs only)</p>
-                        <div className="overflow-x-auto -mx-4 sm:mx-0">
-                          <div className="inline-block min-w-full align-middle">
-                            <div className="overflow-hidden sm:rounded-lg">
-                              <table className="min-w-full text-sm">
-                                <thead className="bg-cyan-100 border-b-2 border-cyan-200">
-                                  <tr>
-                                    <th className="text-left p-3 font-semibold text-cyan-900">Rank</th>
-                                    <th className="text-left p-3 font-semibold text-cyan-900">PCN</th>
-                                    <th className="text-left p-3 font-semibold text-cyan-900">ICB</th>
-                                    <th className="text-right p-3 font-semibold text-cyan-900">Total Patients</th>
-                                    <th className="text-right p-3 font-semibold text-cyan-900">Missed/1000</th>
-                                    <th className="text-right p-3 font-semibold text-cyan-900">Practices</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {pcnsPer1000.slice(0, 20).map((pcn, idx) => {
-                                    const isUserPCN = pcn.pcnCode === selectedPractice.pcnCode;
-                                    return (
-                                      <tr key={pcn.pcnCode} className={`border-b border-cyan-100 ${isUserPCN ? 'bg-cyan-200 font-semibold' : 'hover:bg-cyan-50'}`}>
-                                        <td className="p-3 font-medium">{idx + 1}</td>
-                                        <td className="p-3">
-                                          <div className="font-medium">{pcn.pcnName}</div>
-                                          <div className="text-xs text-slate-500">{pcn.pcnCode}</div>
-                                        </td>
-                                        <td className="p-3 text-slate-600 text-xs">{pcn.icbName}</td>
-                                        <td className="p-3 text-right">{pcn.totalPopulation.toLocaleString()}</td>
-                                        <td className="p-3 text-right text-cyan-600 font-medium">{pcn.missedPer1000.toFixed(1)}</td>
-                                        <td className="p-3 text-right">{pcn.practiceCount}</td>
-                                      </tr>
-                                    );
-                                  })}
-                                </tbody>
-                              </table>
-                            </div>
-                          </div>
-                        </div>
-                      </Card>
+                      <PracticeCentricLeaderboard
+                        title="PCNs (Lowest Missed Calls per 1000 Patients)"
+                        rankedItems={pcnsPer1000}
+                        selectedOdsCode={selectedPractice.pcnCode}
+                        odsCodeAccessor="pcnCode"
+                        colorTheme="blue"
+                        columns={[
+                          { key: 'pcn', header: 'PCN', render: (p) => (<><div className="font-medium">{p.pcnName}</div><div className="text-xs text-slate-500">{p.pcnCode}</div></>), truncate: true },
+                          { key: 'icbName', header: 'ICB', render: (p) => <span className="text-xs text-slate-600">{p.icbName}</span> },
+                          { key: 'totalPopulation', header: 'Total Patients', align: 'right', render: (p) => p.totalPopulation.toLocaleString() },
+                          { key: 'missedPer1000', header: 'Missed/1000', align: 'right', render: (p) => <span className="text-blue-600 font-medium">{p.missedPer1000.toFixed(1)}</span> },
+                          { key: 'practiceCount', header: 'Practices', align: 'right' },
+                        ]}
+                      />
                     );
                   })()}
                 </>
@@ -2169,103 +2023,32 @@ const NationalTelephony = ({
                     </div>
                   </Card>
 
-                  {/* Top 20 Practices - Calls Saved */}
-                  <Card className="bg-gradient-to-br from-indigo-50 to-white border-indigo-200">
-                    <h3 className="text-lg font-bold text-indigo-900 mb-4">🏆 Top 20 Practices by Impact (Calls Saved)</h3>
-                    <p className="text-xs text-indigo-600 mb-3">Volume-weighted metric - practices with highest positive impact</p>
-                    <div className="overflow-x-auto -mx-4 sm:mx-0">
-                      <div className="inline-block min-w-full align-middle">
-                        <div className="overflow-hidden sm:rounded-lg">
-                          <table className="min-w-full text-sm">
-                        <thead className="bg-indigo-100 border-b-2 border-indigo-300">
-                          <tr>
-                            <th className="text-left p-3 font-semibold text-indigo-900">Rank</th>
-                            <th className="text-left p-3 font-semibold text-indigo-900">Practice</th>
-                            <th className="text-left p-3 font-semibold text-indigo-900">PCN</th>
-                            <th className="text-right p-3 font-semibold text-indigo-900">Calls Saved</th>
-                            <th className="text-right p-3 font-semibold text-indigo-900">Total Calls</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {callsSavedRanking.practices.slice(0, 20).map((practice, idx) => {
-                            const isSelected = practice.odsCode === selectedPractice.odsCode;
-                            return (
-                              <tr
-                                key={practice.odsCode}
-                                className={`border-b border-indigo-100 ${isSelected ? 'bg-indigo-200 font-semibold' : 'hover:bg-indigo-50'}`}
-                              >
-                                <td className="p-3">{idx + 1}</td>
-                                <td className="p-3">
-                                  <div className="font-medium">{practice.gpName}</div>
-                                  <div className="text-xs text-slate-500">{practice.odsCode}</div>
-                                </td>
-                                <td className="p-3 text-slate-600 text-xs">{practice.pcnName}</td>
-                                <td className="p-3 text-right font-bold">
-                                  <span className={practice.callsSaved >= 0 ? 'text-teal-600' : 'text-red-600'}>
-                                    {practice.callsSaved >= 0 ? '+' : ''}{Math.round(practice.callsSaved).toLocaleString()}
-                                  </span>
-                                </td>
-                                <td className="p-3 text-right text-slate-600">{practice.inboundCalls.toLocaleString()}</td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    </div>
-                  </Card>
+                  <PracticeCentricLeaderboard
+                    title="Practices by Impact (Calls Saved)"
+                    rankedItems={callsSavedRanking.practices}
+                    selectedOdsCode={selectedPractice.odsCode}
+                    colorTheme="indigo"
+                    columns={[
+                      { key: 'practice', header: 'Practice', render: (p) => (<><div className="font-medium">{p.gpName}</div><div className="text-xs text-slate-500">{p.odsCode}</div></>), truncate: true },
+                      { key: 'pcnName', header: 'PCN', render: (p) => <span className="text-xs text-slate-600">{p.pcnName}</span> },
+                      { key: 'callsSaved', header: 'Calls Saved', align: 'right', render: (p) => <span className={`font-bold ${p.callsSaved >= 0 ? 'text-teal-600' : 'text-red-600'}`}>{p.callsSaved >= 0 ? '+' : ''}{Math.round(p.callsSaved).toLocaleString()}</span> },
+                      { key: 'inboundCalls', header: 'Total Calls', align: 'right', render: (p) => p.inboundCalls.toLocaleString() },
+                    ]}
+                  />
 
-                  {/* Top 20 PCNs - Calls Saved */}
-                  <Card className="bg-gradient-to-br from-violet-50 to-white border-violet-200">
-                    <h3 className="text-lg font-bold text-violet-900 mb-4">🏆 Top 20 PCNs by Impact (Calls Saved)</h3>
-                    <p className="text-xs text-violet-600 mb-3">Volume-weighted metric - PCNs with highest positive impact (excluding single-practice PCNs)</p>
-                    <div className="overflow-x-auto -mx-4 sm:mx-0">
-                      <div className="inline-block min-w-full align-middle">
-                        <div className="overflow-hidden sm:rounded-lg">
-                          <table className="min-w-full text-sm">
-                        <thead className="bg-violet-100 border-b-2 border-violet-300">
-                          <tr>
-                            <th className="text-left p-3 font-semibold text-violet-900">Rank</th>
-                            <th className="text-left p-3 font-semibold text-violet-900">PCN</th>
-                            <th className="text-left p-3 font-semibold text-violet-900">ICB</th>
-                            <th className="text-right p-3 font-semibold text-violet-900">Calls Saved</th>
-                            <th className="text-right p-3 font-semibold text-violet-900">Practices</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {pcnAverages
-                            .filter(pcn => pcn.practiceCount > 1)
-                            .sort((a, b) => b.callsSaved - a.callsSaved)
-                            .slice(0, 20)
-                            .map((pcn, idx) => {
-                              const isUserPCN = pcn.pcnCode === selectedPractice.pcnCode;
-                              return (
-                                <tr
-                                  key={pcn.pcnCode}
-                                  className={`border-b border-violet-100 ${isUserPCN ? 'bg-violet-200 font-semibold' : 'hover:bg-violet-50'}`}
-                                >
-                                  <td className="p-3">{idx + 1}</td>
-                                  <td className="p-3">
-                                    <div className="font-medium">{pcn.pcnName}</div>
-                                    <div className="text-xs text-slate-500">{pcn.pcnCode}</div>
-                                  </td>
-                                  <td className="p-3 text-slate-600">{pcn.icbName}</td>
-                                  <td className="p-3 text-right font-bold">
-                                    <span className={pcn.callsSaved >= 0 ? 'text-teal-600' : 'text-red-600'}>
-                                      {pcn.callsSaved >= 0 ? '+' : ''}{Math.round(pcn.callsSaved).toLocaleString()}
-                                    </span>
-                                  </td>
-                                  <td className="p-3 text-right text-slate-600">{pcn.practiceCount}</td>
-                                </tr>
-                              );
-                            })}
-                        </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    </div>
-                  </Card>
+                  <PracticeCentricLeaderboard
+                    title="PCNs by Impact (Calls Saved)"
+                    rankedItems={pcnAverages.filter(pcn => pcn.practiceCount > 1).sort((a, b) => b.callsSaved - a.callsSaved)}
+                    selectedOdsCode={selectedPractice.pcnCode}
+                    odsCodeAccessor="pcnCode"
+                    colorTheme="indigo"
+                    columns={[
+                      { key: 'pcn', header: 'PCN', render: (p) => (<><div className="font-medium">{p.pcnName}</div><div className="text-xs text-slate-500">{p.pcnCode}</div></>), truncate: true },
+                      { key: 'icbName', header: 'ICB', render: (p) => <span className="text-xs text-slate-600">{p.icbName}</span> },
+                      { key: 'callsSaved', header: 'Calls Saved', align: 'right', render: (p) => <span className={`font-bold ${p.callsSaved >= 0 ? 'text-teal-600' : 'text-red-600'}`}>{p.callsSaved >= 0 ? '+' : ''}{Math.round(p.callsSaved).toLocaleString()}</span> },
+                      { key: 'practiceCount', header: 'Practices', align: 'right' },
+                    ]}
+                  />
                 </>
               );
             })()}

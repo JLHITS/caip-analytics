@@ -293,3 +293,46 @@ export const extractChartData = (practices, metric, sortedMonths) => {
     };
   });
 };
+
+/**
+ * Find practices similar to the selected practice based on population size
+ * and geographic proximity (via ODS code prefix matching).
+ * @param {Object} selectedPractice - The practice to find similar ones for
+ * @param {Array} allPractices - All available practices
+ * @param {number} count - Number of similar practices to return (default 5)
+ * @returns {Array} Array of similar practices sorted by similarity score
+ */
+export const findSimilarPractices = (selectedPractice, allPractices, count = 5) => {
+  if (!selectedPractice || !allPractices?.length) return [];
+
+  const selectedOds = selectedPractice.odsCode || '';
+  const selectedPop = selectedPractice.listSize || 0;
+
+  if (!selectedPop || !selectedOds) return [];
+
+  const candidates = allPractices.filter(p =>
+    p.odsCode !== selectedOds && (p.listSize || 0) > 0
+  );
+
+  const scored = candidates.map(p => {
+    const pop = p.listSize || 0;
+
+    // Population similarity: 1 / (1 + |pop_a - pop_b| / pop_a)
+    const popScore = 1 / (1 + Math.abs(selectedPop - pop) / selectedPop);
+
+    // Geographic proximity via ODS code prefix
+    const ods = p.odsCode || '';
+    let geoScore = 0;
+    if (selectedOds.slice(0, 3) === ods.slice(0, 3)) geoScore = 1.0;
+    else if (selectedOds.slice(0, 2) === ods.slice(0, 2)) geoScore = 0.7;
+    else if (selectedOds.charAt(0) === ods.charAt(0)) geoScore = 0.3;
+
+    // Combined: 60% population, 40% geography
+    const combinedScore = 0.6 * popScore + 0.4 * geoScore;
+
+    return { ...p, similarityScore: combinedScore };
+  });
+
+  scored.sort((a, b) => b.similarityScore - a.similarityScore);
+  return scored.slice(0, count);
+};

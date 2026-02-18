@@ -33,15 +33,16 @@ import {
 import { loadWorkforceData, loadWorkforceDefinitions } from '../data/dataLoader';
 import { commonOptions, donutOptions } from '../constants/chartConfigs';
 import { NHS_BLUE, NHS_GREEN, NHS_AMBER, NHS_RED, NHS_GREY, NHS_AQUA } from '../constants/colors';
+import { getDaysInMonth } from '../utils/demandCapacityMetrics';
 
 import workforceCsvUrl from '../assets/workforce/1 General Practice – November 2025 Practice Level - Detailed.csv?url';
 import workforceDefinitionsUrl from '../assets/workforce/0 General Practice Detailed Practice-Level CSV. Overall Definitions.xlsx?url';
 
 const TAB_OPTIONS = [
   { id: 'overview', label: 'Overview', icon: BarChart3 },
+  { id: 'capacity', label: 'Capacity & Utilisation', icon: SlidersHorizontal },
   { id: 'breakdown', label: 'Breakdown', icon: Table2 },
   { id: 'demand', label: 'Workforce vs Demand', icon: TrendingUp },
-  { id: 'capacity', label: 'Capacity & Utilisation', icon: SlidersHorizontal },
   { id: 'risk', label: 'Risk & Planning', icon: AlertTriangle },
 ];
 
@@ -235,10 +236,50 @@ const NationalWorkforce = ({
   const [dictionaryFilter, setDictionaryFilter] = useState('');
   const [breakdownSort, setBreakdownSort] = useState({ field: 'wte', direction: 'desc' });
   const [breakdownFilter, setBreakdownFilter] = useState('');
-  const [assumptions, setAssumptions] = useState(() => ({
-    workingDaysPerMonth: defaultCapacityAssumptions.workingDaysPerMonth,
-    appointmentsPerWtePerDay: { ...defaultCapacityAssumptions.appointmentsPerWtePerDay },
-  }));
+  const [assumptions, setAssumptions] = useState(() => {
+    // Try to load saved config from localStorage
+    if (selectedPractice?.odsCode) {
+      try {
+        const saved = localStorage.getItem(`caip-capacity-${selectedPractice.odsCode}`);
+        if (saved) return JSON.parse(saved);
+      } catch (e) { /* ignore */ }
+    }
+    return {
+      workingDaysPerMonth: null, // null = auto-calculate
+      appointmentsPerDay: { ...DEFAULT_APPOINTMENTS_PER_WTE_DAY },
+    };
+  });
+
+  // autoWorkingDays and effectiveWorkingDays defined after effectiveMonth (below)
+
+  // Load capacity config when practice changes
+  useEffect(() => {
+    if (!selectedPractice?.odsCode) return;
+    try {
+      const saved = localStorage.getItem(`caip-capacity-${selectedPractice.odsCode}`);
+      if (saved) {
+        setAssumptions(JSON.parse(saved));
+      } else {
+        setAssumptions({
+          workingDaysPerMonth: null,
+          appointmentsPerDay: { ...DEFAULT_APPOINTMENTS_PER_WTE_DAY },
+        });
+      }
+    } catch (e) {
+      setAssumptions({
+        workingDaysPerMonth: null,
+        appointmentsPerDay: { ...DEFAULT_APPOINTMENTS_PER_WTE_DAY },
+      });
+    }
+  }, [selectedPractice?.odsCode]);
+
+  // Save capacity config to localStorage when assumptions change
+  useEffect(() => {
+    if (!selectedPractice?.odsCode) return;
+    try {
+      localStorage.setItem(`caip-capacity-${selectedPractice.odsCode}`, JSON.stringify(assumptions));
+    } catch (e) { /* ignore */ }
+  }, [assumptions, selectedPractice?.odsCode]);
 
   useEffect(() => {
     let isMounted = true;
@@ -286,6 +327,13 @@ const NationalWorkforce = ({
   const effectiveMonth = workforceMonths.includes(selectedMonth) ? selectedMonth : latestWorkforceMonth;
   const monthMismatch = selectedMonth && effectiveMonth && selectedMonth !== effectiveMonth;
 
+  // Auto-calculate working days from selected month
+  const autoWorkingDays = useMemo(() => {
+    return getDaysInMonth(selectedMonth || effectiveMonth) || 21;
+  }, [selectedMonth, effectiveMonth]);
+
+  const effectiveWorkingDays = assumptions.workingDaysPerMonth ?? autoWorkingDays;
+
   const monthData = effectiveMonth ? workforceData?.[effectiveMonth] : null;
 
   const practiceData = useMemo(() => {
@@ -331,8 +379,17 @@ const NationalWorkforce = ({
   ), [totals, roleTotals, apptPractice, telephonyPractice, ocPractice]);
 
   const capacityModel = useMemo(() => (
-    calculateCapacityModel({ roleTotals, totals, apptData: apptPractice, assumptions, month: selectedMonth })
-  ), [roleTotals, totals, apptPractice, assumptions, selectedMonth]);
+    calculateCapacityModel({
+      roleTotals,
+      totals,
+      apptData: apptPractice,
+      assumptions: {
+        workingDaysPerMonth: effectiveWorkingDays,
+        appointmentsPerWtePerDay: assumptions.appointmentsPerDay || assumptions.appointmentsPerWtePerDay || {},
+      },
+      month: selectedMonth,
+    })
+  ), [roleTotals, totals, apptPractice, assumptions, effectiveWorkingDays, selectedMonth]);
 
   const demandCapacityRatio = capacityModel?.totalTheoretical
     ? (capacityModel.totalActual / capacityModel.totalTheoretical)
@@ -604,6 +661,18 @@ const NationalWorkforce = ({
 
       {activeTab === 'overview' && (
         <div className="space-y-6">
+          <Card className="bg-blue-50 border-blue-200">
+            <div className="flex items-start gap-3">
+              <Info className="text-blue-600 flex-shrink-0 mt-0.5" size={18} />
+              <div>
+                <h4 className="font-medium text-blue-800">About This Data</h4>
+                <p className="text-sm text-blue-700 mt-1">
+                  This data is self reported by practices via CQRS. If it's inaccurate,
+                  consult with your practice manager about how this data is collected and submitted.
+                </p>
+              </div>
+            </div>
+          </Card>
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
             <MetricCard
               title="Total WTE"
@@ -1024,38 +1093,56 @@ const NationalWorkforce = ({
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
               <label className="flex flex-col gap-1">
-                <span className="text-slate-500">Working days per month</span>
-                <input
-                  type="number"
-                  min="15"
-                  max="25"
-                  value={assumptions.workingDaysPerMonth}
-                  onChange={(event) => setAssumptions((prev) => ({
-                    ...prev,
-                    workingDaysPerMonth: Number(event.target.value || 0),
-                  }))}
-                  className="border border-slate-200 rounded-lg px-3 py-2"
-                />
-              </label>
-              {Object.entries(DEFAULT_APPOINTMENTS_PER_WTE_DAY).map(([role, defaultValue]) => (
-                <label key={role} className="flex flex-col gap-1">
-                  <span className="text-slate-500">{ROLE_LABELS[role] || role} appts/WTE/day</span>
+                <span className="text-slate-500 flex items-center gap-1">
+                  Working days per month
+                  {assumptions.workingDaysPerMonth === null && (
+                    <span className="text-xs text-blue-500 font-normal">(auto)</span>
+                  )}
+                </span>
+                <div className="flex items-center gap-2">
                   <input
                     type="number"
-                    min="0"
-                    step="1"
-                    value={assumptions.appointmentsPerWtePerDay[role] ?? defaultValue}
+                    min="15"
+                    max="25"
+                    value={effectiveWorkingDays}
                     onChange={(event) => setAssumptions((prev) => ({
                       ...prev,
-                      appointmentsPerWtePerDay: {
-                        ...prev.appointmentsPerWtePerDay,
-                        [role]: Number(event.target.value || 0),
-                      },
+                      workingDaysPerMonth: Number(event.target.value || 0),
                     }))}
-                    className="border border-slate-200 rounded-lg px-3 py-2"
+                    className="border border-slate-200 rounded-lg px-3 py-2 flex-1"
                   />
-                </label>
-              ))}
+                  {assumptions.workingDaysPerMonth !== null && (
+                    <button
+                      onClick={() => setAssumptions((prev) => ({ ...prev, workingDaysPerMonth: null }))}
+                      className="text-xs text-blue-600 hover:text-blue-800 whitespace-nowrap"
+                    >
+                      Auto
+                    </button>
+                  )}
+                </div>
+              </label>
+              {Object.entries(DEFAULT_APPOINTMENTS_PER_WTE_DAY).map(([role, defaultValue]) => {
+                const apptsPerDay = assumptions.appointmentsPerDay || assumptions.appointmentsPerWtePerDay || {};
+                return (
+                  <label key={role} className="flex flex-col gap-1">
+                    <span className="text-slate-500">{ROLE_LABELS[role] || role} appts/day</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={apptsPerDay[role] ?? defaultValue}
+                      onChange={(event) => setAssumptions((prev) => ({
+                        ...prev,
+                        appointmentsPerDay: {
+                          ...(prev.appointmentsPerDay || prev.appointmentsPerWtePerDay || {}),
+                          [role]: Number(event.target.value || 0),
+                        },
+                      }))}
+                      className="border border-slate-200 rounded-lg px-3 py-2"
+                    />
+                  </label>
+                );
+              })}
             </div>
           </Card>
 

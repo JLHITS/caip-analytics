@@ -17,6 +17,7 @@ import {
   Filler,
 } from 'chart.js';
 import Card from './ui/Card';
+import PracticeCentricLeaderboard from './ui/PracticeCentricLeaderboard';
 import {
   parseOnlineConsultationsData,
   getSupplierStats,
@@ -1342,20 +1343,28 @@ const NationalOnlineConsultations = ({
         const pcnNationalRanking = getOCPCNNationalRanking(selectedPractice.pcnCode, pcnAverages);
         const pcnICBRanking = getOCPCNICBRanking(selectedPractice.pcnCode, selectedPractice.icbCode, pcnAverages);
 
-        // Top 20 practices by rate
-        const top20ByRate = [...data.practices]
+        // All practices ranked by rate (for practice-centric leaderboard)
+        const allByRate = [...data.practices]
           .filter(p => p.participation === 1 && p.ratePer1000 > 0)
-          .sort((a, b) => b.ratePer1000 - a.ratePer1000)
-          .slice(0, 20);
+          .sort((a, b) => b.ratePer1000 - a.ratePer1000);
 
-        // Top 20 by absolute submissions
-        const top20BySubmissions = [...data.practices]
+        // All practices ranked by submissions
+        const allBySubmissions = [...data.practices]
           .filter(p => p.participation === 1)
-          .sort((a, b) => b.submissions - a.submissions)
-          .slice(0, 20);
+          .sort((a, b) => b.submissions - a.submissions);
 
-        // Top PCNs
-        const top20PCNs = pcnAverages.filter(p => p.practiceCount > 1).slice(0, 20);
+        // All practices ranked by medical rate
+        const allByMedical = [...data.practices]
+          .filter(p => p.participation === 1 && p.clinicalPer1000 > 0)
+          .sort((a, b) => b.clinicalPer1000 - a.clinicalPer1000);
+
+        // All practices ranked by admin rate
+        const allByAdmin = [...data.practices]
+          .filter(p => p.participation === 1 && p.adminPer1000 > 0)
+          .sort((a, b) => b.adminPer1000 - a.adminPer1000);
+
+        // All PCNs ranked
+        const allPCNs = pcnAverages.filter(p => p.practiceCount > 1);
 
         return (
           <>
@@ -1379,142 +1388,61 @@ const NationalOnlineConsultations = ({
                 </div>
               </div>
             </Card>
-            {/* Supplier Statistics */}
-            <Card>
-              <h3 className="text-lg font-bold text-slate-800 mb-4">System Supplier Market Share</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {supplierStats.slice(0, 8).map((supplier, idx) => (
-                  <div key={supplier.name} className="text-center p-3 bg-slate-50 rounded-lg">
-                    <p className="text-xs text-slate-600 truncate">{supplier.name}</p>
-                    <p className="text-xl font-bold text-indigo-700">{supplier.practiceCount.toLocaleString()}</p>
-                    <p className="text-xs text-slate-500">practices</p>
-                  </div>
-                ))}
-              </div>
-            </Card>
 
-            {/* Top 20 by Rate */}
-            <Card>
-              <h3 className="text-lg font-bold text-slate-800 mb-4">Top 20 Practices (Rate per 1000)</h3>
-              <div className="overflow-x-auto -mx-4 sm:mx-0">
-                <div className="inline-block min-w-full align-middle">
-                  <div className="overflow-hidden sm:rounded-lg">
-                    <table className="min-w-full text-sm">
-                      <thead className="bg-slate-100 border-b-2 border-slate-200">
-                        <tr>
-                          <th className="text-left p-3 font-semibold text-slate-700">Rank</th>
-                          <th className="text-left p-3 font-semibold text-slate-700">Practice</th>
-                          <th className="text-left p-3 font-semibold text-slate-700">PCN</th>
-                          <th className="text-left p-3 font-semibold text-slate-700">Supplier</th>
-                          <th className="text-right p-3 font-semibold text-slate-700">Rate/1000</th>
-                          <th className="text-right p-3 font-semibold text-slate-700">Submissions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {top20ByRate.map((practice, idx) => {
-                          const isSelected = practice.odsCode === selectedPractice.odsCode;
-                          return (
-                            <tr key={practice.odsCode} className={`border-b border-slate-100 ${isSelected ? 'bg-indigo-100 font-semibold' : 'hover:bg-slate-50'}`}>
-                              <td className="p-3 font-medium">{idx + 1}</td>
-                              <td className="p-3">
-                                <div className="font-medium">{practice.gpName}</div>
-                                <div className="text-xs text-slate-500">{practice.odsCode}</div>
-                              </td>
-                              <td className="p-3 text-xs text-slate-600">{practice.pcnName}</td>
-                              <td className="p-3 text-xs text-slate-600">{practice.supplier || (practice.suppliers && practice.suppliers.length > 0 ? practice.suppliers.join(', ') : '-')}</td>
-                              <td className="p-3 text-right text-indigo-600 font-medium">{practice.ratePer1000.toFixed(1)}</td>
-                              <td className="p-3 text-right">{practice.submissions.toLocaleString()}</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            </Card>
+            <PracticeCentricLeaderboard
+              title="Practices by Rate per 1000"
+              rankedItems={allByRate}
+              selectedOdsCode={selectedPractice.odsCode}
+              colorTheme="indigo"
+              columns={[
+                { key: 'practice', header: 'Practice', render: (p) => (<><div className="font-medium">{p.gpName}</div><div className="text-xs text-slate-500">{p.odsCode}</div></>), truncate: true },
+                { key: 'pcnName', header: 'PCN', render: (p) => <span className="text-xs text-slate-600">{p.pcnName}</span> },
+                { key: 'supplier', header: 'Supplier', render: (p) => <span className="text-xs text-slate-600">{p.supplier || (p.suppliers?.length > 0 ? p.suppliers.join(', ') : '-')}</span> },
+                { key: 'ratePer1000', header: 'Rate/1000', align: 'right', render: (p) => <span className="text-indigo-600 font-medium">{p.ratePer1000.toFixed(1)}</span> },
+                { key: 'submissions', header: 'Submissions', align: 'right', render: (p) => p.submissions.toLocaleString() },
+              ]}
+            />
 
-            {/* Top 20 by Absolute Submissions */}
-            <Card className="bg-gradient-to-br from-purple-50 to-white border-purple-200">
-              <h3 className="text-lg font-bold text-purple-900 mb-4">Top 20 Practices (Total Submissions)</h3>
-              <div className="overflow-x-auto -mx-4 sm:mx-0">
-                <div className="inline-block min-w-full align-middle">
-                  <div className="overflow-hidden sm:rounded-lg">
-                    <table className="min-w-full text-sm">
-                      <thead className="bg-purple-100 border-b-2 border-purple-200">
-                        <tr>
-                          <th className="text-left p-3 font-semibold text-purple-900">Rank</th>
-                          <th className="text-left p-3 font-semibold text-purple-900">Practice</th>
-                          <th className="text-left p-3 font-semibold text-purple-900">PCN</th>
-                          <th className="text-right p-3 font-semibold text-purple-900">Submissions</th>
-                          <th className="text-right p-3 font-semibold text-purple-900">List Size</th>
-                          <th className="text-right p-3 font-semibold text-purple-900">Rate/1000</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {top20BySubmissions.map((practice, idx) => {
-                          const isSelected = practice.odsCode === selectedPractice.odsCode;
-                          return (
-                            <tr key={practice.odsCode} className={`border-b border-purple-100 ${isSelected ? 'bg-purple-200 font-semibold' : 'hover:bg-purple-50'}`}>
-                              <td className="p-3 font-medium">{idx + 1}</td>
-                              <td className="p-3">
-                                <div className="font-medium">{practice.gpName}</div>
-                                <div className="text-xs text-slate-500">{practice.odsCode}</div>
-                              </td>
-                              <td className="p-3 text-xs text-slate-600">{practice.pcnName}</td>
-                              <td className="p-3 text-right text-purple-600 font-bold">{practice.submissions.toLocaleString()}</td>
-                              <td className="p-3 text-right">{practice.listSize.toLocaleString()}</td>
-                              <td className="p-3 text-right">{practice.ratePer1000.toFixed(1)}</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            </Card>
+            <PracticeCentricLeaderboard
+              title="Practices by Medical Rate per 1000"
+              rankedItems={allByMedical}
+              selectedOdsCode={selectedPractice.odsCode}
+              colorTheme="blue"
+              columns={[
+                { key: 'practice', header: 'Practice', render: (p) => (<><div className="font-medium">{p.gpName}</div><div className="text-xs text-slate-500">{p.odsCode}</div></>), truncate: true },
+                { key: 'pcnName', header: 'PCN', render: (p) => <span className="text-xs text-slate-600">{p.pcnName}</span> },
+                { key: 'clinicalPer1000', header: 'Medical/1000', align: 'right', render: (p) => <span className="text-blue-600 font-medium">{p.clinicalPer1000.toFixed(1)}</span> },
+                { key: 'clinicalSubmissions', header: 'Medical Subs', align: 'right', render: (p) => p.clinicalSubmissions.toLocaleString() },
+              ]}
+            />
 
-            {/* Top PCNs */}
-            <Card className="bg-gradient-to-br from-cyan-50 to-white border-cyan-200">
-              <h3 className="text-lg font-bold text-cyan-900 mb-4">Top 20 PCNs (Rate per 1000)</h3>
-              <div className="overflow-x-auto -mx-4 sm:mx-0">
-                <div className="inline-block min-w-full align-middle">
-                  <div className="overflow-hidden sm:rounded-lg">
-                    <table className="min-w-full text-sm">
-                      <thead className="bg-cyan-100 border-b-2 border-cyan-200">
-                        <tr>
-                          <th className="text-left p-3 font-semibold text-cyan-900">Rank</th>
-                          <th className="text-left p-3 font-semibold text-cyan-900">PCN</th>
-                          <th className="text-left p-3 font-semibold text-cyan-900">ICB</th>
-                          <th className="text-right p-3 font-semibold text-cyan-900">Avg Rate/1000</th>
-                          <th className="text-right p-3 font-semibold text-cyan-900">Total Subs</th>
-                          <th className="text-right p-3 font-semibold text-cyan-900">Practices</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {top20PCNs.map((pcn, idx) => {
-                          const isUserPCN = pcn.pcnCode === selectedPractice.pcnCode;
-                          return (
-                            <tr key={pcn.pcnCode} className={`border-b border-cyan-100 ${isUserPCN ? 'bg-cyan-200 font-semibold' : 'hover:bg-cyan-50'}`}>
-                              <td className="p-3 font-medium">{idx + 1}</td>
-                              <td className="p-3">
-                                <div className="font-medium">{pcn.pcnName}</div>
-                                <div className="text-xs text-slate-500">{pcn.pcnCode}</div>
-                              </td>
-                              <td className="p-3 text-xs text-slate-600">{pcn.icbName}</td>
-                              <td className="p-3 text-right text-cyan-600 font-medium">{pcn.avgRatePer1000.toFixed(1)}</td>
-                              <td className="p-3 text-right">{pcn.totalSubmissions.toLocaleString()}</td>
-                              <td className="p-3 text-right">{pcn.practiceCount}</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            </Card>
+            <PracticeCentricLeaderboard
+              title="Practices by Admin Rate per 1000"
+              rankedItems={allByAdmin}
+              selectedOdsCode={selectedPractice.odsCode}
+              colorTheme="green"
+              columns={[
+                { key: 'practice', header: 'Practice', render: (p) => (<><div className="font-medium">{p.gpName}</div><div className="text-xs text-slate-500">{p.odsCode}</div></>), truncate: true },
+                { key: 'pcnName', header: 'PCN', render: (p) => <span className="text-xs text-slate-600">{p.pcnName}</span> },
+                { key: 'adminPer1000', header: 'Admin/1000', align: 'right', render: (p) => <span className="text-green-600 font-medium">{p.adminPer1000.toFixed(1)}</span> },
+                { key: 'adminSubmissions', header: 'Admin Subs', align: 'right', render: (p) => p.adminSubmissions.toLocaleString() },
+              ]}
+            />
+
+            <PracticeCentricLeaderboard
+              title="PCNs by Rate per 1000"
+              rankedItems={allPCNs}
+              selectedOdsCode={selectedPractice.pcnCode}
+              odsCodeAccessor="pcnCode"
+              colorTheme="indigo"
+              columns={[
+                { key: 'pcn', header: 'PCN', render: (p) => (<><div className="font-medium">{p.pcnName}</div><div className="text-xs text-slate-500">{p.pcnCode}</div></>), truncate: true },
+                { key: 'icbName', header: 'ICB', render: (p) => <span className="text-xs text-slate-600">{p.icbName}</span> },
+                { key: 'avgRatePer1000', header: 'Avg Rate/1000', align: 'right', render: (p) => <span className="text-indigo-600 font-medium">{p.avgRatePer1000.toFixed(1)}</span> },
+                { key: 'totalSubmissions', header: 'Total Subs', align: 'right', render: (p) => p.totalSubmissions.toLocaleString() },
+                { key: 'practiceCount', header: 'Practices', align: 'right' },
+              ]}
+            />
 
             {/* PCN Performance in Same ICB */}
             <Card>
@@ -1780,6 +1708,18 @@ const NationalOnlineConsultations = ({
           3
         );
 
+        // Forecast medical (clinical) submissions
+        const clinicalForecast = forecastValues(
+          practiceTrendData.map(d => ({ value: d.clinicalSubmissions || 0 })),
+          3
+        );
+
+        // Forecast admin submissions
+        const adminForecast = forecastValues(
+          practiceTrendData.map(d => ({ value: d.adminSubmissions || 0 })),
+          3
+        );
+
         // Get next months labels
         const lastMonth = chartMonths[chartMonths.length - 1];
         const [lastMonthName, lastYear] = lastMonth.split(' ');
@@ -1803,6 +1743,11 @@ const NationalOnlineConsultations = ({
 
         const historicalRates = practiceTrendData.map(d => d.ratePer1000);
         const forecastedRates = rateForecast.forecasts.map(f => f.value);
+
+        const historicalClinical = practiceTrendData.map(d => d.clinicalSubmissions || 0);
+        const forecastedClinical = clinicalForecast.forecasts.map(f => f.value);
+        const historicalAdmin = practiceTrendData.map(d => d.adminSubmissions || 0);
+        const forecastedAdmin = adminForecast.forecasts.map(f => f.value);
 
         // Year-over-year comparison
         const yoyData = [];
@@ -1874,9 +1819,101 @@ const NationalOnlineConsultations = ({
               </Card>
             </div>
 
-            {/* Submissions Forecast Chart */}
+            {/* Medical vs Admin Forecast Summary */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Card className="bg-gradient-to-br from-blue-50 to-white border-blue-200">
+                <h4 className="text-sm font-bold text-blue-900 mb-2">Medical Submissions Forecast</h4>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-2xl font-bold text-blue-700">{Math.round(forecastedClinical[0]).toLocaleString()}</p>
+                    <p className="text-xs text-slate-500">Next month ({futureMonths[0]})</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-medium text-blue-600 capitalize">{clinicalForecast.trend}</p>
+                    <p className="text-xs text-slate-400">R²: {(clinicalForecast.r2 * 100).toFixed(0)}%</p>
+                  </div>
+                </div>
+              </Card>
+              <Card className="bg-gradient-to-br from-green-50 to-white border-green-200">
+                <h4 className="text-sm font-bold text-green-900 mb-2">Admin Submissions Forecast</h4>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-2xl font-bold text-green-700">{Math.round(forecastedAdmin[0]).toLocaleString()}</p>
+                    <p className="text-xs text-slate-500">Next month ({futureMonths[0]})</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-medium text-green-600 capitalize">{adminForecast.trend}</p>
+                    <p className="text-xs text-slate-400">R²: {(adminForecast.r2 * 100).toFixed(0)}%</p>
+                  </div>
+                </div>
+              </Card>
+            </div>
+
+            {/* Medical Forecast Chart */}
             <Card>
-              <h3 className="text-lg font-bold text-slate-800 mb-4">Submissions Forecast</h3>
+              <h3 className="text-lg font-bold text-slate-800 mb-4">Medical Submissions Forecast</h3>
+              <div className="h-64">
+                <Line
+                  data={{
+                    labels: allLabels,
+                    datasets: [
+                      {
+                        label: 'Historical Medical',
+                        data: [...historicalClinical, ...new Array(3).fill(null)],
+                        borderColor: '#005EB8',
+                        backgroundColor: 'rgba(0, 94, 184, 0.1)',
+                        fill: true,
+                        tension: 0.3,
+                      },
+                      {
+                        label: 'Forecast Medical',
+                        data: [...new Array(historicalClinical.length - 1).fill(null), historicalClinical[historicalClinical.length - 1], ...forecastedClinical],
+                        borderColor: '#005EB8',
+                        borderDash: [5, 5],
+                        pointStyle: 'triangle',
+                        tension: 0.3,
+                      },
+                    ],
+                  }}
+                  options={{ ...chartOptions, maintainAspectRatio: false }}
+                />
+              </div>
+            </Card>
+
+            {/* Admin Forecast Chart */}
+            <Card>
+              <h3 className="text-lg font-bold text-slate-800 mb-4">Admin Submissions Forecast</h3>
+              <div className="h-64">
+                <Line
+                  data={{
+                    labels: allLabels,
+                    datasets: [
+                      {
+                        label: 'Historical Admin',
+                        data: [...historicalAdmin, ...new Array(3).fill(null)],
+                        borderColor: '#009639',
+                        backgroundColor: 'rgba(0, 150, 57, 0.1)',
+                        fill: true,
+                        tension: 0.3,
+                      },
+                      {
+                        label: 'Forecast Admin',
+                        data: [...new Array(historicalAdmin.length - 1).fill(null), historicalAdmin[historicalAdmin.length - 1], ...forecastedAdmin],
+                        borderColor: '#009639',
+                        borderDash: [5, 5],
+                        pointStyle: 'triangle',
+                        tension: 0.3,
+                      },
+                    ],
+                  }}
+                  options={{ ...chartOptions, maintainAspectRatio: false }}
+                />
+              </div>
+            </Card>
+
+            {/* Total Submissions Forecast Chart */}
+            <Card>
+              <h3 className="text-lg font-bold text-slate-800 mb-4">Total Submissions Forecast</h3>
               <div className="h-72">
                 <Line
                   data={{
