@@ -3971,7 +3971,7 @@ const NationalDemandCapacity = ({
                         5
                       );
                       if (similar.length > 0) {
-                        setComparePractices(similar);
+                        setComparePractices([selectedPractice, ...similar]);
                       }
                     }}
                     className="px-3 py-1.5 text-xs font-medium text-orange-700 bg-orange-50 border border-orange-200 rounded-lg hover:bg-orange-100 flex items-center gap-1.5"
