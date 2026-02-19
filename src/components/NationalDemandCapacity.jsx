@@ -50,8 +50,6 @@ import {
   saveAnalysis,
   loadAnalysis,
   checkAnalysisStatus,
-  validateBetaCode,
-  consumeBetaCode,
 } from '../utils/caipAnalysisStorage';
 import {
   APPOINTMENT_FILES,
@@ -333,10 +331,6 @@ const NationalDemandCapacity = ({
 
   // CAIP Analysis state
   const [showAIConsent, setShowAIConsent] = useState(false);
-  const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
-  const [aiPassword, setAiPassword] = useState('');
-  const [aiPasswordError, setAiPasswordError] = useState('');
-  const [aiAuthed, setAiAuthed] = useState(false);
   const [aiReport, setAiReport] = useState(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiError, setAiError] = useState(null);
@@ -345,10 +339,8 @@ const NationalDemandCapacity = ({
   const [hasExistingAnalysis, setHasExistingAnalysis] = useState(false);
   const [isAnalysisStale, setIsAnalysisStale] = useState(false);
   const [isAiMinimized, setIsAiMinimized] = useState(false);
-  const [pendingBetaCode, setPendingBetaCode] = useState(null);
 
   // Admin password from environment
-  const adminPassword = (import.meta && import.meta.env && (import.meta.env.VITE_ADMIN_PASSWORD || import.meta.env.ADMIN_PASSWORD)) || '';
   const geminiApiKey = (import.meta && import.meta.env && import.meta.env.VITE_GEMINI_KEY) || '';
   const geminiModel = (import.meta && import.meta.env && import.meta.env.VITE_GEMINI_MODEL) || 'gemini-2.5-flash';
 
@@ -1107,7 +1099,6 @@ const NationalDemandCapacity = ({
       setSavedAnalysis(null);
       setHasExistingAnalysis(false);
       setAiReport(null);
-      setPendingBetaCode(null);
       return;
     }
 
@@ -1180,51 +1171,9 @@ const NationalDemandCapacity = ({
       return;
     }
 
-    // If authenticated (admin password) or have a pending beta code, go to consent
-    if (aiAuthed || pendingBetaCode) {
-      setShowAIConsent(true);
-      return;
-    }
-
-    // Otherwise show password/code prompt
-    setShowPasswordPrompt(true);
-  }, [selectedPractice, hasExistingAnalysis, aiReport, aiAuthed, pendingBetaCode]);
-
-  // Handle password/access code submission
-  const handlePasswordSubmit = useCallback(async (e) => {
-    e.preventDefault();
-
-    const trimmedInput = aiPassword.trim();
-    if (!trimmedInput) {
-      setAiPasswordError('Please enter an access code or password.');
-      return;
-    }
-
-    // 1. Check admin password first (instant, no network call)
-    if (adminPassword && trimmedInput === adminPassword) {
-      setAiAuthed(true);
-      setPendingBetaCode(null);
-      setShowPasswordPrompt(false);
-      setAiPassword('');
-      setAiPasswordError('');
-      setShowAIConsent(true);
-      return;
-    }
-
-    // 2. Check as beta access code in Firestore
-    setAiPasswordError('');
-    const { valid, error } = await validateBetaCode(trimmedInput);
-
-    if (valid) {
-      setPendingBetaCode(trimmedInput);
-      setShowPasswordPrompt(false);
-      setAiPassword('');
-      setAiPasswordError('');
-      setShowAIConsent(true);
-    } else {
-      setAiPasswordError(error);
-    }
-  }, [aiPassword, adminPassword]);
+    // Go straight to consent
+    setShowAIConsent(true);
+  }, [selectedPractice, hasExistingAnalysis, aiReport]);
 
   // Calculate historical metrics for trend analysis
   const getHistoricalMetrics = useCallback(() => {
@@ -1337,12 +1286,6 @@ const NationalDemandCapacity = ({
         analysis: text,
       });
 
-      // Consume beta code if one was used
-      if (pendingBetaCode) {
-        await consumeBetaCode(pendingBetaCode, selectedPractice.odsCode);
-        setPendingBetaCode(null);
-      }
-
       // Update state
       setAiReport(text);
       setHasExistingAnalysis(true);
@@ -1392,7 +1335,7 @@ const NationalDemandCapacity = ({
       }
       setIsAiLoading(false);
     }
-  }, [selectedPractice, practiceMetrics, nationalMetricArrays, workforceMetrics, selectedMonth, geminiApiKey, geminiModel, getHistoricalMetrics, loadMonthData, appointmentData, pendingBetaCode]);
+  }, [selectedPractice, practiceMetrics, nationalMetricArrays, workforceMetrics, selectedMonth, geminiApiKey, geminiModel, getHistoricalMetrics, loadMonthData, appointmentData]);
 
   // ========================================
   // APPOINTMENT SUB-TABS
@@ -4850,92 +4793,6 @@ const NationalDemandCapacity = ({
             >
               <X size={16} />
             </button>
-          </div>
-        </div>
-      )}
-
-      {/* Password Prompt Modal */}
-      {showPasswordPrompt && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200"
-          onClick={() => {
-            setShowPasswordPrompt(false);
-            setAiPassword('');
-            setAiPasswordError('');
-          }}
-        >
-          <div
-            className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-in zoom-in-95 duration-200"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-lg">
-                <Sparkles className="text-white" size={24} />
-              </div>
-              <div>
-                <h3 className="text-xl font-bold text-slate-800">CAIP Analysis</h3>
-                <p className="text-sm text-slate-500">Beta Access Required</p>
-              </div>
-            </div>
-
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
-              <p className="text-sm text-amber-800">
-                <strong>Beta Testing:</strong> This feature is in closed beta. Enter your single-use access code to continue.
-              </p>
-              <p className="text-xs text-amber-600 mt-1">
-                Each code is valid for one analysis. Need access? Use the <strong>Feedback</strong> option to request a code.
-              </p>
-            </div>
-
-            <form onSubmit={handlePasswordSubmit}>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-slate-700 mb-1">Access Code / Password</label>
-                <input
-                  type="text"
-                  value={aiPassword}
-                  onChange={(e) => setAiPassword(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  placeholder="Enter access code or password"
-                  autoFocus
-                />
-                {aiPasswordError && (
-                  <p className="text-sm text-red-600 mt-1">{aiPasswordError}</p>
-                )}
-              </div>
-
-              <div className="flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowPasswordPrompt(false);
-                    setAiPassword('');
-                    setAiPasswordError('');
-                  }}
-                  className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-medium rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-all"
-                >
-                  Unlock
-                </button>
-              </div>
-            </form>
-
-            <div className="mt-4 pt-3 border-t border-slate-100">
-              <button
-                onClick={() => {
-                  setShowPasswordPrompt(false);
-                  if (onOpenBugReport) onOpenBugReport();
-                }}
-                className="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1"
-              >
-                <ExternalLink size={12} />
-                Request beta access via Feedback
-              </button>
-            </div>
           </div>
         </div>
       )}
