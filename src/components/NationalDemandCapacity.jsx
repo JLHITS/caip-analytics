@@ -12,7 +12,6 @@ import * as XLSX from 'xlsx';
 import { trackEvent, trackPracticeLookup, trackTabView, trackNationalAIAnalysis } from '../firebase/config';
 
 // AI imports
-import { GoogleGenAI } from '@google/genai';
 
 // Component imports
 import Card from './ui/Card';
@@ -41,7 +40,7 @@ import {
   calculateCombinedDemandIndex,
 } from '../utils/demandCapacityMetrics';
 import {
-  buildCAIPAnalysisPrompt,
+  buildCAIPPrompts,
   calculatePercentile,
   calculateTrend,
   getPreviousMonths,
@@ -339,10 +338,6 @@ const NationalDemandCapacity = ({
   const [hasExistingAnalysis, setHasExistingAnalysis] = useState(false);
   const [isAnalysisStale, setIsAnalysisStale] = useState(false);
   const [isAiMinimized, setIsAiMinimized] = useState(false);
-
-  // Admin password from environment
-  const geminiApiKey = (import.meta && import.meta.env && import.meta.env.VITE_GEMINI_KEY) || '';
-  const geminiModel = (import.meta && import.meta.env && import.meta.env.VITE_GEMINI_MODEL) || 'gemini-2.5-flash';
 
   // ========================================
   // SUB-TABS CONFIGURATION
@@ -1231,23 +1226,16 @@ const NationalDemandCapacity = ({
   const runCAIPAnalysis = useCallback(async () => {
     if (!selectedPractice || !practiceMetrics) return;
 
-    if (!geminiApiKey) {
-      setAiError('Google AI API key not configured. Please set VITE_GEMINI_KEY in environment.');
-      return;
-    }
-
     setIsAiLoading(true);
     setAiError(null);
 
     try {
       // Load previous months' data for trend calculations
       const previousMonths = getPreviousMonths(selectedMonth, 3);
-      console.log('Loading historical data for months:', previousMonths);
 
       // Ensure historical months are loaded before calculating trends
       for (const month of previousMonths) {
         if (!appointmentData[month]) {
-          console.log(`Loading data for ${month}...`);
           await loadMonthData(month);
         }
       }
@@ -1255,8 +1243,8 @@ const NationalDemandCapacity = ({
       // Get historical metrics for trends (now with loaded data)
       const historicalMetrics = getHistoricalMetrics();
 
-      // Build the prompt
-      const prompt = buildCAIPAnalysisPrompt({
+      // Build system + user prompts (split for OpenAI prompt caching)
+      const { systemPrompt, userPrompt } = buildCAIPPrompts({
         practiceName: selectedPractice.gpName,
         listSize: selectedPractice.listSize || practiceMetrics.listSize,
         metrics: practiceMetrics,
@@ -1268,14 +1256,20 @@ const NationalDemandCapacity = ({
         hasWorkforceData: Boolean(workforceMetrics),
       });
 
-      // Call Gemini API
-      const ai = new GoogleGenAI({ apiKey: geminiApiKey });
-      const response = await ai.models.generateContent({
-        model: geminiModel,
-        contents: [{ parts: [{ text: prompt }] }],
+      // Call OpenAI via server-side API route
+      const response = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ systemPrompt, userPrompt }),
       });
 
-      const text = response.candidates?.[0]?.content?.parts?.[0]?.text;
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || `API error (${response.status})`);
+      }
+
+      const text = data.text;
       if (!text) throw new Error('No response generated from AI');
 
       // Save to Firebase
@@ -1313,29 +1307,21 @@ const NationalDemandCapacity = ({
     } catch (error) {
       console.error('CAIP Analysis error:', error);
 
-      // Detect rate limit and quota errors
       const errorMessage = error.message?.toLowerCase() || '';
       const isRateLimit = errorMessage.includes('rate limit') ||
                           errorMessage.includes('429') ||
-                          errorMessage.includes('too many requests') ||
-                          errorMessage.includes('resource exhausted');
-      const isQuotaError = errorMessage.includes('quota') ||
-                          errorMessage.includes('exceeded') ||
-                          errorMessage.includes('limit exceeded');
+                          errorMessage.includes('too many requests');
 
       if (isRateLimit) {
         setAiErrorType('rate_limit');
-        setAiError('Rate limit reached. Gemini has the following limits: 5 requests/minute, 250,000 tokens/minute. Please wait a minute before trying again.');
-      } else if (isQuotaError) {
-        setAiErrorType('quota');
-        setAiError('Daily quota exceeded. The free tier allows 20 requests per day. Your quota will reset at midnight Pacific Time.');
+        setAiError('Rate limit reached. Please wait a moment before trying again.');
       } else {
         setAiErrorType('general');
         setAiError(`Analysis failed: ${error.message}`);
       }
       setIsAiLoading(false);
     }
-  }, [selectedPractice, practiceMetrics, nationalMetricArrays, workforceMetrics, selectedMonth, geminiApiKey, geminiModel, getHistoricalMetrics, loadMonthData, appointmentData]);
+  }, [selectedPractice, practiceMetrics, nationalMetricArrays, workforceMetrics, selectedMonth, getHistoricalMetrics, loadMonthData, appointmentData]);
 
   // ========================================
   // APPOINTMENT SUB-TABS

@@ -3,7 +3,7 @@ import { AlertTriangle } from 'lucide-react';
 import { NHS_BLUE } from '../../constants/colors';
 
 // Privacy consent dialog before AI analysis
-// Ensures users understand data is sent to Google AI for processing
+// Ensures users understand data is sent to OpenAI for processing
 const AIConsentModal = ({ isOpen, onClose, onProceed }) => {
   if (!isOpen) return null;
 
@@ -15,7 +15,7 @@ const AIConsentModal = ({ isOpen, onClose, onProceed }) => {
           <h3 className="text-xl font-bold text-slate-800">AI Analysis Privacy Notice</h3>
         </div>
         <p className="text-slate-600 mb-6 leading-relaxed">
-          Clicking 'Proceed' will send <strong>anonymized statistical data</strong> from your dashboard to <strong>Google AI (Gemini)</strong> for analysis.
+          Clicking 'Proceed' will send <strong>anonymized statistical data</strong> from your dashboard to <strong>OpenAI</strong> for analysis.
           No patient-identifiable information is included. The analysis will generate insights about practice performance.
         </p>
         <div className="flex justify-end gap-3">

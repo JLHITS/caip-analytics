@@ -55,7 +55,7 @@ const CAIPConsentModal = ({ isOpen, onClose, onProceed, onOpenFeedback, practice
         <div className="text-slate-600 mb-4 leading-relaxed text-sm space-y-2">
           <p>
             Clicking 'Proceed' will send <strong>anonymized practice metrics</strong> to{' '}
-            <strong>Google AI (Gemini)</strong> for analysis. This includes:
+            <strong>OpenAI</strong> for analysis. This includes:
           </p>
           <ul className="list-disc list-inside ml-2 text-slate-500">
             <li>Appointment, telephony, and online consultation statistics</li>

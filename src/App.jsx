@@ -1,5 +1,4 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { GoogleGenAI } from "@google/genai";
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import LZString from 'lz-string';
@@ -121,10 +120,6 @@ import './styles/print.css';
 
 // Configure PDF.js worker
 GlobalWorkerOptions.workerSrc = pdfWorker;
-
-// API Key for Google Gemini
-const apiKey = (import.meta && import.meta.env && import.meta.env.VITE_GEMINI_KEY) || "";
-const geminiModel = (import.meta && import.meta.env && import.meta.env.VITE_GEMINI_MODEL) || "gemini-2.5-flash";
 
 // Auto-versioning from package.json via Vite
 const APP_VERSION = __APP_VERSION__;
@@ -1138,15 +1133,10 @@ export default function App() {
     }
   };
 
-  // AI Analysis Handler - generates insights using Google Gemini
+  // AI Analysis Handler - generates insights using OpenAI
   const runAIAnalysis = async () => {
     if (!processedData || processedData.length === 0) {
       setAiError("No data to analyze. Please process your files first.");
-      return;
-    }
-
-    if (!apiKey) {
-      setAiError("Google AI API key not configured. Please set VITE_GEMINI_KEY in your environment.");
       return;
     }
 
@@ -1406,14 +1396,15 @@ export default function App() {
         Keep the tone professional, constructive, and specific to NHS Primary Care. Use British English.
       `;
 
-      const ai = new GoogleGenAI({ apiKey });
-      const response = await ai.models.generateContent({
-        model: geminiModel,
-        contents: [{ parts: [{ text: prompt }] }],
+      const response = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ systemPrompt: prompt, userPrompt: '' }),
       });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || `API error (${response.status})`);
 
-      const text = response.candidates?.[0]?.content?.parts?.[0]?.text;
-
+      const text = data.text;
       if (!text) throw new Error('No response generated from AI');
 
       setAiReport(text);

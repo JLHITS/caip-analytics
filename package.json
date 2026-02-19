@@ -1,7 +1,7 @@
 {
   "name": "caip-analytics",
   "private": true,
-  "version": "0.9.25",
+  "version": "0.9.26",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -13,7 +13,6 @@
   },
   "dependencies": {
     "@emailjs/browser": "^4.4.1",
-    "@google/genai": "^1.30.0",
     "chart.js": "^4.5.1",
     "firebase": "^12.6.0",
     "html2canvas": "^1.4.1",
