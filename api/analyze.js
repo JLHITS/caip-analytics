@@ -12,8 +12,8 @@ export default async function handler(req, res) {
 
   const { systemPrompt, userPrompt } = req.body;
 
-  if (!systemPrompt || !userPrompt) {
-    return res.status(400).json({ error: 'systemPrompt and userPrompt are required.' });
+  if (!systemPrompt && !userPrompt) {
+    return res.status(400).json({ error: 'systemPrompt or userPrompt is required.' });
   }
 
   try {
@@ -26,10 +26,9 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         model,
         messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
+          ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
+          { role: 'user', content: userPrompt || systemPrompt },
         ],
-        temperature: 0.7,
       }),
     });
 
