@@ -1233,15 +1233,61 @@ const NationalDemandCapacity = ({
       // Load previous months' data for trend calculations
       const previousMonths = getPreviousMonths(selectedMonth, 3);
 
-      // Ensure historical months are loaded before calculating trends
+      // Load historical months and collect returned data directly
+      // (cannot rely on state — setAppointmentData is async)
+      const loadedHistoricalData = {};
       for (const month of previousMonths) {
-        if (!appointmentData[month]) {
-          await loadMonthData(month);
+        if (appointmentData[month]) {
+          loadedHistoricalData[month] = appointmentData[month];
+        } else {
+          const loaded = await loadMonthData(month);
+          if (loaded) loadedHistoricalData[month] = loaded;
         }
       }
 
-      // Get historical metrics for trends (now with loaded data)
-      const historicalMetrics = getHistoricalMetrics();
+      // Calculate historical metrics from the directly-loaded data
+      const historicalMetrics = {
+        gpApptsPerCall: [],
+        gpApptsPer1000: [],
+        gpApptPerDayPct: [],
+        gpApptOrOCPerDayPct: [],
+        otherApptPerDayPct: [],
+        dnaPct: [],
+        sameDayPct: [],
+        inboundCallsPer1000: [],
+        missedCallPct: [],
+        ocPer1000: [],
+      };
+
+      for (const month of previousMonths) {
+        const monthData = loadedHistoricalData[month];
+        if (!monthData) continue;
+
+        const practice = monthData.practices.find(p => p.odsCode === selectedPractice.odsCode);
+        if (!practice) continue;
+
+        const population = practice.listSize || 10000;
+        const telephonyMonth = telephonyData?.[month];
+        const ocMonth = ocData?.[month];
+        const practiceTelephony = telephonyMonth?.practices?.find(p => p.odsCode === practice.odsCode) || null;
+        const practiceOC = ocMonth?.practices?.find(p => p.odsCode === practice.odsCode) || null;
+        const metrics = calculatePracticeMetrics(practice, practiceTelephony, practiceOC, population, month);
+
+        if (metrics.gpApptsPerCall != null) historicalMetrics.gpApptsPerCall.push(metrics.gpApptsPerCall);
+        if (metrics.gpApptsPer1000 != null) historicalMetrics.gpApptsPer1000.push(metrics.gpApptsPer1000);
+        if (metrics.gpApptPerDayPct != null) historicalMetrics.gpApptPerDayPct.push(metrics.gpApptPerDayPct);
+        if (metrics.gpApptOrOCPerDayPct != null) historicalMetrics.gpApptOrOCPerDayPct.push(metrics.gpApptOrOCPerDayPct);
+        if (metrics.otherApptPerDayPct != null) historicalMetrics.otherApptPerDayPct.push(metrics.otherApptPerDayPct);
+        if (metrics.dnaPct != null) historicalMetrics.dnaPct.push(metrics.dnaPct);
+        if (metrics.sameDayPct != null) historicalMetrics.sameDayPct.push(metrics.sameDayPct);
+        if (metrics.hasTelephonyData && metrics.inboundCalls && population) {
+          historicalMetrics.inboundCallsPer1000.push((metrics.inboundCalls / population) * 1000);
+        }
+        if (metrics.missedCallPct != null) historicalMetrics.missedCallPct.push(metrics.missedCallPct);
+        if (metrics.hasOCData && metrics.ocSubmissions && population) {
+          historicalMetrics.ocPer1000.push((metrics.ocSubmissions / population) * 1000);
+        }
+      }
 
       // Build system + user prompts (split for OpenAI prompt caching)
       const { systemPrompt, userPrompt } = buildCAIPPrompts({
