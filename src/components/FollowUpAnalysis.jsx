@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback, useRef } from 'react';
 import {
   Upload, FileText, AlertCircle, CheckCircle, Calendar, Clock,
   TrendingUp, BarChart3, Info, Users, Activity, ArrowUp, ArrowDown,
-  ChevronDown, ChevronUp, ArrowUpDown, Printer, Loader2
+  ChevronDown, ChevronUp, ArrowUpDown, Printer, Loader2, HelpCircle
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -21,6 +21,7 @@ import {
   Filler,
 } from 'chart.js';
 import Card from './ui/Card';
+import FollowUpGuideModal from './modals/FollowUpGuideModal';
 import {
   parseFollowUpCSV,
   mergeCSVTexts,
@@ -44,6 +45,7 @@ const TIMEFRAME_OPTIONS = [
 export default function FollowUpAnalysis() {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
+  const [showGuide, setShowGuide] = useState(false);
   const [timeframe, setTimeframe] = useState('all');
   const [activeSection, setActiveSection] = useState('overview');
   const [expandedDoctor, setExpandedDoctor] = useState(null);
@@ -251,6 +253,13 @@ export default function FollowUpAnalysis() {
               <span className="font-medium text-slate-700">Load Sample Data</span>
             </button>
           </div>
+          <button
+            onClick={() => setShowGuide(true)}
+            className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl hover:bg-blue-100 transition-colors text-sm font-medium text-blue-700"
+          >
+            <HelpCircle size={18} />
+            How do I get this data from SystmOne?
+          </button>
           {error && (
             <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-sm text-red-700">
               <AlertCircle size={16} />
@@ -274,6 +283,7 @@ export default function FollowUpAnalysis() {
             </div>
           </div>
         </Card>
+        <FollowUpGuideModal isOpen={showGuide} onClose={() => setShowGuide(false)} />
       </div>
     );
   }
@@ -326,6 +336,13 @@ export default function FollowUpAnalysis() {
             >
               {exporting ? <Loader2 size={14} className="animate-spin" /> : <Printer size={14} />}
               {exporting ? 'Exporting...' : 'Export PDF'}
+            </button>
+            <button
+              onClick={() => setShowGuide(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 text-xs font-medium text-blue-600"
+              title="How to get this data"
+            >
+              <HelpCircle size={14} />
             </button>
           </div>
         </div>
@@ -947,6 +964,7 @@ export default function FollowUpAnalysis() {
         </div>
       </Card>
       </div>{/* end analysisRef */}
+      <FollowUpGuideModal isOpen={showGuide} onClose={() => setShowGuide(false)} />
     </div>
   );
 }
