@@ -65,6 +65,7 @@ import ImportButton from './components/ui/ImportButton';
 import PracticeLookup from './components/ui/PracticeLookup';
 import NationalDemandCapacity from './components/NationalDemandCapacity';
 import TriageSlotAnalysis from './components/TriageSlotAnalysis';
+import FollowUpAnalysis from './components/FollowUpAnalysis';
 import { PracticeComparison, ComparisonBuilder } from './components/comparison';
 
 // Utility imports
@@ -185,7 +186,7 @@ export default function App() {
   const [error, setError] = useState(null);
   // Navigation state - two levels: dataSource (local/national) then subTab
   const [dataSource, setDataSource] = useState(null); // null = intro, 'local', 'national'
-  const [mainTab, setMainTab] = useState('demand'); // Local: 'demand', 'triage' | National: 'telephony', 'online-consultations'
+  const [mainTab, setMainTab] = useState('demand'); // Local: 'demand', 'triage', 'followup' | National: 'telephony', 'online-consultations'
 
   // Disclaimer state - require acceptance before using the tool
   const [disclaimerAccepted, setDisclaimerAccepted] = useState(() => {
@@ -2325,6 +2326,18 @@ export default function App() {
                         </span>
                       </span>
                     </button>
+                    <button
+                      onClick={() => { setMainTab('followup'); trackTabView('local', 'followup'); }}
+                      className={`flex items-center gap-2 px-6 py-3 rounded-lg font-bold transition-all ${mainTab === 'followup' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-800'}`}
+                    >
+                      <Users size={20} />
+                      <span className="flex items-center gap-2">
+                        Follow Up Analysis
+                        <span className={`text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full font-bold ${mainTab === 'followup' ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-700'}`}>
+                          Beta
+                        </span>
+                      </span>
+                    </button>
                   </>
                 )}
                 {dataSource === 'national' && (
@@ -2571,6 +2584,28 @@ export default function App() {
                 {isProcessing ? 'Analysing Data...' : 'Generate Dashboard'}
               </button>
             </Card>
+
+            {/* Follow Up Analysis promo */}
+            <div
+              onClick={() => { setMainTab('followup'); trackTabView('local', 'followup'); }}
+              className="mt-6 p-4 bg-gradient-to-r from-emerald-50 to-teal-50 border-2 border-emerald-200 rounded-xl cursor-pointer hover:shadow-md hover:border-emerald-300 transition-all group"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center text-emerald-600 group-hover:bg-emerald-200 transition-colors">
+                  <Users size={24} />
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-bold text-emerald-800 flex items-center gap-2">
+                    Follow Up Analysis
+                    <span className="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full font-bold bg-emerald-100 text-emerald-700">New</span>
+                  </h4>
+                  <p className="text-sm text-emerald-700">
+                    Upload your appointment CSV to analyse patient follow-up rates by GP - see how often patients return within 1, 2 and 4 weeks.
+                  </p>
+                </div>
+                <ChevronDown size={20} className="text-emerald-400 rotate-[-90deg] group-hover:translate-x-1 transition-transform" />
+              </div>
+            </div>
           </div>
         )}
 
@@ -3160,6 +3195,11 @@ export default function App() {
         {/* TRIAGE SLOT ANALYSIS CONTENT */}
         <div className={dataSource === 'local' && mainTab === 'triage' ? '' : 'hidden'}>
           <TriageSlotAnalysis />
+        </div>
+
+        {/* FOLLOW UP ANALYSIS CONTENT */}
+        <div className={dataSource === 'local' && mainTab === 'followup' ? '' : 'hidden'}>
+          <FollowUpAnalysis />
         </div>
 
       </main>
