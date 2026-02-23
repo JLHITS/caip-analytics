@@ -431,26 +431,37 @@ export default function App() {
       return;
     }
 
+    // Named routes (must be checked before ODS code catch-all)
+    const lowerPath = path.toLowerCase();
+    if (lowerPath === '/triage' || lowerPath === '/slots') {
+      setDataSource('local');
+      setMainTab('triage');
+      return;
+    } else if (lowerPath === '/local' || lowerPath === '/dc') {
+      setDataSource('local');
+      setMainTab('demand');
+      return;
+    } else if (lowerPath === '/national') {
+      setDataSource('national');
+      setMainTab('telephony');
+      return;
+    } else if (lowerPath === '/telephony') {
+      setDataSource('national');
+      setMainTab('telephony');
+      return;
+    } else if (lowerPath === '/oc') {
+      setDataSource('national');
+      setMainTab('online-consultations');
+      return;
+    }
+
+    // ODS code catch-all (e.g. /Y00042) — must come after named routes
     const odsMatch = path.match(/^\/([A-Za-z0-9]{3,10})$/);
     if (odsMatch) {
       setInitialNationalOdsCode(odsMatch[1]);
       setDataSource('national');
       setMainTab('telephony');
       return;
-    }
-
-    if (path.includes('/telephony')) {
-      setDataSource('national');
-      setMainTab('telephony');
-    } else if (path.includes('/oc')) {
-      setDataSource('national');
-      setMainTab('online-consultations');
-    } else if (path.includes('/slots')) {
-      setDataSource('local');
-      setMainTab('triage');
-    } else if (path.includes('/dc')) {
-      setDataSource('local');
-      setMainTab('demand');
     }
   }, []);
 
