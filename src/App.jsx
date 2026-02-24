@@ -2211,6 +2211,7 @@ export default function App() {
                   <div className="flex flex-wrap gap-2">
                     <span className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-full font-medium">Demand & Capacity</span>
                     <span className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-full font-medium">Triage Slots</span>
+                    <span className="text-xs px-2 py-1 bg-emerald-50 text-emerald-700 rounded-full font-medium">Follow Up Rates</span>
                   </div>
                 </button>
 
