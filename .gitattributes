@@ -1,2 +1,1 @@
-public/data/*.json filter=lfs diff=lfs merge=lfs -text
-public/data/**/*.json filter=lfs diff=lfs merge=lfs -text
+# Keep public data JSON as regular Git blobs so deployments do not depend on Git LFS.

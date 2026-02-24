@@ -72,22 +72,19 @@ export async function loadAppointmentsData() {
     const months = Array.isArray(indexData.months) ? indexData.months : Object.keys(indexData.files || {});
     const fileMap = indexData.files || {};
 
-    try {
-      const entries = await Promise.all(months.map(async (month) => {
-        const relativePath = fileMap[month] || `appointments/${month.replace(/\\s+/g, '_')}.json`;
-        const monthResult = await fetchJsonIfAvailable(`/data/${relativePath}`);
-        if (!monthResult?.data) {
-          throw new Error(`Appointments JSON unavailable for ${month}`);
-        }
-        return [month, monthResult.data];
-      }));
+    const monthResults = await Promise.all(months.map(async (month) => {
+      const relativePath = fileMap[month] || `appointments/${month.replace(/\\s+/g, '_')}.json`;
+      const monthResult = await fetchJsonIfAvailable(`/data/${relativePath}`);
+      return monthResult?.data ? [month, monthResult.data] : null;
+    }));
 
+    const entries = monthResults.filter(Boolean);
+    if (entries.length > 0) {
+      const loadedMonths = entries.map(([month]) => month);
       const data = Object.fromEntries(entries);
-      data.metadata = { ...(indexData.metadata || {}), months, files: fileMap };
+      data.metadata = { ...(indexData.metadata || {}), months: loadedMonths, files: fileMap };
       dataCache.appointments = data;
       return data;
-    } catch {
-      return null;
     }
   }
 
@@ -151,22 +148,19 @@ export async function loadWorkforceData() {
     const months = Array.isArray(indexData.months) ? indexData.months : Object.keys(indexData.files || {});
     const fileMap = indexData.files || {};
 
-    try {
-      const entries = await Promise.all(months.map(async (month) => {
-        const relativePath = fileMap[month] || `workforce/${month.replace(/\\s+/g, '_')}.json`;
-        const monthResult = await fetchJsonIfAvailable(`/data/${relativePath}`);
-        if (!monthResult?.data) {
-          throw new Error(`Workforce JSON unavailable for ${month}`);
-        }
-        return [month, monthResult.data];
-      }));
+    const monthResults = await Promise.all(months.map(async (month) => {
+      const relativePath = fileMap[month] || `workforce/${month.replace(/\\s+/g, '_')}.json`;
+      const monthResult = await fetchJsonIfAvailable(`/data/${relativePath}`);
+      return monthResult?.data ? [month, monthResult.data] : null;
+    }));
 
+    const entries = monthResults.filter(Boolean);
+    if (entries.length > 0) {
+      const loadedMonths = entries.map(([month]) => month);
       const data = Object.fromEntries(entries);
-      data.metadata = { ...(indexData.metadata || {}), months, files: fileMap };
+      data.metadata = { ...(indexData.metadata || {}), months: loadedMonths, files: fileMap };
       dataCache.workforce = data;
       return data;
-    } catch {
-      return null;
     }
   }
 
