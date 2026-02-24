@@ -40,11 +40,6 @@ const fetchJsonIfAvailable = async (url) => {
     return { unavailable: true, status: response.status };
   }
 
-  const contentType = response.headers.get('content-type') || '';
-  if (contentType.includes('application/json')) {
-    return { data: await response.json() };
-  }
-
   const text = await response.text();
   if (isLfsPointer(text) || isHtmlResponse(text)) {
     return { unavailable: true };
