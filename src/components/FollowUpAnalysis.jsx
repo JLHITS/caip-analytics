@@ -375,7 +375,7 @@ export default function FollowUpAnalysis() {
       {activeSection === 'overview' && overallRates && sameGPRates && (
         <div className="space-y-6">
           {/* Key metrics */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <Card className="bg-gradient-to-br from-blue-50 to-white border-blue-200">
               <p className="text-xs font-bold text-blue-900 mb-1">Total Dr Appointments</p>
               <p className="text-2xl font-bold text-blue-700">{overallRates.totalDoctorAppointments.toLocaleString()}</p>
@@ -395,6 +395,11 @@ export default function FollowUpAnalysis() {
               <p className="text-xs font-bold text-purple-900 mb-1">Follow-up within 28 days</p>
               <p className="text-2xl font-bold text-purple-700">{overallRates.rate28.toFixed(1)}%</p>
               <p className="text-xs text-slate-400">cumulative</p>
+            </Card>
+            <Card className="bg-gradient-to-br from-slate-100 to-white border-slate-300">
+              <p className="text-xs font-bold text-slate-700 mb-1">No Follow-up (28d+)</p>
+              <p className="text-2xl font-bold text-slate-500">{overallRates.noFollowUpRate.toFixed(1)}%</p>
+              <p className="text-xs text-slate-400">{overallRates.noFollowUp} appointments</p>
             </Card>
           </div>
 

@@ -208,14 +208,23 @@ function filterByTimeframe(appointments, timeframe) {
  * A follow-up is when the same patient sees any doctor again within the window
  */
 export function calculateOverallFollowUpRates(data, timeframe = 'all') {
-  const allAppts = filterByTimeframe(data.appointments, timeframe);
-  const doctorAppts = allAppts.filter(a => a.isDoctor);
+  // Timeframe controls which appointments we MEASURE FROM
+  const sourceAppts = filterByTimeframe(data.appointments, timeframe);
+  const sourceDoctorAppts = sourceAppts.filter(a => a.isDoctor);
 
-  // Group by patient
-  const patientAppts = {};
-  doctorAppts.forEach(a => {
-    if (!patientAppts[a.nhsNumber]) patientAppts[a.nhsNumber] = [];
-    patientAppts[a.nhsNumber].push(a);
+  // Build full (unfiltered) patient doctor appointment lookup for follow-up searches
+  const fullPatientDrAppts = {};
+  data.appointments.filter(a => a.isDoctor).forEach(a => {
+    if (!fullPatientDrAppts[a.nhsNumber]) fullPatientDrAppts[a.nhsNumber] = [];
+    fullPatientDrAppts[a.nhsNumber].push(a);
+  });
+  Object.values(fullPatientDrAppts).forEach(arr => arr.sort((a, b) => a.date - b.date));
+
+  // Group source appointments by patient for counting
+  const sourcePatientAppts = {};
+  sourceDoctorAppts.forEach(a => {
+    if (!sourcePatientAppts[a.nhsNumber]) sourcePatientAppts[a.nhsNumber] = [];
+    sourcePatientAppts[a.nhsNumber].push(a);
   });
 
   let totalDrAppts = 0;
@@ -223,38 +232,46 @@ export function calculateOverallFollowUpRates(data, timeframe = 'all') {
   let followUp14 = 0;
   let followUp28 = 0;
 
-  Object.values(patientAppts).forEach(appts => {
+  Object.entries(sourcePatientAppts).forEach(([nhsNumber, appts]) => {
     appts.sort((a, b) => a.date - b.date);
+    const fullAppts = fullPatientDrAppts[nhsNumber] || [];
 
     for (let i = 0; i < appts.length; i++) {
       totalDrAppts++;
 
-      // Check if patient has another Dr appointment after this one within windows
-      for (let j = i + 1; j < appts.length; j++) {
-        const gap = daysBetween(appts[i].date, appts[j].date);
-        if (gap === 0) continue; // Same day = same visit, skip
-        if (gap <= 7) { followUp7++; break; }
-        if (gap <= 14) { followUp14++; break; }
-        if (gap <= 28) { followUp28++; break; }
-        break; // Only look at the next appointment
-      }
+      // Find next doctor appointment from FULL dataset after this one
+      const nextAppt = fullAppts.find(a => a.date > appts[i].date);
+      if (!nextAppt) continue;
+
+      const gap = daysBetween(appts[i].date, nextAppt.date);
+      if (gap === 0) continue; // Same day = same visit, skip
+      if (gap <= 7) followUp7++;
+      else if (gap <= 14) followUp14++;
+      else if (gap <= 28) followUp28++;
     }
   });
 
-  // Exclude last appointment per patient from denominator since it can't have a follow-up
-  const adjustedTotal = Object.values(patientAppts).reduce((sum, appts) => sum + Math.max(0, appts.length - 1), 0);
+  // Exclude appointments with no possible follow-up (no next appt in full dataset)
+  const adjustedTotal = Object.entries(sourcePatientAppts).reduce((sum, [nhsNumber, appts]) => {
+    const fullAppts = fullPatientDrAppts[nhsNumber] || [];
+    return sum + appts.filter(a => fullAppts.some(f => f.date > a.date)).length;
+  }, 0);
   const denominator = adjustedTotal || 1;
+
+  const noFollowUp = denominator - followUp7 - followUp14 - followUp28;
 
   return {
     totalDoctorAppointments: totalDrAppts,
-    patientsWithDrAppts: Object.keys(patientAppts).length,
+    patientsWithDrAppts: Object.keys(sourcePatientAppts).length,
     followUp7,
     followUp14,
     followUp28,
+    noFollowUp,
     totalFollowUps: followUp7 + followUp14 + followUp28,
     rate7: (followUp7 / denominator) * 100,
     rate14: ((followUp7 + followUp14) / denominator) * 100,
     rate28: ((followUp7 + followUp14 + followUp28) / denominator) * 100,
+    noFollowUpRate: (noFollowUp / denominator) * 100,
     denominator,
   };
 }
@@ -264,15 +281,27 @@ export function calculateOverallFollowUpRates(data, timeframe = 'all') {
  * Returns overall and per-doctor breakdown
  */
 export function calculateSameGPFollowUpRates(data, timeframe = 'all') {
-  const allAppts = filterByTimeframe(data.appointments, timeframe);
-  const doctorAppts = allAppts.filter(a => a.isDoctor);
+  // Timeframe controls which appointments we MEASURE FROM
+  const sourceAppts = filterByTimeframe(data.appointments, timeframe);
+  const sourceDoctorAppts = sourceAppts.filter(a => a.isDoctor);
 
-  // Group by patient then by doctor
-  const patientDoctorAppts = {}; // { nhsNumber: { doctorName: [appts] } }
-  doctorAppts.forEach(a => {
-    if (!patientDoctorAppts[a.nhsNumber]) patientDoctorAppts[a.nhsNumber] = {};
-    if (!patientDoctorAppts[a.nhsNumber][a.clinician]) patientDoctorAppts[a.nhsNumber][a.clinician] = [];
-    patientDoctorAppts[a.nhsNumber][a.clinician].push(a);
+  // Build FULL (unfiltered) patient-doctor appointment lookup for follow-up searches
+  const fullPatientDoctorAppts = {}; // { nhsNumber: { doctorName: [appts] } }
+  data.appointments.filter(a => a.isDoctor).forEach(a => {
+    if (!fullPatientDoctorAppts[a.nhsNumber]) fullPatientDoctorAppts[a.nhsNumber] = {};
+    if (!fullPatientDoctorAppts[a.nhsNumber][a.clinician]) fullPatientDoctorAppts[a.nhsNumber][a.clinician] = [];
+    fullPatientDoctorAppts[a.nhsNumber][a.clinician].push(a);
+  });
+  Object.values(fullPatientDoctorAppts).forEach(doctorMap => {
+    Object.values(doctorMap).forEach(arr => arr.sort((a, b) => a.date - b.date));
+  });
+
+  // Group SOURCE appointments by patient then by doctor
+  const sourcePatientDoctorAppts = {};
+  sourceDoctorAppts.forEach(a => {
+    if (!sourcePatientDoctorAppts[a.nhsNumber]) sourcePatientDoctorAppts[a.nhsNumber] = {};
+    if (!sourcePatientDoctorAppts[a.nhsNumber][a.clinician]) sourcePatientDoctorAppts[a.nhsNumber][a.clinician] = [];
+    sourcePatientDoctorAppts[a.nhsNumber][a.clinician].push(a);
   });
 
   // Per-doctor stats
@@ -284,11 +313,11 @@ export function calculateSameGPFollowUpRates(data, timeframe = 'all') {
   let sameGP14 = 0;
   let sameGP28 = 0;
 
-  Object.values(patientDoctorAppts).forEach(doctorMap => {
+  Object.entries(sourcePatientDoctorAppts).forEach(([nhsNumber, doctorMap]) => {
     Object.entries(doctorMap).forEach(([doctor, appts]) => {
-      if (appts.length < 2) return; // Need at least 2 visits to same doctor
-
       appts.sort((a, b) => a.date - b.date);
+      // Get FULL appointment history for this patient-doctor pair
+      const fullAppts = fullPatientDoctorAppts[nhsNumber]?.[doctor] || [];
 
       if (!doctorStats[doctor]) {
         doctorStats[doctor] = {
@@ -303,12 +332,17 @@ export function calculateSameGPFollowUpRates(data, timeframe = 'all') {
         };
       }
 
-      doctorStats[doctor].patientsWithRevisit++;
+      let hasRevisit = false;
 
-      for (let i = 0; i < appts.length - 1; i++) {
-        const gap = daysBetween(appts[i].date, appts[i + 1].date);
+      for (let i = 0; i < appts.length; i++) {
+        // Find next same-doctor appointment from FULL dataset
+        const nextAppt = fullAppts.find(a => a.date > appts[i].date);
+        if (!nextAppt) continue;
+
+        const gap = daysBetween(appts[i].date, nextAppt.date);
         if (gap === 0) continue;
 
+        hasRevisit = true;
         totalPairs++;
         doctorStats[doctor].pairs++;
 
@@ -323,11 +357,13 @@ export function calculateSameGPFollowUpRates(data, timeframe = 'all') {
           doctorStats[doctor].followUp28++;
         }
       }
+
+      if (hasRevisit) doctorStats[doctor].patientsWithRevisit++;
     });
   });
 
-  // Count total visits and unique patients per doctor
-  doctorAppts.forEach(a => {
+  // Count total visits and unique patients per doctor (from source appointments)
+  sourceDoctorAppts.forEach(a => {
     if (!doctorStats[a.clinician]) {
       doctorStats[a.clinician] = {
         name: a.clinician,
@@ -345,7 +381,7 @@ export function calculateSameGPFollowUpRates(data, timeframe = 'all') {
 
   // Count unique patients per doctor
   const doctorPatients = {};
-  doctorAppts.forEach(a => {
+  sourceDoctorAppts.forEach(a => {
     if (!doctorPatients[a.clinician]) doctorPatients[a.clinician] = new Set();
     doctorPatients[a.clinician].add(a.nhsNumber);
   });
@@ -383,20 +419,21 @@ export function calculateSameGPFollowUpRates(data, timeframe = 'all') {
  * return within 1/2/4 weeks to ANY doctor
  */
 export function calculateClinicianFollowUpRates(data, timeframe = 'all') {
-  const allAppts = filterByTimeframe(data.appointments, timeframe);
-  const doctorAppts = allAppts.filter(a => a.isDoctor);
+  // Timeframe controls which appointments we MEASURE FROM
+  const sourceAppts = filterByTimeframe(data.appointments, timeframe);
+  const sourceDoctorAppts = sourceAppts.filter(a => a.isDoctor);
 
-  // Build a lookup of all patient appointments (all clinicians) for fast access
+  // Build FULL (unfiltered) patient appointment lookup for follow-up searches
   const allPatientAppts = {};
-  allAppts.forEach(a => {
+  data.appointments.forEach(a => {
     if (!allPatientAppts[a.nhsNumber]) allPatientAppts[a.nhsNumber] = [];
     allPatientAppts[a.nhsNumber].push(a);
   });
   Object.values(allPatientAppts).forEach(arr => arr.sort((a, b) => a.date - b.date));
 
-  // Group doctor appointments by clinician
+  // Group source doctor appointments by clinician
   const clinicianAppts = {};
-  doctorAppts.forEach(a => {
+  sourceDoctorAppts.forEach(a => {
     if (!clinicianAppts[a.clinician]) clinicianAppts[a.clinician] = [];
     clinicianAppts[a.clinician].push(a);
   });
