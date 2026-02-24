@@ -251,12 +251,8 @@ export function calculateOverallFollowUpRates(data, timeframe = 'all') {
     }
   });
 
-  // Exclude appointments with no possible follow-up (no next appt in full dataset)
-  const adjustedTotal = Object.entries(sourcePatientAppts).reduce((sum, [nhsNumber, appts]) => {
-    const fullAppts = fullPatientDrAppts[nhsNumber] || [];
-    return sum + appts.filter(a => fullAppts.some(f => f.date > a.date)).length;
-  }, 0);
-  const denominator = adjustedTotal || 1;
+  // Denominator = all source doctor appointments (no follow-up = patient didn't return)
+  const denominator = totalDrAppts || 1;
 
   const noFollowUp = denominator - followUp7 - followUp14 - followUp28;
 
@@ -399,10 +395,13 @@ export function calculateSameGPFollowUpRates(data, timeframe = 'all') {
     }))
     .sort((a, b) => b.totalVisits - a.totalVisits);
 
-  const denominator = totalPairs || 1;
+  // Denominator = all source doctor appointments (not just those with same-GP revisits)
+  const totalSourceAppts = sourceDoctorAppts.length;
+  const denominator = totalSourceAppts || 1;
 
   return {
     totalPairs,
+    totalSourceAppts,
     sameGP7,
     sameGP14,
     sameGP28,
