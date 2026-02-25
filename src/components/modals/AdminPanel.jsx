@@ -3,12 +3,11 @@ import {
   X, Lock, Users, RefreshCw, Download, Shield, AlertTriangle,
   Sparkles, Trash2, Search, AlertCircle, CheckCircle
 } from 'lucide-react';
-import { collection, getDocs } from 'firebase/firestore';
-import { db } from '../../firebase/config';
 import {
   listAllAnalyses,
   deleteAllAnalysesForPractice,
   clearAllAnalyses,
+  listPracticeUsage,
 } from '../../utils/caipAnalysisStorage';
 
 const AdminPanel = ({ isOpen, onClose }) => {
@@ -48,13 +47,7 @@ const AdminPanel = ({ isOpen, onClose }) => {
     setPracticesLoading(true);
     setPracticesError('');
     try {
-      const snapshot = await getDocs(collection(db, 'practiceUsage'));
-      const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-      data.sort((a, b) => {
-        const aTime = a.lastUsed?.toDate?.() || a.lastUsed || 0;
-        const bTime = b.lastUsed?.toDate?.() || b.lastUsed || 0;
-        return bTime - aTime;
-      });
+      const data = await listPracticeUsage();
       setPractices(data);
     } catch (error) {
       const msg = String(error?.message || '');

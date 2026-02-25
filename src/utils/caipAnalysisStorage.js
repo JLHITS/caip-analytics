@@ -218,6 +218,26 @@ export async function clearAllAnalyses() {
 }
 
 /**
+ * List all practice usage records
+ * @returns {Promise<Array>} Array of practice usage objects sorted by most recent
+ */
+export async function listPracticeUsage() {
+  try {
+    const snapshot = await getDocs(collection(db, 'practiceUsage'));
+    const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    data.sort((a, b) => {
+      const aTime = a.lastUsed?.toDate?.() || a.lastUsed || 0;
+      const bTime = b.lastUsed?.toDate?.() || b.lastUsed || 0;
+      return bTime - aTime;
+    });
+    return data;
+  } catch (error) {
+    if (error?.code === 'permission-denied') throw error;
+    throw error;
+  }
+}
+
+/**
  * Validate a beta access code
  * Checks if the code exists in Firestore and has not been used
  *
@@ -280,6 +300,7 @@ export default {
   deleteAnalysis,
   deleteAllAnalysesForPractice,
   clearAllAnalyses,
+  listPracticeUsage,
   validateBetaCode,
   consumeBetaCode,
 };
