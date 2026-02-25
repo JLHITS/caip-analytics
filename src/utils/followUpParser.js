@@ -389,9 +389,10 @@ export function calculateSameGPFollowUpRates(data, timeframe = 'all') {
   const doctorBreakdown = Object.values(doctorStats)
     .map(d => ({
       ...d,
-      rate7: d.pairs > 0 ? (d.followUp7 / d.pairs) * 100 : 0,
-      rate14: d.pairs > 0 ? ((d.followUp7 + d.followUp14) / d.pairs) * 100 : 0,
-      rate28: d.pairs > 0 ? ((d.followUp7 + d.followUp14 + d.followUp28) / d.pairs) * 100 : 0,
+      // Per-doctor denominator mirrors overall logic: all source visits for that doctor.
+      rate7: d.totalVisits > 0 ? (d.followUp7 / d.totalVisits) * 100 : 0,
+      rate14: d.totalVisits > 0 ? ((d.followUp7 + d.followUp14) / d.totalVisits) * 100 : 0,
+      rate28: d.totalVisits > 0 ? ((d.followUp7 + d.followUp14 + d.followUp28) / d.totalVisits) * 100 : 0,
     }))
     .sort((a, b) => b.totalVisits - a.totalVisits);
 
@@ -422,9 +423,9 @@ export function calculateClinicianFollowUpRates(data, timeframe = 'all') {
   const sourceAppts = filterByTimeframe(data.appointments, timeframe);
   const sourceDoctorAppts = sourceAppts.filter(a => a.isDoctor);
 
-  // Build FULL (unfiltered) patient appointment lookup for follow-up searches
+  // Build FULL (unfiltered) patient doctor appointment lookup for follow-up searches
   const allPatientAppts = {};
-  data.appointments.forEach(a => {
+  data.appointments.filter(a => a.isDoctor).forEach(a => {
     if (!allPatientAppts[a.nhsNumber]) allPatientAppts[a.nhsNumber] = [];
     allPatientAppts[a.nhsNumber].push(a);
   });
@@ -445,7 +446,7 @@ export function calculateClinicianFollowUpRates(data, timeframe = 'all') {
     let noFollowUp = 0;
 
     appts.forEach(appt => {
-      // Find the next appointment for this patient (with any clinician) after this one
+      // Find the next DOCTOR appointment for this patient after this one
       const patientAllAppts = allPatientAppts[appt.nhsNumber] || [];
       const nextAppt = patientAllAppts.find(a => a.date > appt.date);
 
@@ -493,9 +494,9 @@ export function calculateMonthlyTrends(data) {
     monthlyAppts[key].push(a);
   });
 
-  // Build a full patient appointment lookup
+  // Build a full patient DOCTOR appointment lookup
   const allPatientAppts = {};
-  data.appointments.forEach(a => {
+  data.appointments.filter(a => a.isDoctor).forEach(a => {
     if (!allPatientAppts[a.nhsNumber]) allPatientAppts[a.nhsNumber] = [];
     allPatientAppts[a.nhsNumber].push(a);
   });

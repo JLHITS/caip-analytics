@@ -541,7 +541,7 @@ export default function FollowUpAnalysis() {
                 <h3 className="font-bold text-blue-800">Follow-up with Any Doctor</h3>
                 <p className="text-sm text-blue-700">
                   How often patients return to <em>any</em> GP within 1, 2 and 4 weeks of a doctor appointment.
-                  Based on {overallRates.denominator.toLocaleString()} appointment pairs from {overallRates.patientsWithDrAppts.toLocaleString()} patients.
+                  Based on {overallRates.denominator.toLocaleString()} doctor appointments from {overallRates.patientsWithDrAppts.toLocaleString()} patients.
                 </p>
               </div>
             </div>
@@ -606,8 +606,8 @@ export default function FollowUpAnalysis() {
               <div>
                 <h3 className="font-bold text-indigo-800">Same GP Follow-up (Continuity of Care)</h3>
                 <p className="text-sm text-indigo-700">
-                  How often patients return to the <em>same</em> GP. Based on {sameGPRates.totalPairs.toLocaleString()} consecutive
-                  same-GP visit pairs.
+                  How often patients return to the <em>same</em> GP. Based on {sameGPRates.totalSourceAppts.toLocaleString()}
+                  doctor appointments.
                 </p>
               </div>
             </div>
@@ -723,7 +723,7 @@ export default function FollowUpAnalysis() {
               <div>
                 <h3 className="font-bold text-teal-800">Follow-up Rates by Clinician</h3>
                 <p className="text-sm text-teal-700">
-                  For each GP, what percentage of their appointments result in the patient returning to <em>any</em> clinician
+                  For each GP, what percentage of their appointments result in the patient returning to <em>any</em> GP
                   within 1, 2 and 4 weeks. GPs only (clinician name starting with "Dr").
                 </p>
               </div>
@@ -967,7 +967,7 @@ export default function FollowUpAnalysis() {
           <Info className="text-slate-400 mt-0.5 flex-shrink-0" size={16} />
           <div className="text-xs text-slate-500 space-y-1">
             <p><strong>About this analysis:</strong> Follow-up rates measure how often a patient returns within a given window after a GP appointment. Only clinicians whose name starts with "Dr" are included in GP analysis.</p>
-            <p><strong>Any Doctor:</strong> Patient returns to any GP within the window. <strong>Same GP:</strong> Patient returns to the same GP. <strong>By Clinician:</strong> For each GP's appointments, whether the patient returns to any clinician.</p>
+            <p><strong>Any Doctor:</strong> Patient returns to any GP within the window. <strong>Same GP:</strong> Patient returns to the same GP. <strong>By Clinician:</strong> For each GP's appointments, whether the patient returns to any GP.</p>
             <p>This data is processed entirely in your browser. No patient data is sent to any server.</p>
           </div>
         </div>
