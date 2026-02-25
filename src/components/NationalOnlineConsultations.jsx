@@ -264,10 +264,9 @@ const NationalOnlineConsultations = ({
           const jsonResponse = await fetch('/data/online-consultations.json');
           if (jsonResponse.ok) {
             jsonData = await jsonResponse.json();
-            console.log('Using pre-processed JSON data for online consultations');
           }
         } catch (e) {
-          console.log('Pre-processed JSON not available, falling back to XLSX parsing');
+          // Fallback to XLSX parsing
         }
 
         if (jsonData) {
@@ -286,7 +285,7 @@ const NationalOnlineConsultations = ({
               const parsedData = parseOnlineConsultationsData(arrayBuffer);
               return { month, data: parsedData, success: true };
             } catch (err) {
-              console.error(`Error loading ${month}:`, err);
+              if (import.meta.env.DEV) console.error(`Error loading ${month}:`, err);
               return { month, data: null, success: false };
             }
           });
@@ -299,8 +298,7 @@ const NationalOnlineConsultations = ({
           });
         }
 
-        console.log('=== ONLINE CONSULTATIONS DATA LOADED ===');
-        console.log(`Loaded ${Object.keys(allData).length} months of data`);
+        console.log(`=== ONLINE CONSULTATIONS DATA LOADED === ${Object.keys(allData).length} months`);
 
         setAllMonthsData(allData);
         onDataLoaded?.(allData);

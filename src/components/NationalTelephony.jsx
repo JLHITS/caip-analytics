@@ -395,10 +395,9 @@ const NationalTelephony = ({
           const jsonResponse = await fetch('/data/telephony.json');
           if (jsonResponse.ok) {
             jsonData = await jsonResponse.json();
-            console.log('Using pre-processed JSON data');
           }
         } catch (e) {
-          console.log('Pre-processed JSON not available, falling back to XLSX parsing');
+          // Fallback to XLSX parsing
         }
 
         if (jsonData) {
@@ -439,11 +438,7 @@ const NationalTelephony = ({
           });
         }
 
-        // DEBUG: Log the loaded data
-        console.log('=== ALL MONTHS DATA LOADED ===');
-        Object.entries(allData).forEach(([month, parsedData]) => {
-          console.log(`${month}: ${parsedData.practices?.length} practices, ${Object.keys(parsedData.populationMap || {}).length} population records`);
-        });
+        console.log(`=== TELEPHONY DATA LOADED === ${Object.keys(allData).length} months`);
 
         setAllMonthsData(allData);
         onDataLoaded?.(allData);

@@ -76,7 +76,7 @@ export const getPracPopData = () => {
   // Use December data as it's the most recent
   cachedPractices = parsePracPopCSV(pracPopDecRaw);
 
-  console.log(`Loaded ${cachedPractices.length} practices from PracPop data`);
+  console.log(`=== POPULATION DATA LOADED === ${cachedPractices.length} practices`);
   return cachedPractices;
 };
 

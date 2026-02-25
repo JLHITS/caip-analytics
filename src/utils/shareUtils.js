@@ -246,7 +246,10 @@ export const cleanupExpiredShares = async () => {
 
     return deletedCount;
   } catch (error) {
-    console.error('Failed to cleanup expired shares:', error);
+    // Silently ignore permission errors — Firestore rules may not allow deletes
+    if (import.meta.env.DEV) {
+      console.warn('[Share Cleanup] Skipped:', error.code || error.message);
+    }
     return 0;
   }
 };
@@ -260,7 +263,7 @@ export const maybeCleanupExpiredShares = async () => {
   if (Math.random() < CLEANUP_PROBABILITY) {
     const deleted = await cleanupExpiredShares();
     if (deleted > 0) {
-      console.log(`Cleaned up ${deleted} expired share links`);
+      if (import.meta.env.DEV) console.log(`Cleaned up ${deleted} expired share links`);
     }
   }
 };

@@ -109,7 +109,7 @@ export async function hasAnalysis(odsCode, month) {
     const docSnap = await getDoc(docRef);
     return docSnap.exists();
   } catch (error) {
-    console.error('Error checking CAIP analysis:', error);
+    if (import.meta.env.DEV) console.error('[CAIP Cache] Error checking analysis:', error.code);
     return false;
   }
 }

@@ -786,23 +786,16 @@ export default function App() {
       };
 
       // Process appointment data: Handle pivot table format where each staff member is a column
-      console.log('🔍 Starting appointment processing, rows:', apptData.length);
-      if (apptData.length > 0) {
-        console.log('  - First row keys:', Object.keys(apptData[0]).slice(0, 5));
-        console.log('  - First row sample:', apptData[0]);
-      }
 
       let processedRows = 0;
       for (const row of apptData) {
         const dateStr = row['Date'];
         if (!dateStr) {
-          console.log('  ⚠️ Skipping row - no date');
           continue;
         }
 
         const dateObj = parseDate(dateStr);
         if (!dateObj) {
-          console.log('  ⚠️ Skipping row - date parse failed:', dateStr);
           continue;
         }
 
@@ -818,7 +811,6 @@ export default function App() {
             onlineTotal: 0,
             onlineClinicalNoAppt: 0
           };
-          console.log('  ✅ Created month:', monthKey);
         }
 
         // Track working days (exclude Sat/Sun)
@@ -843,12 +835,10 @@ export default function App() {
         });
 
         processedRows++;
-        if (processedRows <= 3) {
-          console.log(`  - Row ${processedRows}: ${dateStr}, ${staffCount} staff with appointments`);
-        }
       }
-      console.log(`✅ Processed ${processedRows} appointment rows`);
-      console.log(`   Created ${Object.keys(monthlyMap).length} months, ${Object.keys(staffMap).length} staff entries`);
+      if (import.meta.env.DEV) {
+        console.log(`=== LOCAL DATA PROCESSED === ${processedRows} rows, ${Object.keys(monthlyMap).length} months, ${Object.keys(staffMap).length} staff`);
+      }
 
       // Calculate working days per month
       Object.values(monthlyMap).forEach(m => {
@@ -980,14 +970,6 @@ export default function App() {
       }
 
       // Store raw data for tables
-      console.log('📊 Data Processing Complete:');
-      console.log('  - Staff entries:', Object.keys(staffMap).length);
-      console.log('  - Slot entries:', Object.keys(slotMap).length);
-      console.log('  - Combined entries:', Object.keys(combinedMap).length);
-      console.log('  - Monthly entries:', Object.keys(monthlyMap).length);
-      console.log('  - Staff sample:', Object.values(staffMap).slice(0, 3));
-      console.log('  - Monthly sample:', Object.values(monthlyMap).slice(0, 2));
-
       setRawStaffData(Object.values(staffMap));
       setRawSlotData(Object.values(slotMap));
       setRawCombinedData(Object.values(combinedMap));
@@ -1852,8 +1834,6 @@ export default function App() {
     });
 
     const result = Object.values(grouped).sort((a, b) => b.appts - a.appts);
-    console.log('👥 Aggregated Staff Data:', result?.length || 0, 'entries');
-    if (result && result.length > 0) console.log('  - Sample:', result[0]);
     return result;
   }, [rawStaffData, selectedMonth, processedData, getAggregatedData]);
 

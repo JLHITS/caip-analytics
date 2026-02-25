@@ -460,7 +460,7 @@ const NationalDemandCapacity = ({
           const jsonData = await loadAppointmentsData();
           if (jsonData) {
             preloadedJsonRef.current = jsonData;
-            console.log('Using pre-processed JSON data for appointments');
+            console.log('=== APPOINTMENTS DATA LOADED ===');
 
             // Load all priority months from JSON immediately
             const newData = {};
@@ -478,7 +478,7 @@ const NationalDemandCapacity = ({
             return;
           }
         } catch (e) {
-          console.log('Pre-processed JSON not available, falling back to XLSX parsing');
+          // Fallback to XLSX parsing
         }
       }
 
