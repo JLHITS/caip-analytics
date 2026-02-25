@@ -246,14 +246,6 @@ export default function App() {
     latestUsageRef.current = sharedUsageStats;
   }, [sharedUsageStats]);
 
-  // Fetch CAIP analysis count when About modal opens
-  useEffect(() => {
-    if (!showAbout) return;
-    import('./utils/caipAnalysisStorage').then(({ listAllAnalyses }) => {
-      listAllAnalyses().then(list => setCaipAnalysisCount(list.length)).catch(() => {});
-    });
-  }, [showAbout]);
-
   // Load shared usage stats (times used + recents) from localStorage
   useEffect(() => {
     const savedUsage = localStorage.getItem('sharedPracticeUsageV3');
@@ -408,6 +400,14 @@ export default function App() {
   const [toast, setToast] = useState(null);
   const [importLoading, setImportLoading] = useState(false);
   const [initialNationalOdsCode, setInitialNationalOdsCode] = useState(null);
+
+  // Fetch CAIP analysis count when About modal opens
+  useEffect(() => {
+    if (!showAbout) return;
+    import('./utils/caipAnalysisStorage').then(({ listAllAnalyses }) => {
+      listAllAnalyses().then(list => setCaipAnalysisCount(list.length)).catch(() => {});
+    });
+  }, [showAbout]);
 
   // Set document title and favicon on mount
   useEffect(() => {
