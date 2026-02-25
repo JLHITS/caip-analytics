@@ -5,7 +5,7 @@
  * Each analysis is cached by practice ODS code + month.
  */
 
-import { doc, getDoc, setDoc, Timestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, getDocs, deleteDoc, Timestamp, collection, query } from 'firebase/firestore';
 import { db } from '../firebase/config';
 
 // Current prompt version - increment when prompt changes significantly
@@ -151,6 +151,74 @@ export async function checkAnalysisStatus(odsCode, month) {
 }
 
 /**
+ * List all stored CAIP analyses
+ * @returns {Promise<Array>} Array of analysis metadata objects
+ */
+export async function listAllAnalyses() {
+  try {
+    const q = query(collection(db, 'caip-analyses'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(d => ({
+      id: d.id,
+      ...d.data(),
+      generatedAt: d.data().generatedAt?.toDate() || null,
+    })).sort((a, b) => (b.generatedAt || 0) - (a.generatedAt || 0));
+  } catch (error) {
+    if (import.meta.env.DEV) console.error('[CAIP Cache] Error listing analyses:', error.code);
+    return [];
+  }
+}
+
+/**
+ * Delete a single CAIP analysis by ODS code and month
+ * @param {string} odsCode
+ * @param {string} month
+ * @returns {Promise<boolean>}
+ */
+export async function deleteAnalysis(odsCode, month) {
+  try {
+    const docId = getDocumentId(odsCode, month);
+    await deleteDoc(doc(db, 'caip-analyses', docId));
+    return true;
+  } catch (error) {
+    if (import.meta.env.DEV) console.error('[CAIP Cache] Error deleting analysis:', error.code);
+    return false;
+  }
+}
+
+/**
+ * Delete all CAIP analyses for a specific ODS code (all months)
+ * @param {string} odsCode
+ * @returns {Promise<number>} Number of documents deleted
+ */
+export async function deleteAllAnalysesForPractice(odsCode) {
+  try {
+    const snapshot = await getDocs(collection(db, 'caip-analyses'));
+    const toDelete = snapshot.docs.filter(d => d.data().odsCode === odsCode);
+    await Promise.all(toDelete.map(d => deleteDoc(d.ref)));
+    return toDelete.length;
+  } catch (error) {
+    if (import.meta.env.DEV) console.error('[CAIP Cache] Error deleting practice analyses:', error.code);
+    return 0;
+  }
+}
+
+/**
+ * Delete ALL CAIP analyses from Firebase
+ * @returns {Promise<number>} Number of documents deleted
+ */
+export async function clearAllAnalyses() {
+  try {
+    const snapshot = await getDocs(collection(db, 'caip-analyses'));
+    await Promise.all(snapshot.docs.map(d => deleteDoc(d.ref)));
+    return snapshot.docs.length;
+  } catch (error) {
+    if (import.meta.env.DEV) console.error('[CAIP Cache] Error clearing all analyses:', error.code);
+    return 0;
+  }
+}
+
+/**
  * Validate a beta access code
  * Checks if the code exists in Firestore and has not been used
  *
@@ -209,6 +277,10 @@ export default {
   loadAnalysis,
   hasAnalysis,
   checkAnalysisStatus,
+  listAllAnalyses,
+  deleteAnalysis,
+  deleteAllAnalysesForPractice,
+  clearAllAnalyses,
   validateBetaCode,
   consumeBetaCode,
 };

@@ -22,6 +22,7 @@ import {
 } from 'chart.js';
 import Card from './ui/Card';
 import FollowUpGuideModal from './modals/FollowUpGuideModal';
+import { trackEvent } from '../firebase/config';
 import {
   parseFollowUpCSV,
   mergeCSVTexts,
@@ -104,6 +105,7 @@ export default function FollowUpAnalysis() {
         setData(parsed);
         setFileNames(results.map(r => r.name));
         setError(null);
+        trackEvent('followup_file_uploaded', { file_count: results.length });
       } catch (err) {
         setError(`Error parsing file(s): ${err.message}`);
       }
@@ -125,6 +127,7 @@ export default function FollowUpAnalysis() {
       setData(parsed);
       setFileNames(['sample-data.csv']);
       setError(null);
+      trackEvent('followup_sample_loaded');
     } catch (err) {
       setError(`Error loading sample: ${err.message}`);
     }
@@ -136,6 +139,7 @@ export default function FollowUpAnalysis() {
   const exportToPDF = useCallback(async () => {
     if (!analysisRef.current) return;
     setExporting(true);
+    trackEvent('followup_pdf_exported');
 
     try {
       // Temporarily show all sections for PDF
@@ -254,7 +258,7 @@ export default function FollowUpAnalysis() {
             </button>
           </div>
           <button
-            onClick={() => setShowGuide(true)}
+            onClick={() => { setShowGuide(true); trackEvent('followup_guide_opened'); }}
             className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl hover:bg-blue-100 transition-colors text-sm font-medium text-blue-700"
           >
             <HelpCircle size={18} />
@@ -313,7 +317,7 @@ export default function FollowUpAnalysis() {
               {TIMEFRAME_OPTIONS.map(opt => (
                 <button
                   key={opt.id}
-                  onClick={() => setTimeframe(opt.id)}
+                  onClick={() => { setTimeframe(opt.id); trackEvent('followup_timeframe_changed', { timeframe: opt.id }); }}
                   className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
                     timeframe === opt.id
                       ? 'bg-emerald-600 text-white shadow-sm'
@@ -338,7 +342,7 @@ export default function FollowUpAnalysis() {
               {exporting ? 'Exporting...' : 'Export PDF'}
             </button>
             <button
-              onClick={() => setShowGuide(true)}
+              onClick={() => { setShowGuide(true); trackEvent('followup_guide_opened'); }}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 text-xs font-medium text-blue-600"
               title="How to get this data"
             >
@@ -357,7 +361,7 @@ export default function FollowUpAnalysis() {
           return (
             <button
               key={section.id}
-              onClick={() => setActiveSection(section.id)}
+              onClick={() => { setActiveSection(section.id); trackEvent('followup_section_changed', { section: section.id }); }}
               className={`flex items-center gap-1.5 px-3 py-2 rounded-lg font-medium transition-all text-sm ${
                 isActive
                   ? 'bg-white text-emerald-600 shadow-sm'

@@ -1,9 +1,9 @@
 import React from 'react';
-import { Info, X, ExternalLink, Clock, Coffee, Shield } from 'lucide-react';
+import { Info, X, ExternalLink, Clock, Coffee, Shield, Sparkles } from 'lucide-react';
 import { trackCoffeeClick } from '../../firebase/config';
 import { NHS_BLUE } from '../../constants/colors';
 
-const AboutModal = ({ isOpen, onClose, onOpenBugReport, onOpenAdmin, timesUsed = 0 }) => {
+const AboutModal = ({ isOpen, onClose, onOpenBugReport, onOpenAdmin, timesUsed = 0, caipAnalysisCount = 0 }) => {
   if (!isOpen) return null;
 
   return (
@@ -28,15 +28,28 @@ const AboutModal = ({ isOpen, onClose, onOpenBugReport, onOpenAdmin, timesUsed =
         </div>
 
         <div className="space-y-4 text-slate-700 leading-relaxed">
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4 flex items-center gap-3">
-            <div className="p-3 bg-white rounded-full border border-blue-100">
-              <Clock className="text-blue-600" size={20} />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4 flex items-center gap-3">
+              <div className="p-3 bg-white rounded-full border border-blue-100">
+                <Clock className="text-blue-600" size={20} />
+              </div>
+              <div>
+                <p className="text-sm text-blue-700 font-semibold">Times used across National Data tabs</p>
+                <p className="text-2xl font-bold text-blue-900">
+                  {Number(timesUsed || 0).toLocaleString()}
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm text-blue-700 font-semibold">Times used across National Data tabs</p>
-              <p className="text-2xl font-bold text-blue-900">
-                {Number(timesUsed || 0).toLocaleString()}
-              </p>
+            <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg p-4 flex items-center gap-3">
+              <div className="p-3 bg-white rounded-full border border-purple-100">
+                <Sparkles className="text-purple-600" size={20} />
+              </div>
+              <div>
+                <p className="text-sm text-purple-700 font-semibold">CAIP AI Analyses run</p>
+                <p className="text-2xl font-bold text-purple-900">
+                  {Number(caipAnalysisCount || 0).toLocaleString()}
+                </p>
+              </div>
             </div>
           </div>
 
