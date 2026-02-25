@@ -43,6 +43,8 @@ const TIMEFRAME_OPTIONS = [
   { id: '4weeks', label: 'Last 4 Weeks' },
 ];
 
+const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
 export default function FollowUpAnalysis() {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
@@ -138,14 +140,84 @@ export default function FollowUpAnalysis() {
 
   const exportToPDF = useCallback(async () => {
     if (!analysisRef.current) return;
+    const originalSection = activeSection;
     setExporting(true);
     trackEvent('followup_pdf_exported');
 
     try {
-      // Temporarily show all sections for PDF
-      const container = analysisRef.current;
+      if (document.fonts?.ready) await document.fonts.ready;
 
-      const canvas = await html2canvas(container, {
+      const pdf = new jsPDF('portrait', 'mm', 'a4');
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 10;
+      const blockGap = 4;
+      const usableWidth = pageWidth - margin * 2;
+      const usableHeight = pageHeight - margin * 2;
+
+      let y = margin;
+      let firstPage = true;
+
+      const addPage = () => {
+        if (!firstPage) pdf.addPage();
+        firstPage = false;
+        y = margin;
+      };
+
+      const addImageCanvas = (canvas) => {
+        const fullHeightMm = (canvas.height * usableWidth) / canvas.width;
+
+        // Normal-sized block: keep as one unit and move to next page if needed.
+        if (fullHeightMm <= usableHeight) {
+          if (y + fullHeightMm > pageHeight - margin) {
+            pdf.addPage();
+            y = margin;
+          }
+          pdf.addImage(canvas.toDataURL('image/png'), 'PNG', margin, y, usableWidth, fullHeightMm);
+          y += fullHeightMm + blockGap;
+          return;
+        }
+
+        // Very tall block: split into page-sized slices.
+        const sliceHeightPx = Math.max(1, Math.floor((usableHeight * canvas.width) / usableWidth));
+        let sourceY = 0;
+
+        while (sourceY < canvas.height) {
+          if (y !== margin) {
+            pdf.addPage();
+            y = margin;
+          }
+
+          const currentSlicePx = Math.min(sliceHeightPx, canvas.height - sourceY);
+          const sliceCanvas = document.createElement('canvas');
+          sliceCanvas.width = canvas.width;
+          sliceCanvas.height = currentSlicePx;
+          const ctx = sliceCanvas.getContext('2d');
+          if (!ctx) break;
+
+          ctx.drawImage(
+            canvas,
+            0,
+            sourceY,
+            canvas.width,
+            currentSlicePx,
+            0,
+            0,
+            canvas.width,
+            currentSlicePx
+          );
+
+          const sliceHeightMm = (currentSlicePx * usableWidth) / canvas.width;
+          pdf.addImage(sliceCanvas.toDataURL('image/png'), 'PNG', margin, y, usableWidth, sliceHeightMm);
+
+          sourceY += currentSlicePx;
+          y += sliceHeightMm;
+        }
+
+        y += blockGap;
+      };
+
+      const captureNode = async (node) => html2canvas(node, {
         scale: 2,
         useCORS: true,
         logging: false,
@@ -153,29 +225,64 @@ export default function FollowUpAnalysis() {
         windowWidth: 1200,
       });
 
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('portrait', 'mm', 'a4');
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      const margin = 10;
-      const usableWidth = pageWidth - margin * 2;
+      addPage();
+      pdf.setTextColor(15, 23, 42);
+      pdf.setFontSize(16);
+      pdf.text('Follow Up Analysis', margin, y);
+      y += 6;
+      pdf.setFontSize(10);
+      const summaryLine = `${data.totalAppointments.toLocaleString()} appointments | ${data.totalPatients.toLocaleString()} patients | ${data.doctors.length} GPs`;
+      pdf.text(summaryLine, margin, y);
+      y += 5;
+      if (data.orgName) {
+        pdf.text(data.orgName, margin, y);
+        y += 5;
+      }
+      y += 2;
 
-      const imgWidth = usableWidth;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      const sectionOrder = [
+        { id: 'overview', label: 'Overview' },
+        { id: 'any-doctor', label: 'Any Doctor' },
+        { id: 'same-gp', label: 'Same GP' },
+        { id: 'by-clinician', label: 'By Clinician' },
+        { id: 'trends', label: 'Trends' },
+      ];
 
-      let heightLeft = imgHeight;
-      let position = margin;
+      for (const section of sectionOrder) {
+        setActiveSection(section.id);
+        await wait(700);
 
-      // First page
-      pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight);
-      heightLeft -= (pageHeight - margin * 2);
+        const container = analysisRef.current;
+        const sectionRoot = container?.children?.[1];
+        if (!sectionRoot) continue;
 
-      // Additional pages if needed
-      while (heightLeft > 0) {
-        position = position - (pageHeight - margin * 2);
         pdf.addPage();
-        pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight);
-        heightLeft -= (pageHeight - margin * 2);
+        y = margin;
+        firstPage = false;
+        pdf.setTextColor(30, 41, 59);
+        pdf.setFontSize(13);
+        pdf.text(section.label, margin, y + 1);
+        y += 7;
+
+        const cards = Array.from(sectionRoot.querySelectorAll('[data-card="true"]'));
+        const blocks = cards.length ? cards : [sectionRoot];
+
+        for (const block of blocks) {
+          const canvas = await captureNode(block);
+          addImageCanvas(canvas);
+        }
+      }
+
+      const aboutCard = analysisRef.current?.lastElementChild;
+      if (aboutCard) {
+        pdf.addPage();
+        y = margin;
+        pdf.setTextColor(30, 41, 59);
+        pdf.setFontSize(13);
+        pdf.text('About this analysis', margin, y + 1);
+        y += 7;
+        const aboutCanvas = await captureNode(aboutCard);
+        addImageCanvas(aboutCanvas);
       }
 
       const fileName = `Follow-Up-Analysis${data?.orgName ? '-' + data.orgName.replace(/\s+/g, '-') : ''}.pdf`;
@@ -184,9 +291,10 @@ export default function FollowUpAnalysis() {
       console.error('PDF export error:', err);
       setError('Failed to export PDF. Please try again.');
     } finally {
+      setActiveSection(originalSection);
       setExporting(false);
     }
-  }, [data]);
+  }, [activeSection, data]);
 
   // Calculations
   const overallRates = useMemo(() => data ? calculateOverallFollowUpRates(data, timeframe) : null, [data, timeframe]);
