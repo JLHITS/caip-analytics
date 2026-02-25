@@ -5,7 +5,7 @@
  * Each analysis is cached by practice ODS code + month.
  */
 
-import { doc, getDoc, setDoc, getDocs, deleteDoc, Timestamp, collection, query } from 'firebase/firestore';
+import { doc, getDoc, setDoc, getDocs, deleteDoc, Timestamp, collection } from 'firebase/firestore';
 import { db } from '../firebase/config';
 
 // Current prompt version - increment when prompt changes significantly
@@ -156,8 +156,7 @@ export async function checkAnalysisStatus(odsCode, month) {
  */
 export async function listAllAnalyses() {
   try {
-    const q = query(collection(db, 'caip-analyses'));
-    const snapshot = await getDocs(q);
+    const snapshot = await getDocs(collection(db, 'caip-analyses'));
     return snapshot.docs.map(d => ({
       id: d.id,
       ...d.data(),

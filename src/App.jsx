@@ -59,7 +59,6 @@ import ShareModal from './components/modals/ShareModal';
 import ShareOptionsModal from './components/modals/ShareOptionsModal';
 import BugReportModal from './components/modals/BugReportModal';
 import AboutModal from './components/modals/AboutModal';
-import { listAllAnalyses } from './utils/caipAnalysisStorage';
 import AdminPanel from './components/modals/AdminPanel';
 import Toast from './components/ui/Toast';
 import ImportButton from './components/ui/ImportButton';
@@ -250,7 +249,9 @@ export default function App() {
   // Fetch CAIP analysis count when About modal opens
   useEffect(() => {
     if (!showAbout) return;
-    listAllAnalyses().then(list => setCaipAnalysisCount(list.length)).catch(() => {});
+    import('./utils/caipAnalysisStorage').then(({ listAllAnalyses }) => {
+      listAllAnalyses().then(list => setCaipAnalysisCount(list.length)).catch(() => {});
+    });
   }, [showAbout]);
 
   // Load shared usage stats (times used + recents) from localStorage
