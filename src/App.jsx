@@ -51,6 +51,7 @@ import Accordion from './components/ui/Accordion';
 import SortableTable from './components/ui/SortableTable';
 import FileInput from './components/ui/FileInput';
 import DisclaimerNotice from './components/ui/DisclaimerNotice';
+import Noticeboard from './components/ui/Noticeboard';
 import SimpleMarkdown from './components/markdown/SimpleMarkdown';
 import DataProcessingModal from './components/modals/DataProcessingModal';
 import ResetConfirmationModal from './components/modals/ResetConfirmationModal';
@@ -2262,6 +2263,9 @@ export default function App() {
                   </div>
                 </div>
               )}
+
+              {/* News/Noticeboard */}
+              <Noticeboard />
             </div>
           </div>
         )}

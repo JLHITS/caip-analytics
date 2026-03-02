@@ -3,7 +3,7 @@ import { collection, doc, setDoc, getDoc, query, where, getDocs, deleteDoc, Time
 import LZString from 'lz-string';
 
 const COLLECTION_NAME = 'sharedDashboards';
-const EXPIRY_DAYS = 30;
+const EXPIRY_DAYS = 365;
 const MAX_SIZE_KB = 900;
 const CLEANUP_PROBABILITY = 0.15;
 
@@ -186,7 +186,7 @@ export const loadFirebaseShare = async (shareId) => {
 
     if (shareDoc.expiresAt.seconds < now.seconds) {
       await deleteDoc(docRef);
-      throw new Error('This share link has expired (30 day limit).');
+      throw new Error('This share link has expired.');
     }
 
     const views = shareDoc.views || 0;
@@ -402,7 +402,7 @@ export const loadComparisonSet = async (comparisonId) => {
     // Check expiry
     if (data.expiresAt.seconds < now.seconds) {
       await deleteDoc(docRef);
-      throw new Error('This comparison has expired (30 day limit).');
+      throw new Error('This comparison has expired.');
     }
 
     // Update view count

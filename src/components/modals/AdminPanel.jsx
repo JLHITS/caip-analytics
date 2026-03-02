@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   X, Lock, Users, RefreshCw, Download, Shield, AlertTriangle,
-  Sparkles, Trash2, Search, AlertCircle, CheckCircle
+  Sparkles, Trash2, Search, AlertCircle, CheckCircle, Megaphone,
+  Plus, Edit3, Eye, EyeOff, Save, XCircle
 } from 'lucide-react';
 import {
   listAllAnalyses,
@@ -9,6 +10,14 @@ import {
   clearAllAnalyses,
   listPracticeUsage,
 } from '../../utils/caipAnalysisStorage';
+import {
+  listNews,
+  createNews,
+  updateNews,
+  deleteNews,
+  toggleNewsActive,
+  seedDefaultNews,
+} from '../../utils/newsStorage';
 
 const AdminPanel = ({ isOpen, onClose }) => {
   const [password, setPassword] = useState('');
@@ -30,6 +39,16 @@ const AdminPanel = ({ isOpen, onClose }) => {
   const [deleteResult, setDeleteResult] = useState(null); // { type: 'success'|'error', message }
   const [clearingAll, setClearingAll] = useState(false);
   const [confirmClearAll, setConfirmClearAll] = useState(false);
+
+  // News state
+  const [newsItems, setNewsItems] = useState([]);
+  const [newsLoading, setNewsLoading] = useState(false);
+  const [newsError, setNewsError] = useState('');
+  const [editingNews, setEditingNews] = useState(null); // null | 'new' | newsId
+  const [newsForm, setNewsForm] = useState({ headline: '', body: '', active: true, priority: 0 });
+  const [newsSaving, setNewsSaving] = useState(false);
+  const [newsResult, setNewsResult] = useState(null);
+  const [confirmDeleteNewsId, setConfirmDeleteNewsId] = useState(null);
 
   const configuredPassword = (import.meta && import.meta.env &&
     (import.meta.env.VITE_ADMIN_PASSWORD || import.meta.env.ADMIN_PASSWORD)) || '';
@@ -74,12 +93,88 @@ const AdminPanel = ({ isOpen, onClose }) => {
     }
   }, []);
 
+  const fetchNews = useCallback(async () => {
+    setNewsLoading(true);
+    setNewsError('');
+    try {
+      const data = await listNews();
+      setNewsItems(data);
+    } catch {
+      setNewsError('Failed to load news items.');
+    } finally {
+      setNewsLoading(false);
+    }
+  }, []);
+
+  const handleSaveNews = async () => {
+    if (!newsForm.headline.trim() || !newsForm.body.trim()) return;
+    setNewsSaving(true);
+    setNewsResult(null);
+    try {
+      if (editingNews === 'new') {
+        await createNews(newsForm);
+        setNewsResult({ type: 'success', message: 'News item created.' });
+      } else {
+        await updateNews(editingNews, newsForm);
+        setNewsResult({ type: 'success', message: 'News item updated.' });
+      }
+      setEditingNews(null);
+      setNewsForm({ headline: '', body: '', active: true, priority: 0 });
+      fetchNews();
+    } catch (err) {
+      setNewsResult({ type: 'error', message: err.message || 'Failed to save news.' });
+    } finally {
+      setNewsSaving(false);
+    }
+  };
+
+  const handleDeleteNews = async (id) => {
+    if (confirmDeleteNewsId !== id) { setConfirmDeleteNewsId(id); return; }
+    try {
+      await deleteNews(id);
+      setConfirmDeleteNewsId(null);
+      setNewsResult({ type: 'success', message: 'News item deleted.' });
+      fetchNews();
+    } catch {
+      setNewsResult({ type: 'error', message: 'Failed to delete news item.' });
+    }
+  };
+
+  const handleToggleActive = async (id) => {
+    try {
+      await toggleNewsActive(id);
+      fetchNews();
+    } catch {
+      setNewsResult({ type: 'error', message: 'Failed to toggle news status.' });
+    }
+  };
+
+  const startEditNews = (item) => {
+    setEditingNews(item.id);
+    setNewsForm({ headline: item.headline, body: item.body, active: item.active, priority: item.priority || 0 });
+    setNewsResult(null);
+    setConfirmDeleteNewsId(null);
+  };
+
+  const startNewNews = () => {
+    setEditingNews('new');
+    setNewsForm({ headline: '', body: '', active: true, priority: 0 });
+    setNewsResult(null);
+    setConfirmDeleteNewsId(null);
+  };
+
+  const cancelEditNews = () => {
+    setEditingNews(null);
+    setNewsForm({ headline: '', body: '', active: true, priority: 0 });
+  };
+
   useEffect(() => {
     if (authed) {
       fetchPracticeUsage();
       fetchAnalyses();
+      fetchNews();
     }
-  }, [authed, fetchPracticeUsage, fetchAnalyses]);
+  }, [authed, fetchPracticeUsage, fetchAnalyses, fetchNews]);
 
   const handleExportPractices = () => {
     const lines = practices.map(p => [
@@ -240,6 +335,20 @@ const AdminPanel = ({ isOpen, onClose }) => {
                 {analyses.length > 0 && (
                   <span className="ml-1.5 bg-purple-100 text-purple-700 text-xs font-semibold px-1.5 py-0.5 rounded-full">
                     {analyses.length}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => setActiveTab('news')}
+                className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
+                  activeTab === 'news' ? 'border-slate-800 text-slate-800' : 'border-transparent text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                <Megaphone size={14} className="inline mr-1.5 -mt-0.5" />
+                News
+                {newsItems.filter(n => n.active).length > 0 && (
+                  <span className="ml-1.5 bg-emerald-100 text-emerald-700 text-xs font-semibold px-1.5 py-0.5 rounded-full">
+                    {newsItems.filter(n => n.active).length}
                   </span>
                 )}
               </button>
@@ -447,6 +556,183 @@ const AdminPanel = ({ isOpen, onClose }) => {
                         ))}
                       </tbody>
                     </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* News Management Tab */}
+            {activeTab === 'news' && (
+              <div className="space-y-5">
+
+                {/* Header with add button */}
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-slate-600">
+                    {newsItems.length} news item{newsItems.length !== 1 ? 's' : ''} ({newsItems.filter(n => n.active).length} active)
+                  </p>
+                  <div className="flex items-center gap-3">
+                    <button onClick={fetchNews} className="flex items-center gap-1 text-xs text-slate-600 hover:text-slate-800">
+                      <RefreshCw size={12} /> Refresh
+                    </button>
+                    <button
+                      onClick={startNewNews}
+                      disabled={editingNews !== null}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white text-xs font-medium rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-40"
+                    >
+                      <Plus size={14} /> Add News
+                    </button>
+                  </div>
+                </div>
+
+                {/* Result message */}
+                {newsResult && (
+                  <div className={`flex items-center gap-2 text-xs p-2 rounded-lg ${
+                    newsResult.type === 'success' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
+                  }`}>
+                    {newsResult.type === 'success' ? <CheckCircle size={13} /> : <AlertCircle size={13} />}
+                    {newsResult.message}
+                  </div>
+                )}
+
+                {/* Add/Edit form */}
+                {editingNews !== null && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-3">
+                    <p className="text-sm font-semibold text-blue-900">
+                      {editingNews === 'new' ? 'New News Item' : 'Edit News Item'}
+                    </p>
+                    <input
+                      type="text"
+                      value={newsForm.headline}
+                      onChange={(e) => setNewsForm(f => ({ ...f, headline: e.target.value }))}
+                      placeholder="Headline"
+                      className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+                      maxLength={120}
+                    />
+                    <textarea
+                      value={newsForm.body}
+                      onChange={(e) => setNewsForm(f => ({ ...f, body: e.target.value }))}
+                      placeholder="Body text..."
+                      rows={3}
+                      className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
+                      maxLength={500}
+                    />
+                    <div className="flex items-center gap-4">
+                      <label className="flex items-center gap-2 text-xs text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={newsForm.active}
+                          onChange={(e) => setNewsForm(f => ({ ...f, active: e.target.checked }))}
+                          className="rounded border-slate-300"
+                        />
+                        Active (visible to users)
+                      </label>
+                      <label className="flex items-center gap-2 text-xs text-slate-700">
+                        Priority:
+                        <input
+                          type="number"
+                          value={newsForm.priority}
+                          onChange={(e) => setNewsForm(f => ({ ...f, priority: parseInt(e.target.value) || 0 }))}
+                          className="w-16 px-2 py-1 text-xs border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-400"
+                          min={0}
+                          max={99}
+                        />
+                        <span className="text-slate-400">(higher = shown first)</span>
+                      </label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleSaveNews}
+                        disabled={newsSaving || !newsForm.headline.trim() || !newsForm.body.trim()}
+                        className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-40"
+                      >
+                        <Save size={14} />
+                        {newsSaving ? 'Saving...' : 'Save'}
+                      </button>
+                      <button
+                        onClick={cancelEditNews}
+                        className="flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-300 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-50 transition-colors"
+                      >
+                        <XCircle size={14} /> Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* News items list */}
+                {newsLoading ? (
+                  <p className="text-sm text-slate-500 py-4 text-center">Loading news...</p>
+                ) : newsError ? (
+                  <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                    <AlertTriangle size={14} className="text-amber-600 shrink-0" />
+                    <p className="text-sm text-amber-700">{newsError}</p>
+                  </div>
+                ) : newsItems.length === 0 ? (
+                  <div className="text-center py-4 space-y-3">
+                    <p className="text-sm text-slate-500">No news items yet. Click "Add News" to create one.</p>
+                    <button
+                      onClick={async () => { await seedDefaultNews(); fetchNews(); setNewsResult({ type: 'success', message: 'Seeded default news item.' }); }}
+                      className="text-xs text-blue-600 hover:text-blue-700 underline"
+                    >
+                      Seed default news item
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {newsItems.map(item => (
+                      <div
+                        key={item.id}
+                        className={`border rounded-lg p-4 transition-colors ${
+                          item.active ? 'bg-white border-slate-200' : 'bg-slate-50 border-slate-200 opacity-60'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className={`inline-block w-2 h-2 rounded-full ${item.active ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                              <h4 className="text-sm font-bold text-slate-800 truncate">{item.headline}</h4>
+                              {item.priority > 0 && (
+                                <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">P{item.priority}</span>
+                              )}
+                            </div>
+                            <p className="text-xs text-slate-600 line-clamp-2">{item.body}</p>
+                            <p className="text-[10px] text-slate-400 mt-1">
+                              Created: {formatTimestamp(item.createdAt)}
+                              {item.updatedAt && item.updatedAt.seconds !== item.createdAt?.seconds && (
+                                <> · Updated: {formatTimestamp(item.updatedAt)}</>
+                              )}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              onClick={() => handleToggleActive(item.id)}
+                              className={`p-1.5 rounded-lg transition-colors ${item.active ? 'text-emerald-600 hover:bg-emerald-50' : 'text-slate-400 hover:bg-slate-100'}`}
+                              title={item.active ? 'Deactivate' : 'Activate'}
+                            >
+                              {item.active ? <Eye size={14} /> : <EyeOff size={14} />}
+                            </button>
+                            <button
+                              onClick={() => startEditNews(item)}
+                              disabled={editingNews !== null}
+                              className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-30"
+                              title="Edit"
+                            >
+                              <Edit3 size={14} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteNews(item.id)}
+                              className={`p-1.5 rounded-lg transition-colors ${
+                                confirmDeleteNewsId === item.id
+                                  ? 'bg-red-600 text-white'
+                                  : 'text-red-500 hover:bg-red-50'
+                              }`}
+                              title={confirmDeleteNewsId === item.id ? 'Click again to confirm' : 'Delete'}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
