@@ -35,7 +35,7 @@ export default function Noticeboard() {
   const item = items[current];
 
   return (
-    <div className="relative overflow-hidden bg-gradient-to-r from-amber-50 via-yellow-50 to-orange-50 border-2 border-amber-200/70 rounded-2xl shadow-sm hover:shadow-md transition-all">
+    <div className="relative overflow-hidden mt-8 bg-gradient-to-r from-amber-50 via-yellow-50 to-orange-50 border-2 border-amber-200/70 rounded-2xl shadow-sm hover:shadow-md transition-all">
       <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-amber-200/30 to-transparent rounded-bl-full" />
       <div className="relative px-5 py-4">
         <div className="flex items-start gap-3">
