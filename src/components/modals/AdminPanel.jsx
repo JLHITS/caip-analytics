@@ -50,16 +50,43 @@ const AdminPanel = ({ isOpen, onClose }) => {
   const [newsResult, setNewsResult] = useState(null);
   const [confirmDeleteNewsId, setConfirmDeleteNewsId] = useState(null);
 
-  const configuredPassword = (import.meta && import.meta.env &&
-    (import.meta.env.VITE_ADMIN_PASSWORD || import.meta.env.ADMIN_PASSWORD)) || '';
+  const [loginLoading, setLoginLoading] = useState(false);
 
-  const handleLogin = (e) => {
+  // On mount / open: check for existing session token
+  useEffect(() => {
+    if (!isOpen) return;
+    const token = sessionStorage.getItem('adminToken');
+    if (!token) return;
+    fetch('/api/admin-verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    })
+      .then(r => { if (r.ok) setAuthed(true); else sessionStorage.removeItem('adminToken'); })
+      .catch(() => sessionStorage.removeItem('adminToken'));
+  }, [isOpen]);
+
+  const handleLogin = async (e) => {
     e.preventDefault();
-    if (!configuredPassword) { setPasswordError('Admin password not configured.'); return; }
-    if (password !== configuredPassword) { setPasswordError('Incorrect password.'); return; }
-    setAuthed(true);
+    if (!password.trim()) { setPasswordError('Please enter a password.'); return; }
+    setLoginLoading(true);
     setPasswordError('');
-    setPassword('');
+    try {
+      const res = await fetch('/api/admin-auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setPasswordError(data.error || 'Authentication failed.'); return; }
+      sessionStorage.setItem('adminToken', data.token);
+      setAuthed(true);
+      setPassword('');
+    } catch {
+      setPasswordError('Unable to reach authentication server.');
+    } finally {
+      setLoginLoading(false);
+    }
   };
 
   const fetchPracticeUsage = useCallback(async () => {
@@ -305,9 +332,10 @@ const AdminPanel = ({ isOpen, onClose }) => {
               {passwordError && <p className="text-xs text-red-600">{passwordError}</p>}
               <button
                 type="submit"
-                className="w-full py-2 bg-slate-800 text-white text-sm font-medium rounded-lg hover:bg-slate-900 transition-colors"
+                disabled={loginLoading}
+                className="w-full py-2 bg-slate-800 text-white text-sm font-medium rounded-lg hover:bg-slate-900 transition-colors disabled:opacity-50"
               >
-                Unlock
+                {loginLoading ? 'Verifying...' : 'Unlock'}
               </button>
             </form>
           </div>
