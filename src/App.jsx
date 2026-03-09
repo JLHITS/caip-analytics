@@ -2342,7 +2342,7 @@ export default function App() {
                         <span className="font-bold">National Demand & Capacity Analysis</span>
                       </div>
                       <span className="text-xs bg-white/20 px-3 py-1 rounded-full font-medium whitespace-nowrap">
-                        Latest extract: Dec 2025
+                        Latest extract: January 2026
                       </span>
                     </div>
                   </>
