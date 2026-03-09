@@ -67,6 +67,8 @@ import aug25Data from '../assets/Submissions via OC Systems in General Practice 
 import sep25Data from '../assets/Submissions via OC Systems in General Practice - September 2025.xlsx?url';
 import oct25Data from '../assets/Submissions via OC Systems in General Practice - October 2025.xlsx?url';
 import nov25Data from '../assets/Submissions via OC Systems in General Practice - November 2025.xlsx?url';
+import dec25Data from '../assets/Submissions via OC Systems in General Practice - December 2025.xlsx?url';
+import jan26Data from '../assets/Submissions via OC Systems in General Practice - January 2026.xlsx?url';
 
 // Month data mapping - ordered from oldest to newest
 const MONTH_DATA = {
@@ -90,6 +92,8 @@ const MONTH_DATA = {
   'September 2025': sep25Data,
   'October 2025': oct25Data,
   'November 2025': nov25Data,
+  'December 2025': dec25Data,
+  'January 2026': jan26Data,
 };
 
 // Ordered months for charts (oldest first)
@@ -97,7 +101,7 @@ const MONTHS_ORDERED = [
   'April 2024', 'May 2024', 'June 2024', 'July 2024', 'August 2024', 'September 2024',
   'October 2024', 'November 2024', 'December 2024', 'January 2025', 'February 2025',
   'March 2025', 'April 2025', 'May 2025', 'June 2025', 'July 2025', 'August 2025',
-  'September 2025', 'October 2025', 'November 2025'
+  'September 2025', 'October 2025', 'November 2025', 'December 2025', 'January 2026'
 ];
 
 const NationalOnlineConsultations = ({
@@ -118,7 +122,7 @@ const NationalOnlineConsultations = ({
   const [allMonthsData, setAllMonthsData] = useState({});
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [localSelectedMonth, setLocalSelectedMonth] = useState('November 2025');
+  const [localSelectedMonth, setLocalSelectedMonth] = useState('January 2026');
   const [localCompareWithPrevious, setLocalCompareWithPrevious] = useState(true);
 
   // Use parent-controlled values if provided, otherwise use local state

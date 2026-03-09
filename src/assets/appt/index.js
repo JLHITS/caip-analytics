@@ -37,6 +37,7 @@ import sep25 from './GPAD_Annex1_Practice_Level_Breakdown_Summary_September_2025
 import oct25 from './GPAD_Annex1_Practice_Level_Breakdown_Summary_October_2025.xlsx?url';
 import nov25 from './GPAD_Annex1_Practice_Level_Breakdown_Summary_November_2025.xlsx?url';
 import dec25 from './GPAD_Annex1_Practice_Level_Breakdown_Summary_December_2025.xlsx?url';
+import jan26 from './GPAD_Annex1_Practice_Level_Breakdown_Summary_January_2026.xlsx?url';
 
 /**
  * Map of month strings to file URLs
@@ -75,6 +76,7 @@ export const APPOINTMENT_FILES = {
   'October 2025': oct25,
   'November 2025': nov25,
   'December 2025': dec25,
+  'January 2026': jan26,
 };
 
 /**
@@ -114,6 +116,7 @@ export const MONTHS_ORDERED = [
   'October 2025',
   'November 2025',
   'December 2025',
+  'January 2026',
 ];
 
 /**
@@ -125,7 +128,7 @@ export const MONTHS_NEWEST_FIRST = [...MONTHS_ORDERED].reverse();
  * Priority months for initial loading (just the most recent for fast startup)
  */
 export const PRIORITY_MONTHS = [
-  'December 2025',
+  'January 2026',
   // Additional months loaded on demand when user selects a practice
 ];
 
@@ -165,13 +168,14 @@ export function getLatestMonths(count = 3) {
 
 /**
  * Get months where all data sources overlap (appointments, telephony, OC)
- * Telephony: Oct-Nov 2025 only
+ * Telephony: Oct 2025-Jan 2026
  * OC: Apr 2024 onwards
  */
 export const FULL_DATA_MONTHS = [
   'October 2025',
   'November 2025',
   'December 2025',
+  'January 2026',
 ];
 
 /**
