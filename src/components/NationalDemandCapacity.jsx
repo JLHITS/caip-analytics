@@ -47,8 +47,8 @@ import {
 } from '../utils/caipAnalysisPrompt';
 import {
   saveAnalysis,
-  loadAnalysis,
   checkAnalysisStatus,
+  ENTIRE_TIMEFRAME_ANALYSIS_KEY,
 } from '../utils/caipAnalysisStorage';
 import {
   APPOINTMENT_FILES,
@@ -292,6 +292,7 @@ const NationalDemandCapacity = ({
   const compareMode = true; // Always compare with previous months
   const defaultEndMonth = MONTHS_NEWEST_FIRST[0];
   const defaultStartMonth = MONTHS_NEWEST_FIRST[Math.min(11, MONTHS_NEWEST_FIRST.length - 1)];
+  const latestAvailableMonth = MONTHS_ORDERED[MONTHS_ORDERED.length - 1];
   const [timeRangePreset, setTimeRangePreset] = useState('last12');
   const [customStartMonth, setCustomStartMonth] = useState(defaultStartMonth);
   const [customEndMonth, setCustomEndMonth] = useState(defaultEndMonth);
@@ -665,6 +666,23 @@ const NationalDemandCapacity = ({
         return MONTHS_NEWEST_FIRST.slice(0, 6).reverse();
     }
   }, [timeRangePreset, customStartMonth, customEndMonth]);
+
+  const isEntireTimeframeSelected = useMemo(() => (
+    timeRangeMonths.length === MONTHS_ORDERED.length &&
+    timeRangeMonths.every((month, index) => month === MONTHS_ORDERED[index])
+  ), [timeRangeMonths]);
+
+  const caipAnalysisDisabledReason = !selectedPractice
+    ? 'Select a practice first'
+    : workforceLoading
+      ? 'Waiting for workforce data...'
+      : !isEntireTimeframeSelected
+        ? 'CAIP Analysis is only available for the entire timeframe'
+        : hasExistingAnalysis
+          ? 'View Analysis'
+          : 'Generate AI Analysis';
+
+  const isCAIPAnalysisDisabled = isAiLoading || !selectedPractice || workforceLoading || !isEntireTimeframeSelected;
 
   useEffect(() => {
     if (timeRangeMonths.length === 0) return;
@@ -1088,18 +1106,35 @@ const NationalDemandCapacity = ({
     };
   }, [appointmentData, selectedMonth, telephonyByOds, ocByOds, workforceByOds]);
 
-  // Check for existing CAIP analysis when practice or month changes
   useEffect(() => {
-    if (!selectedPractice) {
+    if (!isEntireTimeframeSelected && activeSubTab === 'analysis') {
+      setActiveSubTab('appointments');
+    }
+  }, [isEntireTimeframeSelected, activeSubTab]);
+
+  // Check for existing CAIP analysis when practice or timeframe changes
+  useEffect(() => {
+    if (!selectedPractice || !isEntireTimeframeSelected) {
       setSavedAnalysis(null);
       setHasExistingAnalysis(false);
+      setIsAnalysisStale(false);
       setAiReport(null);
       return;
     }
 
     const checkExisting = async () => {
       try {
-        const status = await checkAnalysisStatus(selectedPractice.odsCode, selectedMonth);
+        let status = await checkAnalysisStatus(
+          selectedPractice.odsCode,
+          selectedMonth,
+          ENTIRE_TIMEFRAME_ANALYSIS_KEY
+        );
+
+        // Preserve existing analyses generated before the fixed full-range cache key existed.
+        if (!status.exists) {
+          status = await checkAnalysisStatus(selectedPractice.odsCode, latestAvailableMonth);
+        }
+
         if (status.exists && status.analysis) {
           setSavedAnalysis(status.analysis);
           setHasExistingAnalysis(true);
@@ -1111,14 +1146,14 @@ const NationalDemandCapacity = ({
           setIsAnalysisStale(false);
           setAiReport(null);
         }
-      } catch (error) {
+      } catch {
         // Silently handle - Firebase may not be configured
         setIsAnalysisStale(false);
       }
     };
 
     checkExisting();
-  }, [selectedPractice, selectedMonth]);
+  }, [selectedPractice, selectedMonth, isEntireTimeframeSelected, latestAvailableMonth]);
 
   // ========================================
   // BOOKMARK HANDLING
@@ -1159,6 +1194,10 @@ const NationalDemandCapacity = ({
   // Handle CAIP Analysis button click
   const handleCAIPAnalysisClick = useCallback(() => {
     if (!selectedPractice) return;
+    if (!isEntireTimeframeSelected) {
+      setToast({ type: 'info', message: 'CAIP Analysis is only available when the national timeframe is set to Entire timeframe.' });
+      return;
+    }
 
     // If already have analysis, switch to analysis tab
     if (hasExistingAnalysis && aiReport) {
@@ -1168,7 +1207,7 @@ const NationalDemandCapacity = ({
 
     // Go straight to consent
     setShowAIConsent(true);
-  }, [selectedPractice, hasExistingAnalysis, aiReport]);
+  }, [selectedPractice, hasExistingAnalysis, aiReport, isEntireTimeframeSelected]);
 
   // Calculate historical metrics for trend analysis
   const getHistoricalMetrics = useCallback(() => {
@@ -1225,9 +1264,16 @@ const NationalDemandCapacity = ({
   // Run CAIP Analysis
   const runCAIPAnalysis = useCallback(async () => {
     if (!selectedPractice || !practiceMetrics) return;
+    if (!isEntireTimeframeSelected) {
+      setAiErrorType('general');
+      setAiError('CAIP Analysis is only available when the national timeframe is set to Entire timeframe.');
+      setToast({ type: 'info', message: 'Switch the national timeframe to Entire timeframe to run CAIP Analysis.' });
+      return;
+    }
 
     setIsAiLoading(true);
     setAiError(null);
+    setAiErrorType(null);
 
     try {
       // Load previous months' data for trend calculations
@@ -1324,6 +1370,8 @@ const NationalDemandCapacity = ({
         practiceName: selectedPractice.gpName,
         month: selectedMonth,
         analysis: text,
+        cacheKey: ENTIRE_TIMEFRAME_ANALYSIS_KEY,
+        scope: 'entire_timeframe',
       });
 
       // Update state
@@ -1334,6 +1382,8 @@ const NationalDemandCapacity = ({
         odsCode: selectedPractice.odsCode,
         practiceName: selectedPractice.gpName,
         month: selectedMonth,
+        cacheKey: ENTIRE_TIMEFRAME_ANALYSIS_KEY,
+        scope: 'entire_timeframe',
         analysis: text,
         generatedAt: new Date(),
         promptVersion: '2.0',
@@ -1367,7 +1417,17 @@ const NationalDemandCapacity = ({
       }
       setIsAiLoading(false);
     }
-  }, [selectedPractice, practiceMetrics, nationalMetricArrays, workforceMetrics, selectedMonth, getHistoricalMetrics, loadMonthData, appointmentData]);
+  }, [
+    selectedPractice,
+    practiceMetrics,
+    nationalMetricArrays,
+    workforceMetrics,
+    selectedMonth,
+    getHistoricalMetrics,
+    loadMonthData,
+    appointmentData,
+    isEntireTimeframeSelected,
+  ]);
 
   // ========================================
   // APPOINTMENT SUB-TABS
@@ -1800,19 +1860,19 @@ const NationalDemandCapacity = ({
         {/* CAIP Analysis Button */}
         <button
           onClick={handleCAIPAnalysisClick}
-          disabled={isAiLoading || !selectedPractice || workforceLoading}
+          disabled={isCAIPAnalysisDisabled}
           className={`group relative inline-flex items-center gap-1.5 px-4 py-2 rounded-lg font-medium text-sm
             ml-auto overflow-hidden transition-all duration-300
-            ${!selectedPractice || workforceLoading
+            ${isCAIPAnalysisDisabled
               ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
               : hasExistingAnalysis
                 ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white shadow-lg shadow-green-500/25 hover:shadow-green-500/40'
                 : 'bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 text-white shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40'
             }`}
-          title={!selectedPractice ? 'Select a practice first' : workforceLoading ? 'Waiting for workforce data...' : hasExistingAnalysis ? 'View Analysis' : 'Generate AI Analysis'}
+          title={caipAnalysisDisabledReason}
         >
           {/* Animated sparkle background */}
-          {selectedPractice && !workforceLoading && !hasExistingAnalysis && (
+          {selectedPractice && !isCAIPAnalysisDisabled && !hasExistingAnalysis && (
             <div className="absolute inset-0 bg-gradient-to-r from-purple-400/20 via-pink-400/20 to-blue-400/20 animate-pulse" />
           )}
 
@@ -1822,7 +1882,7 @@ const NationalDemandCapacity = ({
             ) : workforceLoading && selectedPractice ? (
               <Loader2 size={16} className="animate-spin text-slate-400" />
             ) : (
-              <Sparkles size={16} className={selectedPractice && !hasExistingAnalysis ? 'animate-pulse' : ''} />
+              <Sparkles size={16} className={selectedPractice && !isCAIPAnalysisDisabled && !hasExistingAnalysis ? 'animate-pulse' : ''} />
             )}
             <span className="hidden sm:inline">
               {workforceLoading && selectedPractice ? 'Loading Data...' : hasExistingAnalysis ? 'View ' : ''}
@@ -1834,6 +1894,13 @@ const NationalDemandCapacity = ({
           </span>
         </button>
       </div>
+
+      {selectedPractice && !isEntireTimeframeSelected && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 text-sm">
+          <Info size={16} className="shrink-0" />
+          <span>CAIP Analysis is only available for the entire timeframe. Switch the date range above to Entire timeframe to view or generate it.</span>
+        </div>
+      )}
 
       {/* No Practice Selected Message - z-0 ensures it stays below search dropdown */}
       {!selectedPractice && (

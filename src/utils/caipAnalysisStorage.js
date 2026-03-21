@@ -2,7 +2,9 @@
  * CAIP Analysis Storage Utilities
  *
  * Handles saving and loading CAIP analyses to/from Firebase.
- * Each analysis is cached by practice ODS code + month.
+ * Each analysis is cached by practice ODS code + cache key.
+ * The display month is stored separately so cache identity can be decoupled
+ * from the month label shown in the UI/admin tooling.
  */
 
 import { doc, getDoc, setDoc, getDocs, deleteDoc, Timestamp, collection } from 'firebase/firestore';
@@ -13,17 +15,17 @@ import { db } from '../firebase/config';
 // v2.0 - Added practice model detection (Traditional/Hybrid/Total Triage),
 //        GP-only metrics, same-day booking context-dependent interpretation
 const PROMPT_VERSION = '2.0';
+export const ENTIRE_TIMEFRAME_ANALYSIS_KEY = 'entire_timeframe';
 
 /**
  * Generate document ID for an analysis
  * @param {string} odsCode - Practice ODS code
- * @param {string} month - Month string (e.g., "November 2025")
+ * @param {string} cacheKey - Cache key (e.g., "November 2025" or "entire_timeframe")
  * @returns {string} Document ID
  */
-function getDocumentId(odsCode, month) {
-  // Sanitize the month string for use as document ID
-  const sanitizedMonth = month.replace(/\s+/g, '_');
-  return `${odsCode}_${sanitizedMonth}`;
+function getDocumentId(odsCode, cacheKey) {
+  const sanitizedCacheKey = String(cacheKey).replace(/\s+/g, '_');
+  return `${odsCode}_${sanitizedCacheKey}`;
 }
 
 /**
@@ -34,17 +36,28 @@ function getDocumentId(odsCode, month) {
  * @param {string} params.practiceName - Practice name
  * @param {string} params.month - Month string (e.g., "November 2025")
  * @param {string} params.analysis - The AI-generated analysis text
+ * @param {string} [params.cacheKey] - Optional cache key override
+ * @param {string} [params.scope] - Optional analysis scope metadata
  * @returns {Promise<boolean>} True if saved successfully
  */
-export async function saveAnalysis({ odsCode, practiceName, month, analysis }) {
+export async function saveAnalysis({
+  odsCode,
+  practiceName,
+  month,
+  analysis,
+  cacheKey = month,
+  scope = 'month',
+}) {
   try {
-    const docId = getDocumentId(odsCode, month);
+    const docId = getDocumentId(odsCode, cacheKey);
     const docRef = doc(db, 'caip-analyses', docId);
 
     await setDoc(docRef, {
       odsCode,
       practiceName,
       month,
+      cacheKey,
+      scope,
       analysis,
       generatedAt: Timestamp.now(),
       promptVersion: PROMPT_VERSION,
@@ -65,11 +78,12 @@ export async function saveAnalysis({ odsCode, practiceName, month, analysis }) {
  *
  * @param {string} odsCode - Practice ODS code
  * @param {string} month - Month string (e.g., "November 2025")
+ * @param {string} [cacheKey=month] - Optional cache key override
  * @returns {Promise<Object|null>} Analysis object or null if not found
  */
-export async function loadAnalysis(odsCode, month) {
+export async function loadAnalysis(odsCode, month, cacheKey = month) {
   try {
-    const docId = getDocumentId(odsCode, month);
+    const docId = getDocumentId(odsCode, cacheKey);
     const docRef = doc(db, 'caip-analyses', docId);
     const docSnap = await getDoc(docRef);
 
@@ -79,6 +93,8 @@ export async function loadAnalysis(odsCode, month) {
         odsCode: data.odsCode,
         practiceName: data.practiceName,
         month: data.month,
+        cacheKey: data.cacheKey || cacheKey,
+        scope: data.scope || 'month',
         analysis: data.analysis,
         generatedAt: data.generatedAt?.toDate() || null,
         promptVersion: data.promptVersion,
@@ -100,11 +116,12 @@ export async function loadAnalysis(odsCode, month) {
  *
  * @param {string} odsCode - Practice ODS code
  * @param {string} month - Month string (e.g., "November 2025")
+ * @param {string} [cacheKey=month] - Optional cache key override
  * @returns {Promise<boolean>} True if analysis exists
  */
-export async function hasAnalysis(odsCode, month) {
+export async function hasAnalysis(odsCode, month, cacheKey = month) {
   try {
-    const docId = getDocumentId(odsCode, month);
+    const docId = getDocumentId(odsCode, cacheKey);
     const docRef = doc(db, 'caip-analyses', docId);
     const docSnap = await getDoc(docRef);
     return docSnap.exists();
@@ -120,11 +137,12 @@ export async function hasAnalysis(odsCode, month) {
  *
  * @param {string} odsCode - Practice ODS code
  * @param {string} month - Month string (e.g., "November 2025")
+ * @param {string} [cacheKey=month] - Optional cache key override
  * @returns {Promise<{exists: boolean, isStale: boolean, analysis: Object|null}>}
  */
-export async function checkAnalysisStatus(odsCode, month) {
+export async function checkAnalysisStatus(odsCode, month, cacheKey = month) {
   try {
-    const analysis = await loadAnalysis(odsCode, month);
+    const analysis = await loadAnalysis(odsCode, month, cacheKey);
 
     if (!analysis) {
       return { exists: false, isStale: false, analysis: null };
@@ -144,7 +162,7 @@ export async function checkAnalysisStatus(odsCode, month) {
       isStale: isStale || isOutdatedPrompt,
       analysis,
     };
-  } catch (error) {
+  } catch {
     // Silently fail - Firebase permissions may not be configured
     return { exists: false, isStale: false, analysis: null };
   }
@@ -172,11 +190,12 @@ export async function listAllAnalyses() {
  * Delete a single CAIP analysis by ODS code and month
  * @param {string} odsCode
  * @param {string} month
+ * @param {string} [cacheKey=month]
  * @returns {Promise<boolean>}
  */
-export async function deleteAnalysis(odsCode, month) {
+export async function deleteAnalysis(odsCode, month, cacheKey = month) {
   try {
-    const docId = getDocumentId(odsCode, month);
+    const docId = getDocumentId(odsCode, cacheKey);
     await deleteDoc(doc(db, 'caip-analyses', docId));
     return true;
   } catch (error) {
