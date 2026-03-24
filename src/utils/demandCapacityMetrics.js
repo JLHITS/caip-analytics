@@ -124,6 +124,14 @@ export function calculatePracticeMetrics(apptData, telephonyData, ocData, popula
   const otherAppts = apptData?.staffBreakdown?.otherStaffAppointments || 0;
   const totalAppts = apptData?.totalAppointments || (gpAppts + otherAppts);
 
+  // Extract category breakdown for clinically urgent metrics
+  const categories = apptData?.categoryBreakdown || {};
+  const acuteAppts = Number(categories['General Consultation Acute']) || 0;
+  const routineAppts = Number(categories['General Consultation Routine']) || 0;
+  const careHomeVisit = Number(categories['Care Home Visit']) || 0;
+  const inconsistentMapping = Number(categories['Inconsistent Mapping']) || 0;
+  const unmapped = Number(categories['Unmapped']) || 0;
+
   // Extract mode data
   const faceToFace = apptData?.appointmentModes?.faceToFace || 0;
   const telephone = apptData?.appointmentModes?.telephone || 0;
@@ -226,6 +234,23 @@ export function calculatePracticeMetrics(apptData, telephonyData, ocData, popula
     hasOCData: Boolean(ocData && (ocData.submissions > 0 || ocData.totalSubmissions > 0)),
     hasAppointmentData: Boolean(apptData && totalAppts > 0),
 
+    // Clinically Urgent (General Consultation Acute) Metrics
+    acuteAppts,
+    acutePct: totalAppts > 0 ? (acuteAppts / totalAppts) * 100 : null,
+    acutePer1000: calculatePer1000(acuteAppts, population),
+    routineAppts,
+    routinePct: totalAppts > 0 ? (routineAppts / totalAppts) * 100 : null,
+    routinePer1000: calculatePer1000(routineAppts, population),
+    careHomeVisitAppts: careHomeVisit,
+    // Non-clinically urgent = Routine + Care Home Visit (per NHS England definition)
+    nonUrgentAppts: routineAppts + careHomeVisit,
+    nonUrgentPct: totalAppts > 0 ? ((routineAppts + careHomeVisit) / totalAppts) * 100 : null,
+    // Data quality indicators
+    inconsistentMappingAppts: inconsistentMapping,
+    inconsistentMappingPct: totalAppts > 0 ? (inconsistentMapping / totalAppts) * 100 : null,
+    unmappedAppts: unmapped,
+    unmappedPct: totalAppts > 0 ? (unmapped / totalAppts) * 100 : null,
+
     // Population
     population,
     listSize: apptData?.listSize || population,
@@ -327,6 +352,13 @@ export function collectNationalMetricArrays(allPracticeMetrics) {
       .filter(m => m.hasOCData && m.ocSubmissions > 0)
       .map(m => m.ocClinicalSubmissions != null ? (m.ocClinicalSubmissions / m.ocSubmissions) * 100 : null)
       .filter(v => v != null && !isNaN(v)),
+
+    // Clinically Urgent metrics
+    acutePct: allPracticeMetrics.map(m => m.acutePct).filter(v => v != null && !isNaN(v)),
+    acutePer1000: allPracticeMetrics.map(m => m.acutePer1000).filter(v => v != null && !isNaN(v)),
+    routinePct: allPracticeMetrics.map(m => m.routinePct).filter(v => v != null && !isNaN(v)),
+    nonUrgentPct: allPracticeMetrics.map(m => m.nonUrgentPct).filter(v => v != null && !isNaN(v)),
+    inconsistentMappingPct: allPracticeMetrics.map(m => m.inconsistentMappingPct).filter(v => v != null && !isNaN(v)),
 
     // Note: Workforce metrics (patientsPerGpWte, patientsPerClinicalWte) are calculated
     // separately in NationalWorkforce component and need to be collected there

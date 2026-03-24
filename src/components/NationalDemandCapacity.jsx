@@ -4,7 +4,7 @@ import {
   Search, X, Loader2, Calendar, Phone, Monitor, TrendingUp, Users,
   BarChart3, AlertTriangle, Info, Star, StarOff, ChevronDown, ExternalLink,
   Share2, Copy, CheckCircle, Sparkles, Activity, Clock, UserCheck, Trophy,
-  ChevronUp, ChevronRight, ArrowUp, ArrowDown
+  ChevronUp, ChevronRight, ArrowUp, ArrowDown, HeartPulse
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -1441,6 +1441,7 @@ const NationalDemandCapacity = ({
     { id: 'breakdown', label: 'Breakdown', icon: BarChart3 },
     { id: 'trends', label: 'Trends', icon: TrendingUp },
     { id: 'dna', label: 'DNA Rates', icon: AlertTriangle },
+    { id: 'clinically-urgent', label: 'Clinically Urgent', icon: HeartPulse },
     { id: 'booking', label: 'Booking Waits', icon: Clock },
     { id: 'leaderboards', label: 'Leaderboards', icon: Trophy },
   ];
@@ -2024,6 +2025,46 @@ const NationalDemandCapacity = ({
                   icon={Phone}
                   className="border-blue-200 bg-blue-50"
                   color="text-blue-700"
+                />
+              </div>
+
+              {/* Clinically Urgent Key Metrics */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <MetricCard
+                  title="Acute %"
+                  value={formatMetricValue(practiceMetrics.acutePct, 'percent1')}
+                  subtext="Clinically urgent"
+                  info="Percentage of appointments mapped to General Consultation Acute — 2026/27 contract requires same-day access for these patients"
+                  icon={HeartPulse}
+                  className="border-red-200 bg-red-50"
+                  color="text-red-700"
+                />
+                <MetricCard
+                  title="Routine %"
+                  value={formatMetricValue(practiceMetrics.routinePct, 'percent1')}
+                  subtext="Non-urgent consultations"
+                  info="Percentage of appointments mapped to General Consultation Routine"
+                  icon={Calendar}
+                  className="border-blue-200 bg-blue-50"
+                  color="text-blue-700"
+                />
+                <MetricCard
+                  title="Within 7 Days"
+                  value={formatMetricValue((practiceMetrics.sameDayPct || 0) + (practiceMetrics.oneToSevenDaysPct || 0), 'percent1')}
+                  subtext="Non-urgent target"
+                  info="Percentage of all appointments booked and seen within 7 days — NHS England non-clinically urgent monitoring target"
+                  icon={Clock}
+                  className="border-green-200 bg-green-50"
+                  color="text-green-700"
+                />
+                <MetricCard
+                  title="Inconsistent Map"
+                  value={formatMetricValue(practiceMetrics.inconsistentMappingPct, 'percent1')}
+                  subtext="Needs review"
+                  info="Percentage of appointments with inconsistent national category mapping — practices should review and reduce this"
+                  icon={AlertTriangle}
+                  className={practiceMetrics.inconsistentMappingPct > 5 ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-slate-50'}
+                  color={practiceMetrics.inconsistentMappingPct > 5 ? 'text-amber-700' : 'text-slate-600'}
                 />
               </div>
 
@@ -2870,6 +2911,340 @@ const NationalDemandCapacity = ({
                     </span>{' '}
                     per month (assuming 15 min average GP appointment).
                   </p>
+                </div>
+              </Card>
+            </>
+          )}
+
+          {/* CLINICALLY URGENT SUB-TAB */}
+          {appointmentSubTab === 'clinically-urgent' && (
+            <>
+              {/* NHS England Guidance Banner */}
+              <Card className="bg-gradient-to-r from-red-50 to-orange-50 border-red-200">
+                <div className="flex items-start gap-3">
+                  <HeartPulse className="text-red-600 flex-shrink-0 mt-0.5" size={20} />
+                  <div>
+                    <h4 className="font-semibold text-red-800">2026/27 GP Contract Requirement</h4>
+                    <p className="text-sm text-red-700 mt-1">
+                      Patients identified as <strong>clinically urgent</strong> must be dealt with on the <strong>same day</strong>.
+                      Practices should record these appointments using slots mapped to the <strong>General Consultation Acute</strong> national category.
+                    </p>
+                    <p className="text-xs text-red-600 mt-2">
+                      <strong>Target metric:</strong> Same-day rate for General Consultation Acute appointments (time from booking to appointment).
+                    </p>
+                  </div>
+                </div>
+              </Card>
+
+              {/* Key Metrics Cards */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <MetricCard
+                  title="Acute Appts"
+                  value={practiceMetrics.acuteAppts?.toLocaleString() || '0'}
+                  subtext={`${formatMetricValue(practiceMetrics.acutePct, 'percent1')} of total`}
+                  info="Appointments mapped to General Consultation Acute national category"
+                  icon={HeartPulse}
+                  className="border-red-200 bg-red-50"
+                  color="text-red-700"
+                />
+                <MetricCard
+                  title="Acute per 1,000"
+                  value={formatMetricValue(practiceMetrics.acutePer1000, 'decimal1')}
+                  subtext="Per registered patient"
+                  info="Clinically urgent appointments per 1,000 registered patients"
+                  icon={Users}
+                  className="border-orange-200 bg-orange-50"
+                  color="text-orange-700"
+                />
+                <MetricCard
+                  title="Routine Appts"
+                  value={practiceMetrics.routineAppts?.toLocaleString() || '0'}
+                  subtext={`${formatMetricValue(practiceMetrics.routinePct, 'percent1')} of total`}
+                  info="Appointments mapped to General Consultation Routine national category"
+                  icon={Calendar}
+                  className="border-blue-200 bg-blue-50"
+                  color="text-blue-700"
+                />
+                <MetricCard
+                  title="Data Quality"
+                  value={formatMetricValue(practiceMetrics.inconsistentMappingPct, 'percent1')}
+                  subtext="Inconsistent mapping"
+                  info="Percentage of appointments with inconsistent national category mapping - practices should review and reduce this"
+                  icon={AlertTriangle}
+                  className={practiceMetrics.inconsistentMappingPct > 5 ? 'border-red-200 bg-red-50' : 'border-green-200 bg-green-50'}
+                  color={practiceMetrics.inconsistentMappingPct > 5 ? 'text-red-700' : 'text-green-700'}
+                />
+              </div>
+
+              {/* Same-Day Performance Card */}
+              <Card>
+                <h3 className="font-bold text-slate-700 mb-2 flex items-center gap-2">
+                  <Clock size={18} className="text-green-600" />
+                  Same-Day Appointment Performance
+                </h3>
+                <p className="text-xs text-slate-500 mb-4">
+                  The 2026/27 contract target requires clinically urgent patients to be seen on the same day. GPAD currently publishes same-day booking rates for all appointment types.
+                  Per-category same-day data will be published as GPAD evolves.
+                </p>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                    <p className="text-sm text-green-600 font-medium">Same Day (All Appts)</p>
+                    <p className="text-3xl font-bold text-green-800">{formatMetricValue(practiceMetrics.sameDayPct, 'percent1')}</p>
+                    <p className="text-xs text-green-500 mt-1">Booked & seen same day</p>
+                  </div>
+                  <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                    <p className="text-sm text-blue-600 font-medium">Within 7 Days</p>
+                    <p className="text-3xl font-bold text-blue-800">{formatMetricValue((practiceMetrics.sameDayPct || 0) + (practiceMetrics.oneToSevenDaysPct || 0), 'percent1')}</p>
+                    <p className="text-xs text-blue-500 mt-1">Non-urgent target window</p>
+                  </div>
+                  <div className="p-4 bg-indigo-50 rounded-lg border border-indigo-200">
+                    <p className="text-sm text-indigo-600 font-medium">Within 14 Days</p>
+                    <p className="text-3xl font-bold text-indigo-800">{formatMetricValue((practiceMetrics.sameDayPct || 0) + (practiceMetrics.oneToSevenDaysPct || 0) + (practiceMetrics.eightToFourteenDaysPct || 0), 'percent1')}</p>
+                    <p className="text-xs text-indigo-500 mt-1">Extended non-urgent window</p>
+                  </div>
+                </div>
+              </Card>
+
+              {/* Category Breakdown Chart */}
+              <Card>
+                <h3 className="font-bold text-slate-700 mb-4 flex items-center gap-2">
+                  <BarChart3 size={18} className="text-purple-600" />
+                  Urgent vs Routine Distribution
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="h-64">
+                    <Doughnut
+                      data={{
+                        labels: ['General Consultation Acute', 'General Consultation Routine', 'Other Categories'],
+                        datasets: [{
+                          data: [
+                            practiceMetrics.acuteAppts || 0,
+                            practiceMetrics.routineAppts || 0,
+                            Math.max(0, (practiceMetrics.totalAppointments || 0) - (practiceMetrics.acuteAppts || 0) - (practiceMetrics.routineAppts || 0)),
+                          ],
+                          backgroundColor: ['#EF4444', '#3B82F6', '#94A3B8'],
+                          borderWidth: 2,
+                          borderColor: '#fff',
+                        }],
+                      }}
+                      options={{
+                        ...donutOptions,
+                        plugins: {
+                          ...donutOptions.plugins,
+                          legend: { position: 'bottom', labels: { usePointStyle: true, font: { size: 11 } } },
+                        },
+                      }}
+                    />
+                  </div>
+                  <div className="space-y-3">
+                    <div className="p-3 bg-red-50 rounded-lg border border-red-100">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium text-red-700">General Consultation Acute</span>
+                        <span className="text-sm font-bold text-red-800">{formatMetricValue(practiceMetrics.acutePct, 'percent1')}</span>
+                      </div>
+                      <div className="mt-1 h-2 bg-red-200 rounded-full overflow-hidden">
+                        <div className="h-full bg-red-500 rounded-full" style={{ width: `${Math.min(100, practiceMetrics.acutePct || 0)}%` }} />
+                      </div>
+                      <p className="text-xs text-red-500 mt-1">{(practiceMetrics.acuteAppts || 0).toLocaleString()} appointments</p>
+                    </div>
+                    <div className="p-3 bg-blue-50 rounded-lg border border-blue-100">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium text-blue-700">General Consultation Routine</span>
+                        <span className="text-sm font-bold text-blue-800">{formatMetricValue(practiceMetrics.routinePct, 'percent1')}</span>
+                      </div>
+                      <div className="mt-1 h-2 bg-blue-200 rounded-full overflow-hidden">
+                        <div className="h-full bg-blue-500 rounded-full" style={{ width: `${Math.min(100, practiceMetrics.routinePct || 0)}%` }} />
+                      </div>
+                      <p className="text-xs text-blue-500 mt-1">{(practiceMetrics.routineAppts || 0).toLocaleString()} appointments</p>
+                    </div>
+                    <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium text-slate-600">Non-Urgent (Routine + Care Home Visit)</span>
+                        <span className="text-sm font-bold text-slate-700">{formatMetricValue(practiceMetrics.nonUrgentPct, 'percent1')}</span>
+                      </div>
+                      <p className="text-xs text-slate-500 mt-1">
+                        NHS England uses Routine + Care Home Visit for the non-clinically urgent measure
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+
+              {/* National Comparison */}
+              {nationalMetricArrays?.acutePct?.length > 0 && (
+                <Card>
+                  <h3 className="font-bold text-slate-700 mb-4 flex items-center gap-2">
+                    <Users size={18} className="text-indigo-600" />
+                    National Comparison
+                  </h3>
+                  <p className="text-xs text-slate-500 mb-4">
+                    How this practice compares to all practices nationally. NHS England notes wide variation is expected, but practices with high inconsistent mapping
+                    or unexpectedly low acute activity may not be accurately recording clinically urgent appointments.
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Acute % Percentile */}
+                    <div className="p-4 bg-gradient-to-br from-red-50 to-orange-50 rounded-lg border border-red-200">
+                      <p className="text-sm font-semibold text-red-700 mb-2">Acute % - National Percentile</p>
+                      {(() => {
+                        const percentile = calculatePercentile(practiceMetrics.acutePct, nationalMetricArrays.acutePct);
+                        const nationalMean = nationalMetricArrays.acutePct.reduce((a, b) => a + b, 0) / nationalMetricArrays.acutePct.length;
+                        return (
+                          <div>
+                            <p className="text-3xl font-bold text-red-800">
+                              {percentile !== null ? `${percentile}th` : 'N/A'}
+                            </p>
+                            <p className="text-xs text-red-600 mt-1">
+                              Practice: {formatMetricValue(practiceMetrics.acutePct, 'percent1')} | National avg: {formatMetricValue(nationalMean, 'percent1')}
+                            </p>
+                            <div className="mt-2 h-3 bg-red-200 rounded-full overflow-hidden relative">
+                              <div className="h-full bg-red-500 rounded-full" style={{ width: `${percentile || 0}%` }} />
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+
+                    {/* Inconsistent Mapping Percentile */}
+                    <div className="p-4 bg-gradient-to-br from-amber-50 to-yellow-50 rounded-lg border border-amber-200">
+                      <p className="text-sm font-semibold text-amber-700 mb-2">Inconsistent Mapping % - National Percentile</p>
+                      {(() => {
+                        const percentile = calculatePercentile(practiceMetrics.inconsistentMappingPct, nationalMetricArrays.inconsistentMappingPct);
+                        const nationalMean = nationalMetricArrays.inconsistentMappingPct?.length > 0
+                          ? nationalMetricArrays.inconsistentMappingPct.reduce((a, b) => a + b, 0) / nationalMetricArrays.inconsistentMappingPct.length
+                          : null;
+                        return (
+                          <div>
+                            <p className="text-3xl font-bold text-amber-800">
+                              {percentile !== null ? `${percentile}th` : 'N/A'}
+                            </p>
+                            <p className="text-xs text-amber-600 mt-1">
+                              Practice: {formatMetricValue(practiceMetrics.inconsistentMappingPct, 'percent1')} | National avg: {formatMetricValue(nationalMean, 'percent1')}
+                            </p>
+                            <div className="mt-2 h-3 bg-amber-200 rounded-full overflow-hidden relative">
+                              <div className="h-full bg-amber-500 rounded-full" style={{ width: `${percentile || 0}%` }} />
+                            </div>
+                            {percentile > 75 && (
+                              <p className="text-xs text-amber-700 mt-2 font-medium">
+                                High inconsistent mapping may indicate appointment book slots need reviewing against national category guidance.
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </div>
+
+                  {/* Acute per 1000 bar chart comparing to national distribution */}
+                  <div className="mt-6">
+                    <h4 className="text-sm font-semibold text-slate-600 mb-3">Acute Appointments per 1,000 Population - Distribution</h4>
+                    <div className="h-48">
+                      <Bar
+                        data={{
+                          labels: ['This Practice', 'National Average'],
+                          datasets: [{
+                            label: 'Acute per 1,000',
+                            data: [
+                              practiceMetrics.acutePer1000 || 0,
+                              nationalMetricArrays.acutePer1000?.length > 0
+                                ? nationalMetricArrays.acutePer1000.reduce((a, b) => a + b, 0) / nationalMetricArrays.acutePer1000.length
+                                : 0,
+                            ],
+                            backgroundColor: ['#EF4444', '#94A3B8'],
+                            borderRadius: 6,
+                          }],
+                        }}
+                        options={{
+                          ...commonOptions,
+                          indexAxis: 'y',
+                          scales: {
+                            x: { beginAtZero: true },
+                          },
+                          plugins: {
+                            legend: { display: false },
+                          },
+                        }}
+                      />
+                    </div>
+                  </div>
+                </Card>
+              )}
+
+              {/* Historical Trends */}
+              {historicalData.length >= 2 && (
+                <Card>
+                  <h3 className="font-bold text-slate-700 mb-4 flex items-center gap-2">
+                    <TrendingUp size={18} className="text-purple-600" />
+                    Clinically Urgent Trends
+                  </h3>
+                  <div className="h-64">
+                    <Line
+                      data={{
+                        labels: historicalData.map(d => d.month.replace(' 202', '\n202')),
+                        datasets: [
+                          {
+                            label: 'Acute %',
+                            data: historicalData.map(d => d.acutePct),
+                            borderColor: '#EF4444',
+                            backgroundColor: '#EF444433',
+                            fill: true,
+                            tension: 0.4,
+                          },
+                          {
+                            label: 'Routine %',
+                            data: historicalData.map(d => d.routinePct),
+                            borderColor: '#3B82F6',
+                            backgroundColor: '#3B82F633',
+                            fill: true,
+                            tension: 0.4,
+                          },
+                          {
+                            label: 'Inconsistent Mapping %',
+                            data: historicalData.map(d => d.inconsistentMappingPct),
+                            borderColor: '#F59E0B',
+                            borderDash: [5, 5],
+                            fill: false,
+                            tension: 0.4,
+                          },
+                        ],
+                      }}
+                      options={{
+                        ...commonOptions,
+                        scales: {
+                          y: {
+                            beginAtZero: true,
+                            ticks: { callback: v => `${v}%` },
+                          },
+                        },
+                      }}
+                    />
+                  </div>
+                </Card>
+              )}
+
+              {/* Action Checklist */}
+              <Card className="bg-slate-50 border-slate-200">
+                <h3 className="font-bold text-slate-700 mb-3 flex items-center gap-2">
+                  <CheckCircle size={18} className="text-green-600" />
+                  Practice Action Checklist
+                </h3>
+                <p className="text-xs text-slate-500 mb-3">
+                  NHS England recommended actions for practices to ensure accurate recording of clinically urgent appointments.
+                </p>
+                <div className="space-y-2">
+                  {[
+                    'Review appointment book slots for clinically urgent activity — ensure they are mapped to General Consultation Acute',
+                    'Review all other appointment book slots to check alignment with national category guidance',
+                    'Review appointment book slot mapping against the proposed non-clinically urgent categories (General Consultation Routine, Care Home Visit)',
+                    'Review individual GPAD dashboards to identify any potential issues unique to the practice',
+                    'Ensure clinically urgent patients presenting by telephone, walk-in, or online are all captured under General Consultation Acute',
+                  ].map((action, i) => (
+                    <div key={i} className="flex items-start gap-2 p-2 bg-white rounded border border-slate-100">
+                      <span className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-100 text-blue-600 text-xs font-bold flex items-center justify-center mt-0.5">
+                        {i + 1}
+                      </span>
+                      <p className="text-sm text-slate-700">{action}</p>
+                    </div>
+                  ))}
                 </div>
               </Card>
             </>
