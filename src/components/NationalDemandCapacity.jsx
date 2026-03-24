@@ -667,22 +667,15 @@ const NationalDemandCapacity = ({
     }
   }, [timeRangePreset, customStartMonth, customEndMonth]);
 
-  const isEntireTimeframeSelected = useMemo(() => (
-    timeRangeMonths.length === MONTHS_ORDERED.length &&
-    timeRangeMonths.every((month, index) => month === MONTHS_ORDERED[index])
-  ), [timeRangeMonths]);
-
   const caipAnalysisDisabledReason = !selectedPractice
     ? 'Select a practice first'
     : workforceLoading
       ? 'Waiting for workforce data...'
-      : !isEntireTimeframeSelected
-        ? 'CAIP Analysis is only available for the entire timeframe'
-        : hasExistingAnalysis
-          ? 'View Analysis'
-          : 'Generate AI Analysis';
+      : hasExistingAnalysis
+        ? 'View Analysis'
+        : 'Generate AI Analysis';
 
-  const isCAIPAnalysisDisabled = isAiLoading || !selectedPractice || workforceLoading || !isEntireTimeframeSelected;
+  const isCAIPAnalysisDisabled = isAiLoading || !selectedPractice || workforceLoading;
 
   useEffect(() => {
     if (timeRangeMonths.length === 0) return;
@@ -1106,15 +1099,9 @@ const NationalDemandCapacity = ({
     };
   }, [appointmentData, selectedMonth, telephonyByOds, ocByOds, workforceByOds]);
 
+  // Check for existing CAIP analysis when practice changes
   useEffect(() => {
-    if (!isEntireTimeframeSelected && activeSubTab === 'analysis') {
-      setActiveSubTab('appointments');
-    }
-  }, [isEntireTimeframeSelected, activeSubTab]);
-
-  // Check for existing CAIP analysis when practice or timeframe changes
-  useEffect(() => {
-    if (!selectedPractice || !isEntireTimeframeSelected) {
+    if (!selectedPractice) {
       setSavedAnalysis(null);
       setHasExistingAnalysis(false);
       setIsAnalysisStale(false);
@@ -1153,7 +1140,7 @@ const NationalDemandCapacity = ({
     };
 
     checkExisting();
-  }, [selectedPractice, selectedMonth, isEntireTimeframeSelected, latestAvailableMonth]);
+  }, [selectedPractice, selectedMonth, latestAvailableMonth]);
 
   // ========================================
   // BOOKMARK HANDLING
@@ -1194,10 +1181,6 @@ const NationalDemandCapacity = ({
   // Handle CAIP Analysis button click
   const handleCAIPAnalysisClick = useCallback(() => {
     if (!selectedPractice) return;
-    if (!isEntireTimeframeSelected) {
-      setToast({ type: 'info', message: 'CAIP Analysis is only available when the national timeframe is set to Entire timeframe.' });
-      return;
-    }
 
     // If already have analysis, switch to analysis tab
     if (hasExistingAnalysis && aiReport) {
@@ -1207,7 +1190,7 @@ const NationalDemandCapacity = ({
 
     // Go straight to consent
     setShowAIConsent(true);
-  }, [selectedPractice, hasExistingAnalysis, aiReport, isEntireTimeframeSelected]);
+  }, [selectedPractice, hasExistingAnalysis, aiReport]);
 
   // Calculate historical metrics for trend analysis
   const getHistoricalMetrics = useCallback(() => {
@@ -1264,12 +1247,6 @@ const NationalDemandCapacity = ({
   // Run CAIP Analysis
   const runCAIPAnalysis = useCallback(async () => {
     if (!selectedPractice || !practiceMetrics) return;
-    if (!isEntireTimeframeSelected) {
-      setAiErrorType('general');
-      setAiError('CAIP Analysis is only available when the national timeframe is set to Entire timeframe.');
-      setToast({ type: 'info', message: 'Switch the national timeframe to Entire timeframe to run CAIP Analysis.' });
-      return;
-    }
 
     setIsAiLoading(true);
     setAiError(null);
@@ -1426,7 +1403,6 @@ const NationalDemandCapacity = ({
     getHistoricalMetrics,
     loadMonthData,
     appointmentData,
-    isEntireTimeframeSelected,
   ]);
 
   // ========================================
@@ -1896,13 +1872,6 @@ const NationalDemandCapacity = ({
         </button>
       </div>
 
-      {selectedPractice && !isEntireTimeframeSelected && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 text-sm">
-          <Info size={16} className="shrink-0" />
-          <span>CAIP Analysis is only available for the entire timeframe. Switch the date range above to Entire timeframe to view or generate it.</span>
-        </div>
-      )}
-
       {/* No Practice Selected Message - z-0 ensures it stays below search dropdown */}
       {!selectedPractice && (
         <Card className="relative z-0 py-8">
@@ -1953,7 +1922,7 @@ const NationalDemandCapacity = ({
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setAppointmentSubTab(tab.id)}
+                  onClick={() => { setAppointmentSubTab(tab.id); trackTabView('national_appointments', tab.id); }}
                   className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
                     isActive
                       ? 'bg-white text-blue-700 shadow-sm border border-blue-200'
