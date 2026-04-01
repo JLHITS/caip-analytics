@@ -468,11 +468,12 @@ function parseTelephonyFile(filePath) {
 
   const table3Sheet = workbook.Sheets['Table 3'];
   const table3Raw = XLSX.utils.sheet_to_json(table3Sheet, { header: 1 });
+  const monthPattern = /(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})/;
 
   let dataMonth = 'October 2025';
-  const titleRow = table3Raw.find(row => row[0] && String(row[0]).match(/(October|November|December|January)/));
+  const titleRow = table3Raw.find((row) => monthPattern.test(String(row?.[0] || '')));
   if (titleRow) {
-    const monthMatch = String(titleRow[0]).match(/(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})/);
+    const monthMatch = String(titleRow[0]).match(monthPattern);
     if (monthMatch) dataMonth = `${monthMatch[1]} ${monthMatch[2]}`;
   }
 

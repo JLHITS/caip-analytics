@@ -407,18 +407,37 @@ const NationalTelephony = ({
         }
 
         if (jsonData) {
-          // Use pre-processed JSON data - just load population data
-          for (const month of Object.keys(jsonData)) {
-            if (month === 'metadata') continue;
-            const monthConfig = MONTH_DATA[month];
-            if (monthConfig) {
-              const populationMap = await parsePopulationData(monthConfig.population);
-              allData[month] = {
-                ...jsonData[month],
-                populationMap
+          // Use pre-processed JSON data where available, and fill any gaps from the bundled XLSX files.
+          const loadPromises = Object.entries(MONTH_DATA).map(async ([month, { telephony, population }]) => {
+            const populationMap = await parsePopulationData(population);
+
+            if (jsonData[month]) {
+              return {
+                month,
+                data: jsonData[month],
+                populationMap,
               };
             }
-          }
+
+            const cacheBuster = `?v=${Date.now()}`;
+            const response = await fetch(telephony + cacheBuster);
+            const arrayBuffer = await response.arrayBuffer();
+            const parsedData = parseNationalTelephonyData(arrayBuffer);
+
+            return {
+              month,
+              data: parsedData,
+              populationMap,
+            };
+          });
+
+          const results = await Promise.all(loadPromises);
+          results.forEach(({ month, data, populationMap }) => {
+            allData[month] = {
+              ...data,
+              populationMap
+            };
+          });
         } else {
           // Fallback: Load all months in parallel (telephony + population) using XLSX parsing
           const loadPromises = Object.entries(MONTH_DATA).map(async ([month, { telephony, population }]) => {

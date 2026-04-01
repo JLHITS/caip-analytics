@@ -116,6 +116,7 @@ import samplePdf9 from './assets/sampledata/9.pdf?url';
 import samplePdf10 from './assets/sampledata/aug.pdf?url';
 import samplePdf11 from './assets/sampledata/oct.pdf?url';
 import samplePdf12 from './assets/sampledata/sep.pdf?url';
+import { MONTHS_NEWEST_FIRST } from './assets/appt/index.js';
 
 // Print styles
 import './styles/print.css';
@@ -125,6 +126,7 @@ GlobalWorkerOptions.workerSrc = pdfWorker;
 
 // Auto-versioning from package.json via Vite
 const APP_VERSION = __APP_VERSION__;
+const LATEST_NATIONAL_EXTRACT = MONTHS_NEWEST_FIRST[0] || 'Unknown';
 
 // Register ChartJS components and custom backgroundBands plugin
 // backgroundBands plugin draws colored performance zones behind GP metrics charts
@@ -2342,7 +2344,7 @@ export default function App() {
                         <span className="font-bold">National Demand & Capacity Analysis</span>
                       </div>
                       <span className="text-xs bg-white/20 px-3 py-1 rounded-full font-medium whitespace-nowrap">
-                        Latest extract: January 2026
+                        Latest extract: {LATEST_NATIONAL_EXTRACT}
                       </span>
                     </div>
                   </>

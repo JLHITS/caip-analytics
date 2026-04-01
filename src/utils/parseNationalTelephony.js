@@ -10,15 +10,16 @@ export function parseNationalTelephonyData(fileBuffer) {
   // Extract month from Table 3 title (e.g., "October 2025")
   const table3Sheet = workbook.Sheets['Table 3'];
   const table3Raw = XLSX.utils.sheet_to_json(table3Sheet, { header: 1 });
+  const monthPattern = /(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})/;
 
   // Look for the title row which contains the month
-  const titleRow = table3Raw.find(row => row[0] && String(row[0]).includes('October') || String(row[0]).includes('November') || String(row[0]).includes('December') || String(row[0]).includes('January'));
+  const titleRow = table3Raw.find((row) => monthPattern.test(String(row?.[0] || '')));
   let dataMonth = 'October 2025';
 
   if (titleRow) {
     const titleText = String(titleRow[0]);
     // Extract just the month and year (e.g., "October 2025") from title like "Table 3: Summary... England, October 2025"
-    const monthMatch = titleText.match(/(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})/);
+    const monthMatch = titleText.match(monthPattern);
     if (monthMatch) {
       dataMonth = `${monthMatch[1]} ${monthMatch[2]}`;
     }
