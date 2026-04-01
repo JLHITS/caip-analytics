@@ -11,7 +11,7 @@ const MONTH_ORDER = [
   'September 2024', 'October 2024', 'November 2024', 'December 2024',
   'January 2025', 'February 2025', 'March 2025', 'April 2025', 'May 2025',
   'June 2025', 'July 2025', 'August 2025', 'September 2025', 'October 2025',
-  'November 2025', 'December 2025', 'January 2026'
+  'November 2025', 'December 2025', 'January 2026', 'February 2026'
 ];
 
 /**

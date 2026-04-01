@@ -35,7 +35,7 @@ import { commonOptions, donutOptions } from '../constants/chartConfigs';
 import { NHS_BLUE, NHS_GREEN, NHS_AMBER, NHS_RED, NHS_GREY, NHS_AQUA } from '../constants/colors';
 import { getDaysInMonth } from '../utils/demandCapacityMetrics';
 
-import workforceCsvUrl from '../assets/workforce/1 General Practice – January 2026 Practice Level - Detailed.csv?url';
+import workforceCsvUrl from '../assets/workforce/1 General Practice – February 2026 Practice Level - Detailed.csv?url';
 import workforceDefinitionsUrl from '../assets/workforce/0 General Practice Detailed Practice-Level CSV. Overall Definitions.xlsx?url';
 
 const TAB_OPTIONS = [

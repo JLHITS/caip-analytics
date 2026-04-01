@@ -288,7 +288,7 @@ const NationalDemandCapacity = ({
   // Data states
   const [appointmentData, setAppointmentData] = useState({}); // { month: parsedData }
   const [loadedMonths, setLoadedMonths] = useState(new Set());
-  const [selectedMonth, setSelectedMonth] = useState('January 2026');
+  const [selectedMonth, setSelectedMonth] = useState('February 2026');
   const compareMode = true; // Always compare with previous months
   const defaultEndMonth = MONTHS_NEWEST_FIRST[0];
   const defaultStartMonth = MONTHS_NEWEST_FIRST[Math.min(11, MONTHS_NEWEST_FIRST.length - 1)];
@@ -3396,7 +3396,7 @@ const NationalDemandCapacity = ({
                   <h4 className="font-medium text-amber-800">Limited Data Availability</h4>
                   <ul className="text-sm text-amber-700 mt-1 space-y-1">
                     {!practiceMetrics.hasTelephonyData && (
-                      <li>• Telephony data only available for October 2025-January 2026</li>
+                      <li>• Telephony data only available for October 2025-February 2026</li>
                     )}
                     {!practiceMetrics.hasOCData && (
                       <li>• Online consultation data not available for this practice</li>

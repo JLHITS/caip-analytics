@@ -49,15 +49,18 @@ import octData from '../assets/Cloud Based Telephony Publication Summary October
 import novData from '../assets/Cloud Based Telephony Publication Summary November 2025.xlsx?url';
 import decData from '../assets/Cloud Based Telephony Publication Summary December 2025.xlsx?url';
 import jan26Data from '../assets/Cloud Based Telephony Publication Summary January 2026.xlsx?url';
+import feb26Data from '../assets/Cloud Based Telephony Publication Summary February 2026.xlsx?url';
 
 // Import population CSV files
 import octPopData from '../assets/PracPopOct.csv?url';
 import novPopData from '../assets/PracPopNov.csv?url';
 import decPopData from '../assets/PracPopDec.csv?url';
 import jan26PopData from '../assets/PracPopJan26.csv?url';
+import feb26PopData from '../assets/PracPopFeb26.csv?url';
 
 // Month data mapping - ordered from oldest to newest for charts
 const MONTH_DATA = {
+  'February 2026': { telephony: feb26Data, population: feb26PopData },
   'January 2026': { telephony: jan26Data, population: jan26PopData },
   'December 2025': { telephony: decData, population: decPopData },
   'November 2025': { telephony: novData, population: novPopData },
@@ -65,7 +68,7 @@ const MONTH_DATA = {
 };
 
 // Ordered months for charts (oldest first)
-const MONTHS_ORDERED = ['October 2025', 'November 2025', 'December 2025', 'January 2026'];
+const MONTHS_ORDERED = ['October 2025', 'November 2025', 'December 2025', 'January 2026', 'February 2026'];
 
 const NationalTelephony = ({
   sharedPractice,
@@ -89,7 +92,7 @@ const NationalTelephony = ({
   const [showInterpretationTooltip, setShowInterpretationTooltip] = useState(false);
   const [showCoveragePopup, setShowCoveragePopup] = useState(false);
   const [showBookmarks, setShowBookmarks] = useState(true);
-  const [localSelectedMonth, setLocalSelectedMonth] = useState('January 2026');
+  const [localSelectedMonth, setLocalSelectedMonth] = useState('February 2026');
   const [localCompareWithPrevious, setLocalCompareWithPrevious] = useState(true);
 
   // Use parent-controlled values if provided, otherwise use local state
