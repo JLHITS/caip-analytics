@@ -9,9 +9,10 @@ import { searchPractices, getPracticeCount } from '../../utils/pracPopUtils';
 const PracticeLookup = ({
   onSelect,
   className = '',
+  showLabel = true,
   helperText = 'Select a practice to auto-fill ODS code and population',
   searchFn = null,
-  searchDescription = null,
+  searchDescription,
   placeholder = 'e.g., A81001 or TS18 1HU',
 }) => {
   const [query, setQuery] = useState('');
@@ -136,15 +137,19 @@ const PracticeLookup = ({
 
   return (
     <div className={`relative ${className}`}>
-      <label className="block text-sm font-medium text-slate-700 mb-1">
-        <span className="flex items-center gap-2">
-          <Building2 size={14} />
-          Find Your Practice
-        </span>
-      </label>
-      <p className="text-xs text-slate-500 mb-2">
-        {searchDescription || `Search by ODS code or postcode from ${practiceCount.toLocaleString()} NHS practices`}
-      </p>
+      {showLabel && (
+        <label className="block text-sm font-medium text-slate-700 mb-1">
+          <span className="flex items-center gap-2">
+            <Building2 size={14} />
+            Find Your Practice
+          </span>
+        </label>
+      )}
+      {searchDescription !== null && (
+        <p className={`text-xs text-slate-500 ${showLabel ? 'mb-2' : 'mb-0'}`}>
+          {searchDescription ?? `Search by ODS code or postcode from ${practiceCount.toLocaleString()} NHS practices`}
+        </p>
+      )}
 
       {/* Search input */}
       <div className="relative">
@@ -233,9 +238,11 @@ const PracticeLookup = ({
       )}
 
       {/* Help text */}
-      <p className="mt-1 text-xs text-slate-400">
-        {helperText}
-      </p>
+      {helperText && (
+        <p className="mt-1 text-xs text-slate-400">
+          {helperText}
+        </p>
+      )}
     </div>
   );
 };
