@@ -1,6 +1,10 @@
-import React, { useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { Bell, CheckCircle2, Loader2 } from 'lucide-react';
 import { searchPractices as searchNationalPractices } from '../../data/dataLoader';
+import {
+  getPracticeByODS,
+  searchPractices as searchPopulationPractices,
+} from '../../utils/pracPopUtils';
 import PracticeLookup from './PracticeLookup';
 import SubscribeButton from './SubscribeButton';
 
@@ -8,6 +12,41 @@ const HomeSubscribeSection = () => {
   const [selectedPractice, setSelectedPractice] = useState(null);
   const [resolvingPractice, setResolvingPractice] = useState(false);
   const lookupRequestRef = useRef(0);
+
+  const searchHomePractices = useCallback(async (query, limit = 50) => {
+    const [nationalMatches, populationMatches] = await Promise.all([
+      searchNationalPractices(query, 'appointments').catch(() => []),
+      Promise.resolve(searchPopulationPractices(query, limit)),
+    ]);
+
+    const merged = new Map();
+
+    nationalMatches.forEach((match) => {
+      const populationRecord = getPracticeByODS(match.odsCode);
+      merged.set(match.odsCode, {
+        odsCode: match.odsCode,
+        practiceName: match.practiceName,
+        pcnName: match.pcn || '',
+        icbName: match.icb || '',
+        postcode: populationRecord?.postcode || '',
+        population: populationRecord?.population,
+      });
+    });
+
+    populationMatches.forEach((match) => {
+      const existing = merged.get(match.odsCode);
+      merged.set(match.odsCode, {
+        odsCode: match.odsCode,
+        practiceName: existing?.practiceName || null,
+        pcnName: existing?.pcnName || '',
+        icbName: existing?.icbName || '',
+        postcode: existing?.postcode || match.postcode || '',
+        population: existing?.population ?? match.population,
+      });
+    });
+
+    return Array.from(merged.values()).slice(0, limit);
+  }, []);
 
   const handleSelectPractice = async (practice) => {
     const requestId = lookupRequestRef.current + 1;
@@ -17,12 +56,18 @@ const HomeSubscribeSection = () => {
       odsCode: practice.odsCode,
       postcode: practice.postcode,
       population: practice.population,
-      practiceName: null,
-      pcnName: '',
-      icbName: '',
+      practiceName: practice.practiceName || null,
+      pcnName: practice.pcnName || '',
+      icbName: practice.icbName || '',
     };
 
     setSelectedPractice(nextPractice);
+
+    if (practice.practiceName) {
+      setResolvingPractice(false);
+      return;
+    }
+
     setResolvingPractice(true);
 
     try {
@@ -72,6 +117,9 @@ const HomeSubscribeSection = () => {
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <PracticeLookup
               onSelect={handleSelectPractice}
+              searchFn={searchHomePractices}
+              searchDescription="Search by practice name, ODS code or postcode."
+              placeholder="e.g., Riverside Medical Centre, A81001 or TS18 1HU"
               helperText="Select a practice to open the subscription form."
             />
           </div>
@@ -124,7 +172,7 @@ const HomeSubscribeSection = () => {
               <div className="flex h-full min-h-[180px] flex-col justify-center rounded-xl border border-dashed border-blue-200 bg-white/80 px-4 text-center">
                 <p className="text-sm font-semibold text-slate-800">Choose your practice to start</p>
                 <p className="mt-2 text-xs leading-relaxed text-slate-500">
-                  Search by ODS code or postcode, then open the subscription form straight from the home page.
+                  Search by practice name, ODS code or postcode, then open the subscription form straight from the home page.
                 </p>
               </div>
             )}
