@@ -15,6 +15,7 @@ dist-ssr
 # Environment variables
 .env
 .env.local
+*-firebase-adminsdk-*.json
 
 # Editor directories and files
 .vscode/*
@@ -26,3 +27,4 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+.vercel

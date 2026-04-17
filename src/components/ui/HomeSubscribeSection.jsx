@@ -73,33 +73,31 @@ const HomeSubscribeSection = () => {
   return (
     <section className="mt-6 rounded-2xl border border-slate-200 bg-white/90 shadow-sm">
       <div className="px-4 py-4 sm:px-5">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-4">
-          <div className="flex items-start gap-3 lg:min-w-0 lg:flex-1">
-            <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700">
-              <Bell size={18} />
-            </div>
-            <div className="min-w-0">
-              <h3 className="text-sm font-semibold text-slate-900">Practice email updates</h3>
-              <p className="mt-0.5 text-xs leading-relaxed text-slate-500">
-                Search by practice name, ODS code or postcode and subscribe before opening national data.
-              </p>
-            </div>
+        <div className="flex items-start gap-3">
+          <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700">
+            <Bell size={18} />
           </div>
-
-          <div className="w-full lg:max-w-xl">
-            <PracticeLookup
-              onSelect={handleSelectPractice}
-              searchFn={searchHomePractices}
-              showLabel={false}
-              searchDescription={null}
-              helperText={null}
-              placeholder="Search practice name, ODS code or postcode"
-            />
+          <div className="min-w-0">
+            <h3 className="text-sm font-semibold text-slate-900">Practice email updates</h3>
+            <p className="mt-0.5 text-xs leading-relaxed text-slate-500">
+              Search by practice name, ODS code or postcode and subscribe before opening national data.
+            </p>
           </div>
         </div>
 
+        <div className="mt-3">
+          <PracticeLookup
+            onSelect={handleSelectPractice}
+            searchFn={searchHomePractices}
+            showLabel={false}
+            searchDescription={null}
+            helperText={null}
+            placeholder="Search practice name, ODS code or postcode"
+          />
+        </div>
+
         {selectedPractice && (
-          <div className="mt-3 flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="mt-3 flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-slate-900">{selectedPractice.practiceName}</p>
               <p className="mt-0.5 text-xs text-slate-500">
