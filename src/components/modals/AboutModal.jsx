@@ -1,7 +1,8 @@
 import React from 'react';
-import { Info, X, ExternalLink, Clock, Coffee, Shield, Sparkles } from 'lucide-react';
+import { Info, X, ExternalLink, Clock, Coffee, Shield, Sparkles, Mail } from 'lucide-react';
 import { trackCoffeeClick } from '../../firebase/config';
 import { NHS_BLUE } from '../../constants/colors';
+import SubscribeButton from '../ui/SubscribeButton';
 
 const AboutModal = ({ isOpen, onClose, onOpenBugReport, onOpenAdmin, timesUsed = 0, caipAnalysisCount = 0 }) => {
   if (!isOpen) return null;
@@ -131,11 +132,31 @@ const AboutModal = ({ isOpen, onClose, onOpenBugReport, onOpenAdmin, timesUsed =
             function to provide feedback.
           </p>
 
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3 mt-6">
+            <div className="p-2 bg-white rounded-lg border border-blue-100 shrink-0">
+              <Mail className="text-blue-600" size={18} />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-blue-900">Stay updated</p>
+              <p className="text-xs text-blue-800/80 mt-0.5 mb-2 leading-relaxed">
+                Get an email when new monthly NHS data is released, or when we ship platform updates.
+                Unsubscribe any time.
+              </p>
+              <SubscribeButton
+                scope="news"
+                signupSource="about-modal"
+                label="Subscribe by email"
+              />
+            </div>
+          </div>
+
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mt-6">
             <p className="text-sm text-amber-900">
               <strong>Please note:</strong> This tool is for decision support only and does not constitute clinical advice.
               Data processing happens locally in your browser and no data is stored on our servers. However, AI analysis
               (if used) sends anonymized statistical data to third-party services (raw numbers with context descriptions).
+              If you opt in to email notifications, your email address is stored securely with our email provider (Brevo)
+              and is retained until you unsubscribe. You can unsubscribe with one click from any email we send.
             </p>
           </div>
         </div>

@@ -15,6 +15,7 @@
     "@emailjs/browser": "^4.4.1",
     "chart.js": "^4.5.1",
     "firebase": "^12.6.0",
+    "firebase-admin": "^13.8.0",
     "html2canvas": "^1.4.1",
     "jspdf": "^3.0.4",
     "lucide-react": "^0.554.0",

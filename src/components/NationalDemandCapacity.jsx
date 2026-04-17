@@ -20,6 +20,7 @@ import { findSimilarPractices } from '../utils/comparisonUtils';
 import MetricCard from './ui/MetricCard';
 import Toast from './ui/Toast';
 import FancyNationalLoader from './ui/FancyNationalLoader';
+import SubscribeButton from './ui/SubscribeButton';
 import NationalTelephony from './NationalTelephony';
 import NationalOnlineConsultations from './NationalOnlineConsultations';
 import NationalWorkforce from './NationalWorkforce';
@@ -267,6 +268,7 @@ const NationalDemandCapacity = ({
   sharedUsageStats = {},
   recordPracticeUsage,
   initialOdsCode,
+  initialAutoAnalyze = false,
   onOpenBugReport,
 }) => {
   // ========================================
@@ -1192,6 +1194,16 @@ const NationalDemandCapacity = ({
     setShowAIConsent(true);
   }, [selectedPractice, hasExistingAnalysis, aiReport]);
 
+  // Auto-trigger CAIP analysis when arriving via an email deep link (?autoAnalyze=true).
+  // Fires once all prerequisites are ready: a practice is selected and workforce is loaded.
+  const autoAnalyzeFiredRef = useRef(false);
+  useEffect(() => {
+    if (!initialAutoAnalyze || autoAnalyzeFiredRef.current) return;
+    if (!selectedPractice || workforceLoading || !practiceMetrics) return;
+    autoAnalyzeFiredRef.current = true;
+    handleCAIPAnalysisClick();
+  }, [initialAutoAnalyze, selectedPractice, workforceLoading, practiceMetrics, handleCAIPAnalysisClick]);
+
   // Calculate historical metrics for trend analysis
   const getHistoricalMetrics = useCallback(() => {
     if (!selectedPractice) return {};
@@ -1737,6 +1749,16 @@ const NationalDemandCapacity = ({
               >
                 {isBookmarked ? <Star size={20} fill="currentColor" /> : <StarOff size={20} />}
               </button>
+              <div title="Subscribe to updates for this practice">
+                <SubscribeButton
+                  scope="practice"
+                  odsCode={selectedPractice.odsCode}
+                  practiceName={selectedPractice.gpName}
+                  signupSource="practice-dashboard"
+                  variant="icon"
+                  className="!text-white/90 hover:!text-white hover:!bg-white/20"
+                />
+              </div>
               <button
                 onClick={() => { setSelectedPractice(null); setSearchQuery(''); }}
                 className="p-2 rounded-full hover:bg-white/20 transition-colors"

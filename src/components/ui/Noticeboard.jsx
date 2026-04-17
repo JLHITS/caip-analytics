@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Megaphone } from 'lucide-react';
 import { listActiveNews } from '../../utils/newsStorage';
+import SubscribeButton from './SubscribeButton';
 
 const CYCLE_INTERVAL = 8000; // 8 seconds
 
@@ -45,6 +46,15 @@ export default function Noticeboard() {
           <div className="flex-1 min-w-0">
             <h4 className="text-sm font-bold text-amber-900 leading-tight">{item.headline}</h4>
             <p className="text-xs text-amber-800/80 mt-1 leading-relaxed">{item.body}</p>
+            <div className="mt-2">
+              <SubscribeButton
+                scope="news"
+                signupSource="noticeboard"
+                variant="link"
+                label="Get these updates by email"
+                className="!text-amber-800 hover:!text-amber-900"
+              />
+            </div>
           </div>
         </div>
 

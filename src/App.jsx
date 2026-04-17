@@ -403,6 +403,7 @@ export default function App() {
   const [toast, setToast] = useState(null);
   const [importLoading, setImportLoading] = useState(false);
   const [initialNationalOdsCode, setInitialNationalOdsCode] = useState(null);
+  const [initialNationalAutoAnalyze, setInitialNationalAutoAnalyze] = useState(false);
 
   // Fetch CAIP analysis count when About modal opens
   useEffect(() => {
@@ -475,6 +476,65 @@ export default function App() {
       setDataSource('national');
       setMainTab('telephony');
       return;
+    }
+  }, []);
+
+  // Handle subscription query params (?verify=, ?unsubscribe=, ?practice=X&autoAnalyze=true,
+  // ?verifyResult=, ?unsubscribeResult=). Runs once on mount.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.toString() === '') return;
+
+    const verifyToken = params.get('verify');
+    const verifyResult = params.get('verifyResult');
+    const unsubToken = params.get('unsubscribe');
+    const unsubResult = params.get('unsubscribeResult');
+    const practiceParam = params.get('practice');
+    const autoAnalyzeParam = params.get('autoAnalyze') === 'true';
+
+    const cleanUrl = () => {
+      window.history.replaceState({}, '', window.location.pathname);
+    };
+
+    // Server redirect results — already processed server-side, just show toast
+    if (verifyResult === 'success') {
+      setToast({ type: 'success', message: 'Subscription confirmed. You\'ll receive updates by email.' });
+      cleanUrl();
+      return;
+    }
+    if (verifyResult === 'invalid') {
+      setToast({ type: 'error', message: 'This confirmation link is invalid or has already been used.' });
+      cleanUrl();
+      return;
+    }
+    if (unsubResult === 'success') {
+      setToast({ type: 'success', message: 'You\'ve been unsubscribed. We won\'t email you again.' });
+      cleanUrl();
+      return;
+    }
+    if (unsubResult === 'invalid') {
+      setToast({ type: 'error', message: 'This unsubscribe link is invalid or has already been used.' });
+      cleanUrl();
+      return;
+    }
+
+    // Raw verify token — hit the API (which redirects back with verifyResult)
+    if (verifyToken) {
+      window.location.replace(`/api/verify?token=${encodeURIComponent(verifyToken)}`);
+      return;
+    }
+    if (unsubToken) {
+      window.location.replace(`/api/unsubscribe?token=${encodeURIComponent(unsubToken)}`);
+      return;
+    }
+
+    // Deep link to a practice (and optionally auto-run AI analysis)
+    if (practiceParam) {
+      setInitialNationalOdsCode(practiceParam);
+      setInitialNationalAutoAnalyze(autoAnalyzeParam);
+      setDataSource('national');
+      setMainTab('demand-capacity');
+      cleanUrl();
     }
   }, []);
 
@@ -3184,6 +3244,7 @@ export default function App() {
             sharedUsageStats={sharedUsageStats}
             recordPracticeUsage={recordPracticeUsage}
             initialOdsCode={initialNationalOdsCode}
+            initialAutoAnalyze={initialNationalAutoAnalyze}
             onOpenBugReport={() => setShowBugReport(true)}
           />
         )}

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   X, Lock, Users, RefreshCw, Download, Shield, AlertTriangle,
   Sparkles, Trash2, Search, AlertCircle, CheckCircle, Megaphone,
-  Plus, Edit3, Eye, EyeOff, Save, XCircle
+  Plus, Edit3, Eye, EyeOff, Save, XCircle, Mail, Send
 } from 'lucide-react';
 import {
   listAllAnalyses,
@@ -51,6 +51,25 @@ const AdminPanel = ({ isOpen, onClose }) => {
   const [confirmDeleteNewsId, setConfirmDeleteNewsId] = useState(null);
 
   const [loginLoading, setLoginLoading] = useState(false);
+
+  // Subscribers tab state
+  const [subsLoading, setSubsLoading] = useState(false);
+  const [subsError, setSubsError] = useState('');
+  const [subStats, setSubStats] = useState(null);
+  const [subscribers, setSubscribers] = useState([]);
+  const [dispatches, setDispatches] = useState([]);
+  const [sendForm, setSendForm] = useState({
+    type: 'data-release',           // 'data-release' | 'news-blast' | 'all-data'
+    dataset: 'appointments',
+    month: '',
+    odsCode: '',
+    practiceName: '',
+    newsId: '',
+  });
+  const [sendDryRun, setSendDryRun] = useState(null); // { targeted }
+  const [sendResult, setSendResult] = useState(null); // { type, message }
+  const [sending, setSending] = useState(false);
+  const [confirmSend, setConfirmSend] = useState(false);
 
   // On mount / open: check for existing session token
   useEffect(() => {
@@ -195,13 +214,115 @@ const AdminPanel = ({ isOpen, onClose }) => {
     setNewsForm({ headline: '', body: '', active: true, priority: 0 });
   };
 
+  const fetchSubscriptions = useCallback(async () => {
+    const token = sessionStorage.getItem('adminToken');
+    if (!token) { setSubsError('Not authenticated.'); return; }
+    setSubsLoading(true);
+    setSubsError('');
+    try {
+      const res = await fetch('/api/subscriptions-list', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) { setSubsError(data.error || 'Failed to load subscriptions.'); return; }
+      setSubStats(data.stats);
+      setSubscribers(data.subscribers || []);
+      setDispatches(data.dispatches || []);
+    } catch {
+      setSubsError('Unable to reach subscriptions API.');
+    } finally {
+      setSubsLoading(false);
+    }
+  }, []);
+
+  const handleDryRun = async () => {
+    const token = sessionStorage.getItem('adminToken');
+    if (!token) return;
+    setSendResult(null);
+    setSendDryRun(null);
+    try {
+      const payload = buildSendPayload(true);
+      const res = await fetch('/api/send-notifications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) { setSendResult({ type: 'error', message: data.error || 'Preview failed.' }); return; }
+      setSendDryRun({ targeted: data.targeted });
+    } catch {
+      setSendResult({ type: 'error', message: 'Unable to reach send API.' });
+    }
+  };
+
+  const buildSendPayload = (dryRun = false) => {
+    const { type, dataset, month, odsCode, practiceName, newsId } = sendForm;
+    if (type === 'news-blast') {
+      const news = newsItems.find(n => n.id === newsId);
+      return {
+        type,
+        newsId,
+        headline: news?.headline || '',
+        body: news?.body || '',
+        dryRun,
+      };
+    }
+    return { type, dataset, month, odsCode: odsCode.trim().toUpperCase() || null, practiceName: practiceName.trim() || null, dryRun };
+  };
+
+  const handleSendNotifications = async () => {
+    if (!confirmSend) { setConfirmSend(true); return; }
+    const token = sessionStorage.getItem('adminToken');
+    if (!token) return;
+    setSending(true);
+    setSendResult(null);
+    try {
+      const payload = buildSendPayload(false);
+      const res = await fetch('/api/send-notifications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) { setSendResult({ type: 'error', message: data.error || 'Send failed.' }); return; }
+      setSendResult({
+        type: 'success',
+        message: `Sent to ${data.sent}/${data.targeted}${data.failed > 0 ? ` — ${data.failed} failed` : ''}.`,
+      });
+      setConfirmSend(false);
+      setSendDryRun(null);
+      fetchSubscriptions();
+    } catch {
+      setSendResult({ type: 'error', message: 'Unable to reach send API.' });
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleExportSubscribers = () => {
+    const verified = subscribers.filter(s => s.verified);
+    const lines = verified.map(s => [
+      s.email,
+      (s.practices || []).join(';'),
+      s.subscribedToNews ? 'yes' : 'no',
+      s.subscribedToAllDataReleases ? 'yes' : 'no',
+      s.wantsAIAnalysis ? 'yes' : 'no',
+      s.signupSource || '',
+      formatTimestamp(s.verifiedAt),
+    ].join('\t'));
+    const content = ['Email\tPractices\tNews\tAllData\tWantsAI\tSource\tVerified', ...lines].join('\n');
+    downloadFile(content, 'caip-subscribers.txt', 'text/plain');
+  };
+
   useEffect(() => {
     if (authed) {
       fetchPracticeUsage();
       fetchAnalyses();
       fetchNews();
+      fetchSubscriptions();
     }
-  }, [authed, fetchPracticeUsage, fetchAnalyses, fetchNews]);
+  }, [authed, fetchPracticeUsage, fetchAnalyses, fetchNews, fetchSubscriptions]);
 
   const handleExportPractices = () => {
     const lines = practices.map(p => [
@@ -377,6 +498,20 @@ const AdminPanel = ({ isOpen, onClose }) => {
                 {newsItems.filter(n => n.active).length > 0 && (
                   <span className="ml-1.5 bg-emerald-100 text-emerald-700 text-xs font-semibold px-1.5 py-0.5 rounded-full">
                     {newsItems.filter(n => n.active).length}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => setActiveTab('subscribers')}
+                className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
+                  activeTab === 'subscribers' ? 'border-slate-800 text-slate-800' : 'border-transparent text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                <Mail size={14} className="inline mr-1.5 -mt-0.5" />
+                Subscribers
+                {subStats?.verified > 0 && (
+                  <span className="ml-1.5 bg-blue-100 text-blue-700 text-xs font-semibold px-1.5 py-0.5 rounded-full">
+                    {subStats.verified}
                   </span>
                 )}
               </button>
@@ -763,6 +898,265 @@ const AdminPanel = ({ isOpen, onClose }) => {
                     ))}
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Subscribers Tab */}
+            {activeTab === 'subscribers' && (
+              <div className="space-y-5">
+
+                {/* Stats cards */}
+                <div className="grid grid-cols-4 gap-3">
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
+                    <p className="text-2xl font-bold text-blue-800">{subStats?.verified ?? '—'}</p>
+                    <p className="text-xs text-blue-600">Verified</p>
+                  </div>
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-center">
+                    <p className="text-2xl font-bold text-amber-800">{subStats?.unverified ?? '—'}</p>
+                    <p className="text-xs text-amber-600">Pending verify</p>
+                  </div>
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-center">
+                    <p className="text-2xl font-bold text-emerald-800">{subStats?.news ?? '—'}</p>
+                    <p className="text-xs text-emerald-600">News subscribers</p>
+                  </div>
+                  <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 text-center">
+                    <p className="text-2xl font-bold text-purple-800">{subStats?.practiceScoped ?? '—'}</p>
+                    <p className="text-xs text-purple-600">Practice-scoped</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-3">
+                  <button
+                    onClick={fetchSubscriptions}
+                    className="flex items-center gap-1 text-xs text-slate-600 hover:text-slate-800"
+                  >
+                    <RefreshCw size={12} /> Refresh
+                  </button>
+                  <button
+                    onClick={handleExportSubscribers}
+                    disabled={subscribers.length === 0}
+                    className={`flex items-center gap-1 text-xs ${subscribers.length === 0 ? 'text-slate-300' : 'text-blue-600 hover:text-blue-700'}`}
+                  >
+                    <Download size={12} /> Export verified (.txt)
+                  </button>
+                </div>
+
+                {subsError && (
+                  <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                    <AlertTriangle size={14} className="text-amber-600 shrink-0" />
+                    <p className="text-sm text-amber-700">{subsError}</p>
+                  </div>
+                )}
+
+                {/* Send notification form */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-3">
+                  <p className="text-sm font-semibold text-blue-900">Send notification</p>
+
+                  <div className="flex flex-wrap gap-4 text-xs">
+                    {[
+                      { id: 'data-release', label: 'Practice data release' },
+                      { id: 'all-data', label: 'All-data digest' },
+                      { id: 'news-blast', label: 'News blast' },
+                    ].map(opt => (
+                      <label key={opt.id} className="flex items-center gap-1.5 text-slate-700 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="sendType"
+                          checked={sendForm.type === opt.id}
+                          onChange={() => { setSendForm(f => ({ ...f, type: opt.id })); setSendDryRun(null); setConfirmSend(false); }}
+                          className="text-blue-600"
+                        />
+                        {opt.label}
+                      </label>
+                    ))}
+                  </div>
+
+                  {(sendForm.type === 'data-release' || sendForm.type === 'all-data') && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <select
+                        value={sendForm.dataset}
+                        onChange={(e) => { setSendForm(f => ({ ...f, dataset: e.target.value })); setSendDryRun(null); setConfirmSend(false); }}
+                        className="px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+                      >
+                        <option value="appointments">Appointments</option>
+                        <option value="telephony">Telephony</option>
+                        <option value="oc">Online Consultations</option>
+                        <option value="workforce">Workforce</option>
+                      </select>
+                      <input
+                        type="text"
+                        value={sendForm.month}
+                        onChange={(e) => { setSendForm(f => ({ ...f, month: e.target.value })); setSendDryRun(null); setConfirmSend(false); }}
+                        placeholder="Month e.g. January 2026"
+                        className="px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+                      />
+                    </div>
+                  )}
+
+                  {sendForm.type === 'data-release' && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        value={sendForm.odsCode}
+                        onChange={(e) => { setSendForm(f => ({ ...f, odsCode: e.target.value })); setSendDryRun(null); setConfirmSend(false); }}
+                        placeholder="ODS code (e.g. C84025)"
+                        className="px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 uppercase"
+                      />
+                      <input
+                        type="text"
+                        value={sendForm.practiceName}
+                        onChange={(e) => setSendForm(f => ({ ...f, practiceName: e.target.value }))}
+                        placeholder="Practice name (optional)"
+                        className="px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+                      />
+                    </div>
+                  )}
+
+                  {sendForm.type === 'news-blast' && (
+                    <select
+                      value={sendForm.newsId}
+                      onChange={(e) => { setSendForm(f => ({ ...f, newsId: e.target.value })); setSendDryRun(null); setConfirmSend(false); }}
+                      className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    >
+                      <option value="">Select a news item…</option>
+                      {newsItems.map(n => (
+                        <option key={n.id} value={n.id}>
+                          {n.active ? '● ' : '○ '}{n.headline}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      onClick={handleDryRun}
+                      className="flex items-center gap-1.5 px-3 py-2 bg-white border border-blue-300 text-blue-700 text-sm font-medium rounded-lg hover:bg-blue-50 transition-colors"
+                    >
+                      <Eye size={14} /> Preview audience
+                    </button>
+                    <button
+                      onClick={handleSendNotifications}
+                      disabled={sending}
+                      className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg transition-colors disabled:opacity-40 ${
+                        confirmSend
+                          ? 'bg-red-600 text-white hover:bg-red-700'
+                          : 'bg-blue-600 text-white hover:bg-blue-700'
+                      }`}
+                    >
+                      <Send size={14} />
+                      {sending
+                        ? 'Sending…'
+                        : confirmSend
+                          ? `Confirm — Send to ${sendDryRun?.targeted ?? '?'}`
+                          : 'Send notification'}
+                    </button>
+                    {confirmSend && !sending && (
+                      <button
+                        onClick={() => { setConfirmSend(false); }}
+                        className="px-3 py-2 text-xs text-slate-600 hover:text-slate-800"
+                      >
+                        Cancel
+                      </button>
+                    )}
+                  </div>
+
+                  {sendDryRun && (
+                    <p className="text-xs text-blue-800">
+                      <strong>{sendDryRun.targeted}</strong> verified subscriber{sendDryRun.targeted === 1 ? '' : 's'} match this notification.
+                    </p>
+                  )}
+
+                  {sendResult && (
+                    <div className={`flex items-center gap-2 text-xs p-2 rounded-lg ${
+                      sendResult.type === 'success' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
+                    }`}>
+                      {sendResult.type === 'success' ? <CheckCircle size={13} /> : <AlertCircle size={13} />}
+                      {sendResult.message}
+                    </div>
+                  )}
+                </div>
+
+                {/* Dispatch history */}
+                <div>
+                  <p className="text-xs font-semibold text-slate-600 mb-2">Recent dispatches</p>
+                  {subsLoading ? (
+                    <p className="text-sm text-slate-500 py-4 text-center">Loading…</p>
+                  ) : (
+                    <div className="max-h-56 overflow-y-auto border border-slate-200 rounded-lg bg-white">
+                      <table className="w-full text-xs">
+                        <thead className="sticky top-0 bg-slate-100 text-slate-600">
+                          <tr>
+                            <th className="text-left px-3 py-2">When</th>
+                            <th className="text-left px-3 py-2">Type</th>
+                            <th className="text-left px-3 py-2">Detail</th>
+                            <th className="text-right px-3 py-2">Sent</th>
+                            <th className="text-right px-3 py-2">Failed</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {dispatches.length === 0 && (
+                            <tr><td colSpan={5} className="px-3 py-4 text-slate-500 text-center">No dispatches yet.</td></tr>
+                          )}
+                          {dispatches.map(d => (
+                            <tr key={d.id} className="border-t border-slate-100">
+                              <td className="px-3 py-2 text-slate-500">{formatTimestamp(d.createdAt)}</td>
+                              <td className="px-3 py-2 text-slate-700">{d.type}</td>
+                              <td className="px-3 py-2 text-slate-600">
+                                {d.type === 'news-blast'
+                                  ? (d.newsId || '—')
+                                  : `${d.dataset || ''}${d.month ? ` · ${d.month}` : ''}${d.odsCode ? ` · ${d.odsCode}` : ''}`}
+                              </td>
+                              <td className="px-3 py-2 text-right text-emerald-700 font-medium">{d.emailsSent ?? 0}</td>
+                              <td className={`px-3 py-2 text-right font-medium ${d.emailsFailed > 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                                {d.emailsFailed ?? 0}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                {/* Subscribers table */}
+                <div>
+                  <p className="text-xs font-semibold text-slate-600 mb-2">All subscribers ({subscribers.length})</p>
+                  <div className="max-h-72 overflow-y-auto border border-slate-200 rounded-lg bg-white">
+                    <table className="w-full text-xs">
+                      <thead className="sticky top-0 bg-slate-100 text-slate-600">
+                        <tr>
+                          <th className="text-left px-3 py-2">Email</th>
+                          <th className="text-left px-3 py-2">Status</th>
+                          <th className="text-left px-3 py-2">Practices</th>
+                          <th className="text-center px-3 py-2">News</th>
+                          <th className="text-center px-3 py-2">All data</th>
+                          <th className="text-left px-3 py-2">Source</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {subscribers.length === 0 && (
+                          <tr><td colSpan={6} className="px-3 py-4 text-slate-500 text-center">No subscribers yet.</td></tr>
+                        )}
+                        {subscribers.map(s => (
+                          <tr key={s.id} className="border-t border-slate-100">
+                            <td className="px-3 py-2 text-slate-800">{s.email}</td>
+                            <td className="px-3 py-2">
+                              {s.verified
+                                ? <span className="text-emerald-700">Verified</span>
+                                : <span className="text-amber-700">Pending</span>}
+                            </td>
+                            <td className="px-3 py-2 text-slate-600 font-mono">
+                              {(s.practices || []).join(', ') || '—'}
+                            </td>
+                            <td className="px-3 py-2 text-center">{s.subscribedToNews ? '✓' : ''}</td>
+                            <td className="px-3 py-2 text-center">{s.subscribedToAllDataReleases ? '✓' : ''}</td>
+                            <td className="px-3 py-2 text-slate-500">{s.signupSource || '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
             )}
           </>
