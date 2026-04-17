@@ -160,7 +160,9 @@ const SubscribeModal = ({
                 onChange={e => setEmail(e.target.value)}
                 required
                 autoFocus
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                autoComplete="email"
+                spellCheck={false}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="you@nhs.net"
               />
             </div>

@@ -1755,8 +1755,8 @@ const NationalDemandCapacity = ({
                   odsCode={selectedPractice.odsCode}
                   practiceName={selectedPractice.gpName}
                   signupSource="practice-dashboard"
-                  variant="icon"
-                  className="!text-white/90 hover:!text-white hover:!bg-white/20"
+                  label="Subscribe"
+                  className="!border-white/30 !bg-white/15 !text-white hover:!bg-white/25"
                 />
               </div>
               <button

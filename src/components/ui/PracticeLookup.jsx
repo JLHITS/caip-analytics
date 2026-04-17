@@ -6,7 +6,11 @@ import { searchPractices, getPracticeCount } from '../../utils/pracPopUtils';
  * Practice lookup component with searchable dropdown
  * Allows users to search by ODS code or postcode and auto-fill practice details
  */
-const PracticeLookup = ({ onSelect, className = '' }) => {
+const PracticeLookup = ({
+  onSelect,
+  className = '',
+  helperText = 'Select a practice to auto-fill ODS code and population',
+}) => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [isOpen, setIsOpen] = useState(false);
@@ -120,7 +124,7 @@ const PracticeLookup = ({ onSelect, className = '' }) => {
           onKeyDown={handleKeyDown}
           onFocus={() => query.length >= 2 && results.length > 0 && setIsOpen(true)}
           placeholder="e.g., A81001 or TS18 1HU"
-          className="w-full pl-9 pr-9 py-2 border border-slate-300 rounded-lg text-sm
+          className="w-full pl-9 pr-9 py-2 border border-slate-300 rounded-lg bg-white text-sm text-slate-900
                      focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500
                      placeholder:text-slate-400"
         />
@@ -177,7 +181,7 @@ const PracticeLookup = ({ onSelect, className = '' }) => {
 
       {/* Help text */}
       <p className="mt-1 text-xs text-slate-400">
-        Select a practice to auto-fill ODS code and population
+        {helperText}
       </p>
     </div>
   );

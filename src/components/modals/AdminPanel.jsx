@@ -70,6 +70,9 @@ const AdminPanel = ({ isOpen, onClose }) => {
   const [sendResult, setSendResult] = useState(null); // { type, message }
   const [sending, setSending] = useState(false);
   const [confirmSend, setConfirmSend] = useState(false);
+  const [lastTestRecipient, setLastTestRecipient] = useState('');
+  const [sendingTestType, setSendingTestType] = useState('');
+  const [testEmailResult, setTestEmailResult] = useState(null);
 
   // On mount / open: check for existing session token
   useEffect(() => {
@@ -315,6 +318,56 @@ const AdminPanel = ({ isOpen, onClose }) => {
     downloadFile(content, 'caip-subscribers.txt', 'text/plain');
   };
 
+  const handleSendTestEmail = async (type) => {
+    const token = sessionStorage.getItem('adminToken');
+    if (!token) {
+      setTestEmailResult({ type: 'error', message: 'Not authenticated.' });
+      return;
+    }
+
+    const promptLabel = {
+      verification: 'Send test verification email to:',
+      'practice-data': 'Send test practice data email to:',
+      'news-blast': 'Send test news blast email to:',
+      'all-data': 'Send test all-data digest email to:',
+    };
+
+    const requestedEmail = window.prompt(promptLabel[type] || 'Send test email to:', lastTestRecipient || '');
+    if (requestedEmail === null) return;
+
+    const email = requestedEmail.trim();
+    if (!email) {
+      setTestEmailResult({ type: 'error', message: 'Email address is required.' });
+      return;
+    }
+
+    setSendingTestType(type);
+    setTestEmailResult(null);
+
+    try {
+      const res = await fetch('/api/send-test-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ type, email }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setTestEmailResult({ type: 'error', message: data.error || 'Failed to send test email.' });
+        return;
+      }
+
+      setLastTestRecipient(data.email || email);
+      setTestEmailResult({
+        type: 'success',
+        message: `${data.label || 'Test email'} sent to ${data.email || email}.`,
+      });
+    } catch {
+      setTestEmailResult({ type: 'error', message: 'Unable to reach test email API.' });
+    } finally {
+      setSendingTestType('');
+    }
+  };
+
   useEffect(() => {
     if (authed) {
       fetchPracticeUsage();
@@ -409,6 +462,28 @@ const AdminPanel = ({ isOpen, onClose }) => {
         a.practiceName?.toLowerCase().includes(deleteSearch.toLowerCase())
       ).slice(0, 5)
     : [];
+  const testEmailActions = [
+    {
+      id: 'verification',
+      label: 'Verification email',
+      description: 'Sends the confirmation email a user receives after subscribing.',
+    },
+    {
+      id: 'practice-data',
+      label: 'Practice data release',
+      description: 'Sends a sample practice update with the AI analysis CTA enabled.',
+    },
+    {
+      id: 'news-blast',
+      label: 'News blast',
+      description: 'Sends a sample platform update email from the admin tool.',
+    },
+    {
+      id: 'all-data',
+      label: 'All-data digest',
+      description: 'Sends a sample national data release digest email.',
+    },
+  ];
 
   if (!isOpen) return null;
 
@@ -431,7 +506,7 @@ const AdminPanel = ({ isOpen, onClose }) => {
           </div>
           <div>
             <h3 className="text-xl font-bold text-slate-800">Admin Panel</h3>
-            <p className="text-sm text-slate-500">Manage usage and AI analysis cache</p>
+            <p className="text-sm text-slate-500">Manage usage, content, subscribers and email testing</p>
           </div>
         </div>
 
@@ -514,6 +589,15 @@ const AdminPanel = ({ isOpen, onClose }) => {
                     {subStats.verified}
                   </span>
                 )}
+              </button>
+              <button
+                onClick={() => setActiveTab('testing')}
+                className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
+                  activeTab === 'testing' ? 'border-slate-800 text-slate-800' : 'border-transparent text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                <Send size={14} className="inline mr-1.5 -mt-0.5" />
+                Testing
               </button>
             </div>
 
@@ -896,6 +980,59 @@ const AdminPanel = ({ isOpen, onClose }) => {
                         </div>
                       </div>
                     ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Testing Tab */}
+            {activeTab === 'testing' && (
+              <div className="space-y-5">
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
+                  <p className="text-sm font-semibold text-slate-900">Email testing</p>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-600">
+                    Each button prompts for a destination email address, then sends a single admin-only test email.
+                    No subscriber records are created or changed.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {testEmailActions.map((action) => (
+                    <button
+                      key={action.id}
+                      onClick={() => handleSendTestEmail(action.id)}
+                      disabled={!!sendingTestType}
+                      className="rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition-all hover:border-slate-300 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-800">{action.label}</p>
+                          <p className="mt-1 text-xs leading-relaxed text-slate-500">{action.description}</p>
+                        </div>
+                        <div className="shrink-0 text-slate-400">
+                          {sendingTestType === action.id ? (
+                            <RefreshCw size={16} className="animate-spin" />
+                          ) : (
+                            <Send size={16} />
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+
+                {lastTestRecipient && (
+                  <p className="text-xs text-slate-500">
+                    Last recipient: <span className="font-medium text-slate-700">{lastTestRecipient}</span>
+                  </p>
+                )}
+
+                {testEmailResult && (
+                  <div className={`flex items-center gap-2 text-xs p-2 rounded-lg ${
+                    testEmailResult.type === 'success' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
+                  }`}>
+                    {testEmailResult.type === 'success' ? <CheckCircle size={13} /> : <AlertCircle size={13} />}
+                    {testEmailResult.message}
                   </div>
                 )}
               </div>

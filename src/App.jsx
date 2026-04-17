@@ -64,6 +64,7 @@ import AdminPanel from './components/modals/AdminPanel';
 import Toast from './components/ui/Toast';
 import ImportButton from './components/ui/ImportButton';
 import PracticeLookup from './components/ui/PracticeLookup';
+import HomeSubscribeSection from './components/ui/HomeSubscribeSection';
 import NationalDemandCapacity from './components/NationalDemandCapacity';
 import TriageSlotAnalysis from './components/TriageSlotAnalysis';
 import FollowUpAnalysis from './components/FollowUpAnalysis';
@@ -2325,10 +2326,12 @@ export default function App() {
                   </div>
                 </div>
               )}
-
-              {/* News/Noticeboard */}
-              <Noticeboard />
             </div>
+
+            <HomeSubscribeSection />
+
+            {/* News/Noticeboard */}
+            <Noticeboard />
           </div>
         )}
 
