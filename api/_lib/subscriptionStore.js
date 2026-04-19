@@ -11,8 +11,7 @@ export function normaliseEmail(raw) {
 
 export function isValidEmail(email) {
   if (!email) return false;
-  // RFC 5321-ish simple check — good enough for user input validation
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 254;
+  return /^[^\s@]+@nhs\.(net|uk)$/i.test(email) && email.length <= 254;
 }
 
 export function generateToken(bytes = 24) {

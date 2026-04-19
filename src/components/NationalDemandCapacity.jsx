@@ -269,7 +269,7 @@ const NationalDemandCapacity = ({
   recordPracticeUsage,
   initialOdsCode,
   initialAutoAnalyze = false,
-  onOpenBugReport,
+  onOpenFeedback,
 }) => {
   // ========================================
   // STATE MANAGEMENT
@@ -5270,7 +5270,7 @@ const NationalDemandCapacity = ({
           setShowAIConsent(false);
           runCAIPAnalysis();
         }}
-        onOpenFeedback={onOpenBugReport}
+        onOpenFeedback={onOpenFeedback}
         practiceName={selectedPractice?.gpName}
       />
 

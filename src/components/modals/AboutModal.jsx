@@ -4,7 +4,7 @@ import { trackCoffeeClick } from '../../firebase/config';
 import { NHS_BLUE } from '../../constants/colors';
 import SubscribeButton from '../ui/SubscribeButton';
 
-const AboutModal = ({ isOpen, onClose, onOpenBugReport, onOpenAdmin, timesUsed = 0, caipAnalysisCount = 0 }) => {
+const AboutModal = ({ isOpen, onClose, onOpenFeedback, onOpenAdmin, timesUsed = 0, caipAnalysisCount = 0 }) => {
   if (!isOpen) return null;
 
   return (
@@ -123,13 +123,13 @@ const AboutModal = ({ isOpen, onClose, onOpenBugReport, onOpenAdmin, timesUsed =
             <button
               onClick={() => {
                 onClose();
-                onOpenBugReport();
+                if (onOpenFeedback) onOpenFeedback();
               }}
               className="text-blue-600 hover:text-blue-700 font-medium underline"
             >
-              report a bug
+              feedback
             </button>{' '}
-            function to provide feedback.
+            form to contact us.
           </p>
 
           <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3 mt-6">

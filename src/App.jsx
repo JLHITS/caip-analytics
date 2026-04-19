@@ -21,7 +21,7 @@ import {
   BarChart3, PieChart, ArrowRight, CheckCircle, AlertCircle,
   Menu, X, ChevronDown, HelpCircle, Info, Sparkles, XCircle,
   Download, Loader2, PlayCircle, AlertTriangle, Trash2, Plus, Monitor, User, Search,
-  ArrowUpDown, ArrowUp, ArrowDown, ChevronUp, Copy, Minimize2, Maximize2, Share2
+  ArrowUpDown, ArrowUp, ArrowDown, ChevronUp, Copy, Minimize2, Maximize2, Share2, MessageSquare
 } from 'lucide-react';
 
 // LinkedIn icon component
@@ -58,7 +58,7 @@ import ResetConfirmationModal from './components/modals/ResetConfirmationModal';
 import AIConsentModal from './components/modals/AIConsentModal';
 import ShareModal from './components/modals/ShareModal';
 import ShareOptionsModal from './components/modals/ShareOptionsModal';
-import BugReportModal from './components/modals/BugReportModal';
+import FeedbackModal from './components/modals/FeedbackModal';
 import AboutModal from './components/modals/AboutModal';
 import AdminPanel from './components/modals/AdminPanel';
 import Toast from './components/ui/Toast';
@@ -391,7 +391,7 @@ export default function App() {
   const [showProcessingInfo, setShowProcessingInfo] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showAIConsent, setShowAIConsent] = useState(false);
-  const [showBugReport, setShowBugReport] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
   const [caipAnalysisCount, setCaipAnalysisCount] = useState(0);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
@@ -2137,11 +2137,11 @@ export default function App() {
               <Activity size={16} className="text-blue-500" />
             </button>
             <button
-              onClick={() => setShowBugReport(true)}
-              className="p-1.5 text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:border-amber-300 transition-all"
-              title="Report a Bug / Feedback"
+              onClick={() => setShowFeedback(true)}
+              className="p-1.5 text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:border-blue-300 transition-all"
+              title="Share Feedback"
             >
-              <AlertTriangle size={16} className="text-amber-500" />
+              <MessageSquare size={16} className="text-blue-500" />
             </button>
             <button
               onClick={() => setShowAbout(true)}
@@ -3248,7 +3248,7 @@ export default function App() {
             recordPracticeUsage={recordPracticeUsage}
             initialOdsCode={initialNationalOdsCode}
             initialAutoAnalyze={initialNationalAutoAnalyze}
-            onOpenBugReport={() => setShowBugReport(true)}
+            onOpenFeedback={() => setShowFeedback(true)}
           />
         )}
 
@@ -3306,15 +3306,15 @@ export default function App() {
         expiresAt={shareExpiresAt}
       />
 
-      <BugReportModal
-        isOpen={showBugReport}
-        onClose={() => setShowBugReport(false)}
+      <FeedbackModal
+        isOpen={showFeedback}
+        onClose={() => setShowFeedback(false)}
       />
 
       <AboutModal
         isOpen={showAbout}
         onClose={() => setShowAbout(false)}
-        onOpenBugReport={() => setShowBugReport(true)}
+        onOpenFeedback={() => setShowFeedback(true)}
         onOpenAdmin={() => setShowAdminPanel(true)}
         timesUsed={sharedUsageStats?.totalChecks || 0}
         caipAnalysisCount={caipAnalysisCount}

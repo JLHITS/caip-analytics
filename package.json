@@ -1,7 +1,7 @@
 {
   "name": "caip-analytics",
   "private": true,
-  "version": "0.9.41",
+  "version": "0.9.42",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,7 +12,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@emailjs/browser": "^4.4.1",
     "chart.js": "^4.5.1",
     "firebase": "^12.6.0",
     "firebase-admin": "^13.8.0",

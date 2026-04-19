@@ -57,7 +57,7 @@ export default async function handler(req, res) {
 
   const normalised = normaliseEmail(email);
   if (!isValidEmail(normalised)) {
-    return res.status(400).json({ error: 'Please provide a valid email address.' });
+    return res.status(400).json({ error: 'Please use your NHS email address (@nhs.net or @nhs.uk)' });
   }
   if (!consent) {
     return res.status(400).json({ error: 'Consent is required to subscribe.' });

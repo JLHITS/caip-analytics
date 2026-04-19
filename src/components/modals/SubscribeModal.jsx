@@ -3,6 +3,11 @@ import { Mail, X, Bell, Newspaper, Database, Sparkles, Check, AlertCircle } from
 import { NHS_BLUE } from '../../constants/colors';
 import { trackEvent } from '../../firebase/config';
 
+const NHS_EMAIL_PATTERN = /^[^\s@]+@nhs\.(net|uk)$/i;
+const EMAIL_ERROR = 'Please use your NHS email address (@nhs.net or @nhs.uk)';
+
+const isNhsEmail = (value) => NHS_EMAIL_PATTERN.test(String(value || '').trim());
+
 /**
  * Email subscription modal.
  *
@@ -47,6 +52,7 @@ const SubscribeModal = ({
   const practiceAvailable = !!odsCode;
   const anySelected =
     (wantPractice && practiceAvailable) || wantNews || wantAllData;
+  const emailError = email.trim() && !isNhsEmail(email) ? EMAIL_ERROR : '';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -54,6 +60,10 @@ const SubscribeModal = ({
 
     if (!email.trim()) {
       setError('Please enter your email address.');
+      return;
+    }
+    if (emailError) {
+      setError(EMAIL_ERROR);
       return;
     }
     if (!consent) {
@@ -162,9 +172,16 @@ const SubscribeModal = ({
                 autoFocus
                 autoComplete="email"
                 spellCheck={false}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className={`w-full px-3 py-2 border rounded-lg bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 ${
+                  emailError
+                    ? 'border-red-300 focus:ring-red-500'
+                    : 'border-slate-300 focus:ring-blue-500'
+                }`}
                 placeholder="you@nhs.net"
               />
+              {emailError && (
+                <p className="mt-1 text-xs text-red-600">{emailError}</p>
+              )}
             </div>
 
             <div className="space-y-2 mb-4">
@@ -280,7 +297,7 @@ const SubscribeModal = ({
               </button>
               <button
                 type="submit"
-                disabled={submitting || !email.trim() || !consent || !anySelected}
+                disabled={submitting || !email.trim() || Boolean(emailError) || !consent || !anySelected}
                 className="px-5 py-2 text-white font-semibold rounded-lg shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 style={{ backgroundColor: NHS_BLUE }}
               >
